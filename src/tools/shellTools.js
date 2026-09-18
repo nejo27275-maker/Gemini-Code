@@ -88,16 +88,33 @@ function runCommand(command, { timeoutMs, maxBuffer }) {
   });
 }
 
+// Frase que precisa ser digitada por extenso para liberar um comando que
+// mexe em config.json/mcp.json. Antes bastava "s"/"y" — igual à confirmação
+// de qualquer outro comando — o que é fácil demais de aprovar no automático
+// (reflexo de sempre apertar "s", ou um script/atalho que sempre manda "y").
+// Essa é a ÚNICA confirmação do gemini-code que exige uma frase, de propósito:
+// o resto continua rápido (s/n), só o caminho que já causou um incidente real
+// (o agente resetando a própria config sozinho) fica com atrito extra.
+const FRASE_CONFIRMACAO = 'sim, tenho certeza';
+
 async function execute(name, args) {
   if (name !== 'run_shell') throw new Error(`Ferramenta de shell desconhecida: ${name}`);
   const cfg = loadConfig();
 
   const protegido = touchesProtectedFile(args.command);
 
-  if (cfg.confirmShell || protegido) {
-    const pergunta = protegido
-      ? `\n[gemini-code] ATENÇÃO: esse comando mexe no arquivo de configuração do gemini-code.\n  ${args.command}\nConfirmar mesmo assim? (s/n) `
-      : `\n[gemini-code] Rodar comando?\n  ${args.command}\n(s/n) `;
+  if (protegido) {
+    const pergunta =
+      `\n[gemini-code] ATENÇÃO: esse comando mexe no arquivo de configuração do gemini-code.\n` +
+      `  ${args.command}\n` +
+      `Isso já causou perda de configuração antes. Para confirmar, digite exatamente:\n` +
+      `  ${FRASE_CONFIRMACAO}\n> `;
+    const answer = await ask(pergunta);
+    if (answer !== FRASE_CONFIRMACAO) {
+      return 'Comando cancelado: frase de confirmação não digitada corretamente.';
+    }
+  } else if (cfg.confirmShell) {
+    const pergunta = `\n[gemini-code] Rodar comando?\n  ${args.command}\n(s/n) `;
     const answer = await ask(pergunta);
     if (answer !== 's' && answer !== 'y') {
       return 'Comando cancelado pelo usuário.';
