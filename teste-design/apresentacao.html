@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8" />
+<title>Apresentação gerada pelo gemini-code</title>
+<style>
+  body { margin:0; font-family: system-ui, sans-serif; background:#111; color:#eee; }
+  .slide { display:none; min-height:100vh; box-sizing:border-box; padding:8vh 8vw; }
+  .slide.active { display:flex; flex-direction:column; justify-content:center; }
+  .slide h2 { font-size: 2.4rem; margin-bottom: 1rem; }
+  .nav { position:fixed; bottom:1rem; right:1rem; }
+  button { padding:.6rem 1rem; margin-left:.5rem; }
+</style>
+</head>
+<body>
+<section class="slide" data-index="0"><h2>Slide 1: A História da Internet</h2>
+<p>* **O que é a internet?** Uma rede global de computadores interconectados que revolucionou a comunicação e o acesso à informação.</p>
+<p>* **Origem:** Desenvolvida nos Estados Unidos durante a Guerra Fria.</p>
+<p>* **Impacto:** Transformou a sociedade, a economia e a forma como nos relacionamos.</p>
+<p>[Imagem: Um globo terrível digitalizado com linhas brilhantes conectando vários pontos pelo mundo]</p></section>
+<section class="slide" data-index="1"><h2>Slide 2: As Origens e a ARPANET (1960)</h2>
+<p>* **Contexto da Guerra Fria:** Necessidade de um sistema de comunicação militar descentralizado e seguro.</p>
+<p>* **Criação da ARPANET (1969):** Financiada pelo Departamento de Defesa dos EUA (DARPA).</p>
+<p>* **Primeira mensagem:** Enviada entre a UCLA e a Universidade de Stanford (a palavra "LO").</p>
+<p>[Imagem: Um computador mainframe antigo dos anos 1960 com fitas magnéticas]</p></section>
+<section class="slide" data-index="2"><h2>Slide 3: A Expansão e o Protocolo TCP/IP (1970 - 1980)</h2>
+<p>* **Problema inicial:** Redes diferentes não conseguiam se comunicar entre si.</p>
+<p>* **A solução (1983):** Criação do protocolo TCP/IP por Vint Cerf e Bob Kahn.</p>
+<p>* **O nascimento da "Internet":** O TCP/IP permitiu que a ARPANET se conectasse a outras redes, criando a "rede das redes".</p>
+<p>[Imagem: Diagrama simples conectando diferentes redes através de um núcleo central]</p></section>
+<section class="slide" data-index="3"><h2>Slide 4: A Revolução da World Wide Web (1990)</h2>
+<p>* **Tim Berners-Lee (1989/1990):** Criou a World Wide Web (WWW) no CERN, facilitando o acesso à informação.</p>
+<p>* **Novas ferramentas:** Surgimento do primeiro navegador web e das páginas acessíveis por hipertextos.</p>
+<p>* **Popularização:** A internet deixa de ser exclusiva para cientistas e militares e chega ao público geral.</p>
+<p>[Imagem: Captura de tela antiga de um navegador web primitivo dos anos 90]</p></section>
+<section class="slide" data-index="4"><h2>Slide 5: A Era da Informação e o Boom das Ponto-Com (2000)</h2>
+<p>* **Expansão comercial:** Milhares de novas empresas de internet (dot-com) surgiram na virada do milênio.</p>
+<p>* **Acesso discado para banda larga:** Substituição gradual da internet barulhenta de linha telefônica por conexões rápidas (ADSL e cabo).</p>
+<p>* **E-commerce e Portais:** Crescimento de gigantes como Amazon, Google e Yahoo.</p>
+<p>[Imagem: Pessoas usando computadores de gabinete branco clássicos do ano 2000]</p></section>
+<section class="slide" data-index="5"><h2>Slide 6: A Web 2.0 e as Redes Sociais (2005 - 2010)</h2>
+<p>* **Interatividade:** Os usuários deixaram de ser apenas leitores para se tornarem criadores de conteúdo.</p>
+<p>* **Redes Sociais:** Surgimento de plataformas como Orkut, Facebook, YouTube e Twitter.</p>
+<p>* **Mobilidade inicial:** Lançamento dos primeiros smartphones, integrando a internet ao dia a dia portátil.</p>
+<p>[Imagem: Ícones de redes sociais populares flutuando sobre um fundo moderno]</p></section>
+<section class="slide" data-index="6"><h2>Slide 7: A Internet Moderna e o Futuro</h2>
+<p>* **Internet das Coisas (IoT):** Geladeiras, carros e lâmpadas conectados à rede.</p>
+<p>* **5G e Inteligência Artificial:** Conexões ultrarrápidas permitindo automação avançada e processamento em nuvem.</p>
+<p>* **O legado:** Uma ferramenta indispensável que continua moldando o futuro da humanidade.</p>
+<p>[Imagem: Cidades inteligentes conectadas com carros autônomos e hologramas digitais]</p></section>
+<div class="nav">
+  <button onclick="go(-1)">‹ Anterior</button>
+  <button onclick="go(1)">Próximo ›</button>
+</div>
+<script>
+  let i = 0;
+  const slides = document.querySelectorAll('.slide');
+  function render() { slides.forEach((s, idx) => s.classList.toggle('active', idx === i)); }
+  function go(delta) { i = Math.max(0, Math.min(slides.length - 1, i + delta)); render(); }
+  render();
+</script>
+</body>
+</html>

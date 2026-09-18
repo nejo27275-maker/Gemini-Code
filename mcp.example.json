@@ -1,0 +1,14 @@
+{
+  "_comentario": "Copie este arquivo para ~/.gemini-code/mcp.json e ajuste. Cada entrada é um servidor MCP que roda como processo separado e expõe ferramentas ao agente.",
+  "mcpServers": {
+    "sistema-de-arquivos": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/data/data/com.termux/files/home"]
+    },
+    "buscar-na-web": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+      "env": { "BRAVE_API_KEY": "SUA_CHAVE_AQUI" }
+    }
+  }
+}

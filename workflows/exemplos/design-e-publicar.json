@@ -1,0 +1,18 @@
+{
+  "name": "design-e-publicar",
+  "description": "Cria um roteiro, depois gera o conteúdo de slides a partir dele, e por fim escreve uma legenda curta para divulgação.",
+  "steps": [
+    {
+      "id": "roteiro",
+      "prompt": "Crie um roteiro curto (5 tópicos) para uma apresentação sobre: 'como uma pequena loja digital pode vender mais usando automação'."
+    },
+    {
+      "id": "slides",
+      "prompt": "A partir deste roteiro:\n{{roteiro}}\n\nEscreva o conteúdo de cada slide em Markdown (títulos com ##, bullets curtos)."
+    },
+    {
+      "id": "legenda",
+      "prompt": "Baseado nestes slides:\n{{slides}}\n\nEscreva uma legenda curta (2 frases) para divulgar essa apresentação nas redes sociais."
+    }
+  ]
+}
