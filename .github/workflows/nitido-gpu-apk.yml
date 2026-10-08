@@ -2,6 +2,8 @@ name: Build Nitido GPU APK
 on:
   push:
     branches: ["nitido-gpu-v2-27-build"]
+  pull_request:
+    branches: ["main"]
   workflow_dispatch:
 jobs:
   build:
