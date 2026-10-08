@@ -20,12 +20,12 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.10.2"
-      - name: Build release APK
+      - name: Build installable debug APK
         working-directory: nitido-gpu-v2
-        run: gradle :app:assembleRelease --stacktrace
-      - name: Upload APK
+        run: gradle :app:assembleDebug --stacktrace
+      - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: nitido-gpu-v2.26-beta-apk
-          path: nitido-gpu-v2/app/build/outputs/apk/release/*.apk
+          name: nitido-gpu-v2.26-beta-installable
+          path: nitido-gpu-v2/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
