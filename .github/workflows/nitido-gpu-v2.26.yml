@@ -1,44 +1,55 @@
-name: Build Nitido GPU v2.26
+name: Build Nítido GPU v2.26
 on:
   push:
     branches: [nitido-gpu-v2-26-build]
   pull_request:
     branches: [main]
   workflow_dispatch:
+
 permissions:
   contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
+
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+
+      - name: Localizar projeto v2.26
+        run: |
+          set -e
+          if [ -d "nitido-gpu-v2" ]; then
+            echo "Projeto encontrado na pasta nitido-gpu-v2"
+          elif [ -f "nitido-gpu-v2_26.zip" ]; then
+            echo "Descompactando nitido-gpu-v2_26.zip"
+            unzip -t nitido-gpu-v2_26.zip
+            unzip -q nitido-gpu-v2_26.zip
+          else
+            echo "::error::Falta o nitido-gpu-v2_26.zip (ou a pasta nitido-gpu-v2) neste branch."
+            echo "Envie o ZIP original para a raiz do repositório e execute novamente."
+            exit 1
+          fi
+          test -f nitido-gpu-v2/settings.gradle.kts
+          test -f nitido-gpu-v2/app/build.gradle.kts
+          test -f nitido-gpu-v2/app/src/main/AndroidManifest.xml
+
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
-      - uses: gradle/actions/setup-gradle@v4
+
+      - uses: gradle/actions/setup-gradle@v5
         with:
           gradle-version: '8.7'
-      - name: Prepare project
-        run: |
-          unzip -q nitido-gpu-v2_26-ci.zip
-          cd nitido-gpu-v2
-          rm -f app/nitido.keystore
-          keytool -genkeypair -v \
-            -keystore app/nitido.keystore \
-            -storepass nitido123 \
-            -keypass nitido123 \
-            -alias nitido \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -dname 'CN=Nitido GPU, OU=Beta, O=Nitido, C=BR'
-      - name: Ensure Android SDK 34
+
+      - name: Garantir SDK 34
         run: |
           yes | sdkmanager --licenses >/dev/null 2>&1 || true
-          sdkmanager 'platforms;android-34' 'build-tools;34.0.0'
-      - name: Run quick tests
+          sdkmanager 'platform-tools' 'platforms;android-34' 'build-tools;34.0.0'
+
+      - name: Testes rápidos
         working-directory: nitido-gpu-v2
         run: |
           python3 tests/props.py
@@ -47,15 +58,18 @@ jobs:
           python3 tests/a11y_fallback_check.py
           python3 tests/manifest_check.py
           python3 tests/shaders_check.py
-      - name: Build release APK
+
+      - name: Compilar APK release
         working-directory: nitido-gpu-v2
         run: gradle :app:assembleRelease --no-daemon --stacktrace
-      - name: Rename APK
+
+      - name: Preparar APK
         run: |
           mkdir -p dist
           cp nitido-gpu-v2/app/build/outputs/apk/release/app-release.apk dist/nitido-gpu-v2.26.apk
           ls -lh dist/nitido-gpu-v2.26.apk
-      - name: Upload APK
+
+      - name: Publicar artefato APK
         uses: actions/upload-artifact@v4
         with:
           name: nitido-gpu-v2.26-apk
