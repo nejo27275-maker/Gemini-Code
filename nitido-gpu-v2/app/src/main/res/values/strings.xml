@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Nítido GPU</string>
+    <string name="acc_desc">Só permite ao Nítido GPU desenhar o overlay como janela confiável. Não lê nem envia o conteúdo da tela.</string>
+    <string name="tile_label">Nítido GPU</string>
+</resources>
