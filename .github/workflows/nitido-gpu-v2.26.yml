@@ -2,6 +2,8 @@ name: Build Nitido GPU v2.26
 on:
   push:
     branches: [nitido-gpu-v2-26-build]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
