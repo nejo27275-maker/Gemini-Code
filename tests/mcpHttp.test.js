@@ -71,6 +71,38 @@ test('token errado: erro claro apontando o cabeçalho', async () => {
   await assert.rejects(c.initialize(), /HTTP 401.*headers/);
 });
 
+// Revisão adversarial da v0.41.0: o fetch seguia 307/308 levando os cabeçalhos do mcp.json (tokens) para
+// outro endereço, e o prazo acabava quando chegavam os cabeçalhos (corpo parado = agente travado).
+async function comServidor(tratar, fn) {
+  const s = http.createServer(tratar);
+  await new Promise((ok) => s.listen(0, '127.0.0.1', ok));
+  try { return await fn(`http://127.0.0.1:${s.address().port}`); } finally { s.closeAllConnections?.(); await new Promise((ok) => s.close(ok)); }
+}
+
+test('redirecionamento não é seguido: o token não vai para outro endereço', async () => {
+  const recebidos = [];
+  await comServidor((req, res) => { recebidos.push(req.headers); res.end('{}'); }, (outro) =>
+    comServidor((req, res) => { res.writeHead(307, { location: `${outro}/mcp` }); res.end(); }, async (base) => {
+      const c = new mcp.McpHttpConnection('remoto', { url: `${base}/mcp`, headers: { 'X-Api-Key': 'chave-que-nao-pode-sair' } });
+      await assert.rejects(c.initialize(), /redirecionou \(HTTP 307\).*URL final no mcp\.json/);
+      assert.deepEqual(recebidos, [], 'o outro servidor não recebeu nada');
+    }));
+});
+
+test('servidor que manda os cabeçalhos e para no meio do corpo cai no prazo (JSON e SSE)', async () => {
+  for (const tipo of ['application/json', 'text/event-stream']) {
+    await comServidor((req, res) => {
+      res.writeHead(200, { 'content-type': tipo });
+      res.write(tipo === 'application/json' ? '{"jsonrpc":"2.0",' : `data: ${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/progress' })}\n\n`);
+    }, async (base) => {
+      const c = new mcp.McpHttpConnection('lento', { url: `${base}/mcp` });
+      const inicio = Date.now();
+      await assert.rejects(c._send('initialize', {}, 300), /Tempo esgotado \(300ms\)/, tipo);
+      assert.ok(Date.now() - inicio < 5000, `${tipo}: demorou ${Date.now() - inicio} ms`);
+    });
+  }
+});
+
 test('URL inválida ou fora de http(s) é recusada', () => {
   assert.throws(() => new mcp.McpHttpConnection('x', { url: 'ftp://exemplo' }).start(), /só http/);
   assert.throws(() => new mcp.McpHttpConnection('x', { url: 'não é url' }).start(), /URL inválida/);

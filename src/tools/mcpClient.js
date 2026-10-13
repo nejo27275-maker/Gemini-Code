@@ -217,38 +217,55 @@ class McpHttpConnection {
     return h;
   }
 
-  async _post(corpo, timeoutMs) {
+  // O prazo vale até o CORPO terminar de chegar (JSON ou SSE): antes era limpo quando chegavam os
+  // cabeçalhos, e um servidor que mandasse "200" e parasse travava o agente para sempre.
+  async _comPrazo(timeoutMs, fn) {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
-      const res = await this.fetchFn(this.cfg.url, { method: 'POST', headers: this._cabecalhos(), body: JSON.stringify(corpo), signal: ctrl.signal });
-      const sessao = res.headers && res.headers.get && res.headers.get('mcp-session-id');
-      if (sessao) this.sessao = sessao;
-      return res;
+      return await fn(ctrl);
     } catch (err) {
       if (ctrl.signal.aborted) throw new Error(`Tempo esgotado (${timeoutMs}ms) esperando resposta de "${this.name}".`);
-      throw new Error(`Não consegui falar com o servidor MCP "${this.name}" (${err.cause?.code || err.message}).`);
+      throw err;
     } finally {
       clearTimeout(timer);
     }
   }
 
-  async _send(method, params, timeoutMs = 20000) {
-    const id = this.nextId++;
-    const res = await this._post({ jsonrpc: '2.0', id, method, params }, timeoutMs);
-    if (!res.ok) {
-      const detalhe = await res.text().catch(() => '');
-      throw new Error(`Servidor MCP "${this.name}" respondeu HTTP ${res.status} em "${method}"${res.status === 401 || res.status === 403 ? ' (confira o token em "headers" no mcp.json)' : ''}: ${detalhe.slice(0, 200)}`);
+  async _post(corpo, ctrl) {
+    try {
+      // redirect: 'manual' — seguir um 307/308 levaria os cabeçalhos do mcp.json (tokens) para outro endereço.
+      const res = await this.fetchFn(this.cfg.url, { method: 'POST', headers: this._cabecalhos(), body: JSON.stringify(corpo), signal: ctrl.signal, redirect: 'manual' });
+      const sessao = res.headers && res.headers.get && res.headers.get('mcp-session-id');
+      if (sessao) this.sessao = sessao;
+      return res;
+    } catch (err) {
+      if (ctrl.signal.aborted) throw err;
+      throw new Error(`Não consegui falar com o servidor MCP "${this.name}" (${err.cause?.code || err.message}).`);
     }
-    const tipo = (res.headers.get('content-type') || '').toLowerCase();
-    const msg = tipo.includes('text/event-stream') ? await respostaDoSse(res, id) : await res.json().catch(() => null);
-    if (!msg) throw new Error(`Servidor MCP "${this.name}" não devolveu resposta para "${method}".`);
-    if (msg.error) throw new Error(msg.error.message || JSON.stringify(msg.error));
-    return msg;
+  }
+
+  _send(method, params, timeoutMs = 20000) {
+    const id = this.nextId++;
+    return this._comPrazo(timeoutMs, async (ctrl) => {
+      const res = await this._post({ jsonrpc: '2.0', id, method, params }, ctrl);
+      if (res.status >= 300 && res.status < 400) {
+        throw new Error(`Servidor MCP "${this.name}" redirecionou (HTTP ${res.status}) para ${res.headers.get('location') || 'outro endereço'} em "${method}". O gemini-code não segue redirecionamento (os cabeçalhos com token iriam junto): coloque a URL final no mcp.json.`);
+      }
+      if (!res.ok) {
+        const detalhe = await res.text().catch(() => '');
+        throw new Error(`Servidor MCP "${this.name}" respondeu HTTP ${res.status} em "${method}"${res.status === 401 || res.status === 403 ? ' (confira o token em "headers" no mcp.json)' : ''}: ${detalhe.slice(0, 200)}`);
+      }
+      const tipo = (res.headers.get('content-type') || '').toLowerCase();
+      const msg = tipo.includes('text/event-stream') ? await respostaDoSse(res, id) : await res.json().catch((err) => { if (ctrl.signal.aborted) throw err; return null; });
+      if (!msg) throw new Error(`Servidor MCP "${this.name}" não devolveu resposta para "${method}".`);
+      if (msg.error) throw new Error(msg.error.message || JSON.stringify(msg.error));
+      return msg;
+    });
   }
 
   async _notify(method, params) {
-    try { await this._post({ jsonrpc: '2.0', method, ...(params ? { params } : {}) }, 10000); } catch { /* notificação é best-effort */ }
+    try { await this._comPrazo(10000, (ctrl) => this._post({ jsonrpc: '2.0', method, ...(params ? { params } : {}) }, ctrl)); } catch { /* notificação é best-effort */ }
   }
 
   async initialize() {
@@ -270,7 +287,7 @@ class McpHttpConnection {
     if (!this.sessao) return;
     const h = this._cabecalhos();
     this.sessao = null;
-    Promise.resolve().then(() => this.fetchFn(this.cfg.url, { method: 'DELETE', headers: h })).catch(() => {});
+    Promise.resolve().then(() => this.fetchFn(this.cfg.url, { method: 'DELETE', headers: h, redirect: 'manual' })).catch(() => {});
   }
 }
 
