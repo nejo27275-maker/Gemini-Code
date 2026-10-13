@@ -14,7 +14,7 @@ const rodar = (modo, id, extra = {}) => evals.avaliarAgente({ agente: `${AGENTE}
 
 test('autoteste: todo verificador falha no workspace original e passa com a solução', () => {
   const r = evals.autoTeste();
-  assert.ok(r.length >= 6);
+  assert.ok(r.length >= 7);
   for (const x of r) assert.ok(x.ok, `${x.id}: falha sem solução=${x.falhaSemSolucao}, passa com solução=${x.passaComSolucao}\n${x.detalhe}`);
 });
 
@@ -44,6 +44,12 @@ test('controle negativo: alterar o teste em vez do código reprova', { skip: sem
   const [r] = (await rodar('mexer-no-teste', 'diagnosticar-teste')).resultados;
   assert.equal(r.passou, false);
   assert.match(r.detalhe, /não podia ser alterado/);
+});
+
+test('controle negativo: refatoração ingênua (troca a substring) cai na isca e reprova', { skip: semShellPosix }, async () => {
+  const [r] = (await rodar('refatorar-ingenuo', 'refatorar-multiarquivo')).resultados;
+  assert.equal(r.passou, false);
+  assert.match(r.detalhe, /testes do projeto falharam/);
 });
 
 test('tempo esgotado: o agente é encerrado e a tarefa reprova', { skip: semShellPosix }, async () => {

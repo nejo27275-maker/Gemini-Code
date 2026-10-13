@@ -20,6 +20,12 @@ switch (modo.split(':')[0]) {
   case 'substituir-tudo': // troca TODA ocorrência de 30000, inclusive as iscas
     fs.writeFileSync('src/limites.js', fs.readFileSync('src/limites.js', 'utf8').replace(/30000/g, '45000'));
     break;
+  case 'refatorar-ingenuo': // troca a substring em todo lugar e cai na isca recalcTotal
+    for (const f of fs.readdirSync('src')) {
+      const p = path.join('src', f);
+      fs.writeFileSync(p, fs.readFileSync(p, 'utf8').split('calcTotal').join('calcularTotalPedido'));
+    }
+    break;
   case 'mexer-no-teste': // "conserta" o teste em vez do código
     fs.writeFileSync('test/duracao.test.js', "'use strict';\nrequire('node:test')('ok', () => {});\n");
     break;
