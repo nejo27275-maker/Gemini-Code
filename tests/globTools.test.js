@@ -447,3 +447,34 @@ test('glob_files só lê: não cria nem altera nada no projeto', async () => {
   await glob({ pattern: '{a,b}/**/*.log', path: raiz });
   assert.deepEqual(retrato(), antes);
 });
+
+// Revisão adversarial da v0.41.0 (comparado com o git e o bash).
+test('numa subpasta do repositório, o .gitignore do topo também vale (como no git)', async () => {
+  const repo = projeto();
+  fs.mkdirSync(path.join(repo, '.git'));
+  criar(repo, '.gitignore', 'dist/\n*.log\n');
+  for (const f of ['packages/app/src/index.js', 'packages/app/dist/bundle.js', 'packages/app/debug.log']) criar(repo, f, 'x');
+  const app = path.join(repo, 'packages', 'app');
+  assert.deepEqual(achados(await glob({ pattern: '**/*', path: app }), app), ['src/index.js']);
+  // Pasta que o repositório ignora, pedida de propósito: olhar dentro dela é a intenção.
+  const dist = path.join(app, 'dist');
+  assert.deepEqual(achados(await glob({ pattern: '**/*', path: dist }), dist), ['bundle.js']);
+});
+
+test('.gitignore salvo com BOM (Bloco de Notas) não perde a primeira regra', async () => {
+  const raiz = projeto();
+  criar(raiz, '.gitignore', '﻿dist/\n');
+  criar(raiz, 'a.js');
+  criar(raiz, 'dist/b.js');
+  assert.deepEqual(achados(await glob({ pattern: '**/*.js', path: raiz }), raiz), ['a.js']);
+});
+
+test('classe negada com "-" no começo ([!-9]) é literal, como no bash e no git', async () => {
+  const raiz = projeto();
+  for (const n of ['5.txt', '-a.txt', 'b.txt']) criar(raiz, n);
+  assert.deepEqual(ordenado(achados(await glob({ pattern: '[!-9]*.txt', path: raiz }), raiz)), ['5.txt', 'b.txt']);
+  const ignora = projeto();
+  criar(ignora, '.gitignore', '[!-9]*.txt\n');
+  for (const n of ['5.txt', '-a.txt', 'b.txt']) criar(ignora, n);
+  assert.deepEqual(achados(await glob({ pattern: '*.txt', path: ignora }), ignora), ['-a.txt']);
+});

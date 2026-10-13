@@ -62,7 +62,9 @@ function lerClasse(s, i) {
     // ']' logo no início é literal ([]] casa "]").
     if (c === ']' && !primeiro) {
       // '/' separa pastas: nunca casa dentro de colchetes.
-      return { fim: j, src: negada ? `[^/${corpo}]` : `(?!/)[${corpo}]` };
+      // '-' no começo de classe negada é literal ([!-9] = "nem '-' nem '9'"); colado no '/' viraria o
+      // intervalo '/'..'9' e excluiria os dígitos (revisão adversarial da v0.41.0).
+      return { fim: j, src: negada ? `[^/${corpo.startsWith('-') ? '\\' + corpo : corpo}]` : `(?!/)[${corpo}]` };
     }
     if (c === '\\' && j + 1 < s.length) {
       c = s[++j];
@@ -266,22 +268,34 @@ function regraGitignore(linha) {
  * final, e nada volta se uma pasta de cima foi ignorada.
  * @returns {(caminhoRelativo: string, ehDiretorio?: boolean) => boolean}
  */
+function acharTopoGit(pasta) {
+  for (let d = pasta; ; d = path.dirname(d)) {
+    if (fs.existsSync(path.join(d, '.git'))) return d;
+    if (path.dirname(d) === d) return null;
+  }
+}
+
 function criarFiltroGitignore(raiz) {
   const base = path.resolve(raiz);
   const ehSegredo = verificadorDeSegredos();
   const regrasPorPasta = new Map();
   const pastasIgnoradas = new Map();
+  // v0.41.0: numa subpasta de um repositório, os .gitignore do topo até ela também valem (como no git);
+  // antes "dist/" do .gitignore da raiz não valia com o agente aberto em packages/app.
+  let topo = base;
+  let prefixo = [];
 
   function regrasDe(pastaRel) {
     let regras = regrasPorPasta.get(pastaRel);
     if (regras) return regras;
     regras = [];
-    const arquivo = path.join(base, pastaRel, '.gitignore');
+    const arquivo = path.join(topo, pastaRel, '.gitignore');
     try {
       const st = fs.statSync(arquivo);
       // Um repositório pode trazer .gitignore -> ~/.gemini-code/config.json: não lemos segredo.
       if (st.isFile() && st.size <= MAX_GITIGNORE && !ehSegredo(arquivo, st)) {
-        for (const linha of fs.readFileSync(arquivo, 'utf8').split('\n')) {
+        // BOM (Bloco de Notas) no começo: o git descarta; sem tirar, a primeira regra não valia.
+        for (const linha of fs.readFileSync(arquivo, 'utf8').replace(/^\uFEFF/, '').split('\n')) {
           const regra = regraGitignore(linha);
           if (regra) regras.push(regra);
         }
@@ -316,14 +330,24 @@ function criarFiltroGitignore(raiz) {
     return ignorada;
   }
 
+  const topoGit = acharTopoGit(base);
+  if (topoGit && topoGit !== base) {
+    topo = topoGit;
+    prefixo = path.relative(topoGit, base).split(path.sep).filter(Boolean);
+    // Pasta pedida de propósito que o próprio repositório ignora (ex.: path "dist"): olhar dentro dela é a
+    // intenção; aí valem só as regras dela para baixo, como antes.
+    if (pastaIgnorada(prefixo)) { topo = base; prefixo = []; regrasPorPasta.clear(); pastasIgnoradas.clear(); }
+  }
+
   return function ignorado(caminhoRelativo, ehDiretorio = false) {
     let rel = String(caminhoRelativo);
     if (path.isAbsolute(rel)) rel = path.relative(base, rel);
     if (path.sep === '\\') rel = rel.replace(/\\/g, '/');
     // normalize: "a/../../x" não pode fazer o filtro ler um .gitignore acima da raiz.
-    const partes = path.posix.normalize(rel).split('/').filter((p) => p && p !== '.');
+    const relativas = path.posix.normalize(rel).split('/').filter((p) => p && p !== '.');
     // A própria raiz ou algo fora dela: as regras daqui não se aplicam.
-    if (!partes.length || partes[0] === '..') return false;
+    if (!relativas.length || relativas[0] === '..') return false;
+    const partes = [...prefixo, ...relativas];
     if (ehDiretorio) return pastaIgnorada(partes);
     return (partes.length > 1 && pastaIgnorada(partes.slice(0, -1))) || casaRegras(partes, false);
   };
