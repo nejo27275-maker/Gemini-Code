@@ -66,7 +66,10 @@ function compactar(history, { manter = 6 } = {}) {
 // ---------------------------------------------------------------------------
 
 const PREFIXO_OMITIDO = '[resultado antigo de ';
-const tamanhoDe = (v) => JSON.stringify(v).length;
+// Imagem (inlineData, base64 de até 15 MB) conta como ~3000 caracteres, como em llamacpp.tamConteudo: o modelo
+// a vê como algumas centenas de tokens, e contar o base64 apagava resultados de ferramenta numa conversa curta.
+const IMAGEM_EQUIVALE = 'x'.repeat(3000);
+const tamanhoDe = (v) => JSON.stringify(v, (k, x) => (k === 'inlineData' && x && typeof x.data === 'string' ? IMAGEM_EQUIVALE : x)).length;
 
 /** @returns {{ history: object[], enxugados: number }} sem alterar o histórico recebido. */
 function enxugarResultadosAntigos(history, { maxChars = 300000, manterRecentes = 6 } = {}) {

@@ -46,6 +46,15 @@ test('abaixo do orçamento ou com 0 (desligado), nada muda', () => {
   assert.equal(enxugarResultadosAntigos(grande, { maxChars: 0 }).enxugados, 0);
 });
 
+test('uma imagem não conta pelo tamanho do base64 (não apaga resultados numa conversa curta)', () => {
+  // Revisão adversarial da v0.41.0: uma foto de 1 MB (~1,4 MB em base64) estourava o orçamento de 300 000.
+  const h = conversaComFerramentas(10, 2000);
+  h[0] = { role: 'user', parts: [{ text: 'o que tem na foto?' }, { inlineData: { mimeType: 'image/jpeg', data: 'A'.repeat(1400000) } }] };
+  const r = enxugarResultadosAntigos(h, { maxChars: 300000 });
+  assert.equal(r.enxugados, 0);
+  assert.equal(r.history, h);
+});
+
 test('loop do agente: 15 leituras grandes seguidas não fazem o pedido crescer sem limite', async () => {
   const dir = fs.mkdtempSync(path.join(HOME_FALSO, 'arquivos-'));
   for (let i = 0; i < 15; i++) fs.writeFileSync(path.join(dir, `a${i}.txt`), `${i}`.repeat(40000));
