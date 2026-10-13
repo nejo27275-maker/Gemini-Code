@@ -24,6 +24,10 @@ test('negar: comando, parte de comando composto, caminho e ferramenta por curing
   assert.equal(perm.negada('run_shell', { command: 'npm test && git push -f' }, c), 'run_shell(git push*)', 'uma parte basta');
   assert.equal(perm.negada('run_shell', { command: 'ls; git push' }, c), 'run_shell(git push*)');
   assert.equal(perm.negada('run_shell', { command: 'git status' }, c), null);
+  // Separadores e subcomandos que escapavam na primeira versão (revisão adversarial da v0.41.0).
+  for (const cmd of ['true & git push', 'true&git push', 'echo $(git push)', 'echo `git push`', '(git push)', '{ git push; }', 'cat <(git push)', 'x=$(git push origin)']) {
+    assert.equal(perm.negada('run_shell', { command: cmd }, c), 'run_shell(git push*)', cmd);
+  }
   assert.equal(perm.negada('write_file', { path: 'config/.env' }, c), 'write_file(*.env)');
   assert.equal(perm.negada('write_file', { path: path.join(HOME_FALSO, 'x.env') }, c), 'write_file(*.env)');
   assert.equal(perm.negada('write_file', { path: 'src/a.js' }, c), null);

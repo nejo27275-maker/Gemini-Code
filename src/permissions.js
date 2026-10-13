@@ -5,7 +5,8 @@
 //   PADRÃO é comparado com o alvo da chamada: comando (run_shell), caminho (arquivos), URL
 //   (web_fetch); nas demais, o JSON dos argumentos. * = qualquer sequência (inclusive "/"), ? = 1 caractere.
 // - negar: bloqueia antes de executar, em qualquer modo (chat, run, subagente, workflow).
-//   Num comando composto (;, &&, ||, |, quebra de linha) basta UMA parte bater.
+//   Num comando composto (;, &, &&, ||, |, quebra de linha) ou com subcomando ($(...), `...`,
+//   (...), { ...; }) basta UMA parte bater.
 // - permitir: só dispensa a confirmação do run_shell, e nunca para comando composto ou com
 //   redirecionamento/substituição — senão "npm test*" liberaria "npm test && rm -rf ~".
 //   Comando destrutivo ou que toca arquivo protegido continua pedindo confirmação.
@@ -42,7 +43,9 @@ function caminhos(p) {
   return [...new Set([p, path.relative(process.cwd(), abs) || '.', abs])];
 }
 
-const PARTES_SHELL = /&&|\|\||[;|\n]/;
+// Separa também & (segundo plano), $( ` ( ) { }: sem isso "true & git push", "echo $(git push)"
+// e "(git push)" escapavam de run_shell(git push*). Partes a mais só deixam o "negar" mais rígido.
+const PARTES_SHELL = /&&|\|\||\$\(|[;|&\n`(){}]/;
 const METACARACTERES = /[;&|`<>\n]|\$\(/;
 
 function bate(regra, nome, args, { cadaParteDoShell = false } = {}) {
