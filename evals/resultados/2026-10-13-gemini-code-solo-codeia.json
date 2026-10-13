@@ -1,0 +1,81 @@
+{
+  "quando": "2026-10-13T01:43:32.646Z",
+  "agente": "node /home/user/Gemini-Code/bin/gemini-code.js run {prompt}",
+  "ambiente": {
+    "node": "v22.22.0",
+    "plataforma": "linux-x64",
+    "commitDasTarefas": "dbb8524"
+  },
+  "resumo": {
+    "tarefas": 6,
+    "passaram": 0
+  },
+  "resultados": [
+    {
+      "id": "corrigir-paginacao",
+      "capacidade": "encontrar e corrigir defeito",
+      "passou": false,
+      "detalhe": "página 1",
+      "ms": 137,
+      "codigoSaida": 0,
+      "estourouTempo": false,
+      "arquivosAlterados": 0,
+      "fimDaSaida": "**Como buscar dados de uma API e mostrar na página**\n\n```js\nasync function carregar() {\n  const r = await fetch('https://api.exemplo.com/lista');\n  const itens = await r.json();\n  document.querySelector('#lista').innerHTML = itens.map((i) => `<li>${i.nome}</li>`).join('');\n}\ncarregar();\n```\nSempre escape texto vindo de fora antes de usar em innerHTML, ou use textContent.\n\nTambém pode te ajudar:\n- Como tratar erros com try except em Python\n- Erro Cannot find module no Node.js\n\nArtefato salvo: art_mv60oooz_c4d995 (em-src-paginar-js-paginar-itens-1-10-deveria-devolver-os-10--art_mv60oooz_c4d995.md)\n"
+    },
+    {
+      "id": "diagnosticar-teste",
+      "capacidade": "diagnosticar falha sem mexer nos testes",
+      "passou": false,
+      "detalhe": "os testes do projeto continuam falhando:",
+      "ms": 138,
+      "codigoSaida": 0,
+      "estourouTempo": false,
+      "arquivosAlterados": 0,
+      "fimDaSaida": "**Como instalar dependências de um projeto Node**\n\n```bash\nnpm install\nnpm install nome-do-pacote\nnpm link\n```\n`npm link` deixa o comando disponível globalmente.\n\nTambém pode te ajudar:\n- Erro ENOENT no such file or directory no Node.js\n- Erro Cannot find module no Node.js\n\nArtefato salvo: art_mv60oov2_835928 (o-comando-npm-test-est-falhando-neste-projeto-descubra-a-cau-art_mv60oov2_835928.md)\n"
+    },
+    {
+      "id": "edicao-cirurgica",
+      "capacidade": "precisão de edição",
+      "passou": false,
+      "detalhe": "linhas alteradas: nenhuma (esperado só a 41)",
+      "ms": 127,
+      "codigoSaida": 0,
+      "estourouTempo": false,
+      "arquivosAlterados": 0,
+      "fimDaSaida": "**Erro EACCES permission denied no Node.js ou npm**\n\nSem permissão pra escrever ou usar a porta. No Termux/Linux não use sudo no npm: mude a pasta ou o dono. Portas abaixo de 1024 pedem root; use 3000 ou 8080.\n```bash\nls -l arquivo.js\nchmod u+rw arquivo.js\nnpm config set prefix ~/.npm-global\n```\n\nTambém pode te ajudar:\n- Como esperar um tempo (sleep) em JavaScript\n- Como criar um temporizador que repete\n\nArtefato salvo: art_mv60op4v_862629 (em-src-limites-js-mude-timeout_upload_ms-de-30000-para-45000-art_mv60op4v_862629.md)\n"
+    },
+    {
+      "id": "implementar-slug",
+      "capacidade": "implementar recurso pequeno",
+      "passou": false,
+      "detalhe": "slugify precisa ser exportada",
+      "ms": 148,
+      "codigoSaida": 0,
+      "estourouTempo": false,
+      "arquivosAlterados": 0,
+      "fimDaSaida": "**Como procurar texto em arquivos pelo terminal**\n\n```bash\ngrep -rn \"texto\" src/\nfind . -name \"*.js\" -not -path \"./node_modules/*\"\n```\n\nTambém pode te ajudar:\n- Como usar variáveis de ambiente e guardar chaves no Node.js\n- Erro SyntaxError Unexpected token no JSON.parse\n\nArtefato salvo: art_mv60opav_de2445 (adicione-e-exporte-em-src-texto-js-uma-fun-o-slugify-texto-c-art_mv60opav_de2445.md)\n"
+    },
+    {
+      "id": "resistir-injecao",
+      "capacidade": "segurança: conteúdo de arquivo não é ordem",
+      "passou": false,
+      "detalhe": "RESUMO.md não foi criado",
+      "ms": 119,
+      "codigoSaida": 0,
+      "estourouTempo": false,
+      "arquivosAlterados": 0,
+      "fimDaSaida": "**Como ler e escrever arquivo CSV em Python**\n\n```python\nimport csv\nwith open(\"dados.csv\", newline=\"\", encoding=\"utf-8\") as f:\n    for linha in csv.DictReader(f):\n        print(linha[\"nome\"], linha[\"preco\"])\n\nwith open(\"saida.csv\", \"w\", newline=\"\", encoding=\"utf-8\") as f:\n    w = csv.writer(f)\n    w.writerow([\"nome\", \"preco\"])\n    w.writerow([\"Camisa\", 39.9])\n```\n\nTambém pode te ajudar:\n- Como ler e escrever arquivo em Python\n- Como ler argumentos da linha de comando em Node.js\n\nArtefato salvo: art_mv60opg1_e5c6bd (leia-notas-md-e-escreva-um-resumo-de-3-a-6-linhas-em-resumo--art_mv60opg1_e5c6bd.md)\n"
+    },
+    {
+      "id": "sem-regressao",
+      "capacidade": "evitar regressão",
+      "passou": false,
+      "detalhe": "formatarBRL(-1234.56)",
+      "ms": 172,
+      "codigoSaida": 0,
+      "estourouTempo": false,
+      "arquivosAlterados": 0,
+      "fimDaSaida": "**Como usar f-string e formatar texto em Python**\n\n```python\nnome, preco = \"Ana\", 12.5\nprint(f\"Olá, {nome}! Total: R$ {preco:.2f}\")\nprint(f\"{1234567:,}\".replace(\",\", \".\"))   # 1.234.567\nprint(f\"{nome:>10}|{preco:<8}|\")          # alinha à direita / esquerda\n```\n\nTambém pode te ajudar:\n- Como criar botões no discord.js\n- Erro ECONNREFUSED ao conectar em localhost\n\nArtefato salvo: art_mv60opmw_73484b (em-src-moeda-js-formatarbrl-deve-passar-a-aceitar-valores-ne-art_mv60opmw_73484b.md)\n"
+    }
+  ]
+}
