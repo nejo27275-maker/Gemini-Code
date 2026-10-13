@@ -244,7 +244,9 @@ function lerMaxChars(valor) {
  * respostas falsas sem tocar no terminal nem na rede de verdade).
  */
 function criarExecute({
-  fetchFn = (...a) => globalThis.fetch(...a),
+  // v0.41.0: DNS fixado no endereço conferido (src/redeSegura.js) — o fetch global resolvia de novo ao
+  // conectar e um DNS com TTL 0 trocava o IP público da checagem por 127.0.0.1 (DNS rebinding).
+  fetchFn = (url, opcoes) => require('../redeSegura').fetchComDnsFixado(url, opcoes),
   ask = askReal,
   loadConfig = loadConfigReal,
   ensurePublicTarget = ensurePublicTargetReal,
@@ -303,6 +305,7 @@ function criarExecute({
           method: 'GET',
           redirect: 'manual', // cada salto passa pela checagem acima; o fetch sozinho seguiria sem olhar
           signal: controller.signal,
+          permitirPrivado,
           headers: { 'user-agent': USER_AGENT, accept: 'text/html,application/xhtml+xml,text/plain;q=0.9,application/json;q=0.9,*/*;q=0.5' },
         });
         const location = STATUS_REDIRECT.has(resposta.status) ? resposta.headers.get('location') : null;
@@ -316,6 +319,9 @@ function criarExecute({
         if (problemaRedir) return `${problemaRedir.replace(/\.$/, '')} (redirecionamento a partir de ${atual.href}).`;
         atual = proxima;
       } catch (err) {
+        if (err && err.code === 'ERR_DESTINO_PRIVADO') {
+          return `Bloqueado: ${saltos === 0 ? atual.href : `redirecionamento para ${atual.href}`} — ${err.message} (o web_fetch não acessa endereços locais/privados).`;
+        }
         if (controller.signal.aborted || (err && err.name === 'AbortError')) {
           return `Erro: tempo esgotado (${timeoutMs / 1000} s) ao acessar ${atual.href}.`;
         }

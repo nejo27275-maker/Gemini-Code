@@ -401,6 +401,31 @@ test('sem GEMINI_CODE_WEB_ALLOW_PRIVATE, 127.0.0.1 e outros endereços locais s�
   }
 });
 
+// Revisão adversarial da v0.41.0: o nome era resolvido duas vezes (checagem e conexão). Um DNS do atacante
+// com TTL 0 responde IP público na checagem e 127.0.0.1 na conexão (DNS rebinding). Aqui o "DNS" troca de
+// resposta entre as duas consultas, como o do atacante.
+test('DNS rebinding: o IP usado na conexão também é conferido (não só o da checagem)', async () => {
+  delete process.env.GEMINI_CODE_WEB_ALLOW_PRIVATE;
+  const dns = require('dns');
+  const original = { lookup: dns.lookup, promises: dns.promises.lookup };
+  dns.promises.lookup = async () => [{ address: '93.184.215.14', family: 4 }]; // checagem: público
+  dns.lookup = (host, opts, cb) => { // conexão: local
+    const callback = typeof opts === 'function' ? opts : cb;
+    if (host !== 'rebind.teste') return original.lookup(host, opts, cb);
+    return opts && opts.all ? callback(null, [{ address: '127.0.0.1', family: 4 }]) : callback(null, '127.0.0.1', 4);
+  };
+  try {
+    const antes = hits['/html'] || 0;
+    const r = await criarExecute({ loadConfig: semConfirmar })('web_fetch', { url: `http://rebind.teste:${porta}/html` });
+    assert.match(r, /^Bloqueado: http:\/\/rebind\.teste:\d+\/html — rebind\.teste resolve para um IP privado\/reservado \(127\.0\.0\.1\) na hora de conectar/);
+    assert.equal(hits['/html'] || 0, antes, 'o servidor local não pode ter recebido a requisição');
+  } finally {
+    dns.lookup = original.lookup;
+    dns.promises.lookup = original.promises;
+    process.env.GEMINI_CODE_WEB_ALLOW_PRIVATE = '1';
+  }
+});
+
 // ---------------------------------------------------------------- confirmação
 
 test('confirmação recusada não faz requisição (nem DNS)', async () => {

@@ -48,3 +48,30 @@ test('ensurePublicTarget recusa as mesmas formas escritas na URL', async () => {
     await assert.rejects(ensurePublicTarget(u, false), /privado|reservado/, u);
   }
 });
+
+// Revisão adversarial da v0.41.0: a checagem resolvia o nome e o fetch resolvia DE NOVO ao conectar (DNS
+// rebinding). Rotinas e web_fetch agora conectam pelo endereço conferido (src/redeSegura.js).
+test('rotina http-check: o IP da conexão também é conferido (DNS rebinding)', async () => {
+  const http = require('http');
+  const dns = require('dns');
+  const { executeHttpCheck } = require('../src/routineRunner');
+  let pedidos = 0;
+  const servidor = http.createServer((req, res) => { pedidos++; res.end('ok'); });
+  await new Promise((ok) => servidor.listen(0, '127.0.0.1', ok));
+  const original = { lookup: dns.lookup, promises: dns.promises.lookup };
+  dns.promises.lookup = async () => [{ address: '93.184.215.14', family: 4 }]; // na checagem: público
+  dns.lookup = (host, opts, cb) => { // na conexão: local
+    const callback = typeof opts === 'function' ? opts : cb;
+    if (host !== 'rebind.teste') return original.lookup(host, opts, cb);
+    return opts && opts.all ? callback(null, [{ address: '127.0.0.1', family: 4 }]) : callback(null, '127.0.0.1', 4);
+  };
+  try {
+    await assert.rejects(executeHttpCheck({ url: `http://rebind.teste:${servidor.address().port}/`, timeoutMs: 3000, expectedStatus: null }, { allowPrivateTargets: false }),
+      /rebind\.teste resolve para um IP privado\/reservado \(127\.0\.0\.1\) na hora de conectar/);
+    assert.equal(pedidos, 0, 'o serviço local não pode ter recebido a requisição');
+  } finally {
+    dns.lookup = original.lookup;
+    dns.promises.lookup = original.promises;
+    await new Promise((ok) => servidor.close(ok));
+  }
+});

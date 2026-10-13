@@ -90,8 +90,10 @@ async function executeHttpCheck(action, { allowPrivateTargets = process.env.ROUT
   const timer = setTimeout(() => controller.abort(), action.timeoutMs);
   const started = Date.now();
   try {
-    const response = await fetch(action.url, {
-      method: 'GET', signal: controller.signal, redirect: 'manual',
+    // v0.41.0: DNS fixado no endereço conferido (src/redeSegura.js); o fetch global resolvia de novo ao
+    // conectar (DNS rebinding). Não segue redirecionamento, como antes (redirect: 'manual').
+    const response = await require('./redeSegura').fetchComDnsFixado(action.url, {
+      signal: controller.signal, permitirPrivado: allowPrivateTargets,
       headers: { 'user-agent': 'gemini-code-routine-monitor/1.0', accept: '*/*' },
     });
     const durationMs = Date.now() - started;
@@ -110,7 +112,7 @@ async function executeHttpCheck(action, { allowPrivateTargets = process.env.ROUT
     return result;
   } catch (err) {
     if (err.result) throw err;
-    const message = err.name === 'AbortError' ? `Timeout após ${action.timeoutMs} ms.` : err.message;
+    const message = err.name === 'AbortError' || controller.signal.aborted ? `Timeout após ${action.timeoutMs} ms.` : err.message;
     const wrapped = new Error(message);
     wrapped.result = { ok: false, url: action.url, durationMs: Date.now() - started, checkedAt: new Date().toISOString(), message };
     throw wrapped;
