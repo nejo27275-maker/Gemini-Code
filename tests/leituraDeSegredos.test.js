@@ -42,7 +42,8 @@ test('convidado não consegue ler o token do cowork pelo loop do agente', async 
     assert.equal(historico.includes(TOKEN), false, 'o token não pode aparecer em nenhum resultado de ferramenta');
     const resultados = r.history.filter((m) => m.parts[0] && m.parts[0].functionResponse).map((m) => m.parts[0].functionResponse.response.result);
     assert.match(resultados[0], /^Bloqueado/);
-    assert.match(resultados[1], /Nenhuma ocorrência/);
+    // Desde a restrição do convidado ao projeto, a busca em ~/.gemini-code nem roda (bloqueada); antes, não achava.
+    assert.match(resultados[1], /^Bloqueado|Nenhuma ocorrência/);
     assert.match(resultados[2], /^Bloqueado/);
   } finally { security.clearSession(); }
 });
