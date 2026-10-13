@@ -57,9 +57,25 @@ function verificadorDeSegredos() {
   return (arquivo, stat) => (stat && stat.ino ? inodes.has(`${stat.dev}:${stat.ino}`) : isSecret(arquivo));
 }
 
+/**
+ * v0.41.0: a sessão de convidado ("só leitura") lia QUALQUER arquivo da máquina (chaves SSH, outros
+ * projetos). Agora só dentro da pasta em que o gemini-code foi aberto. Compara caminhos reais
+ * (symlink e ".." não escapam). Sessão de dono: sem restrição.
+ * @returns {string|null} mensagem de bloqueio ou null
+ */
+function foraDoProjetoParaConvidado(p, raiz = process.cwd()) {
+  let papel = null;
+  try { papel = require('../security').getSessionRole(); } catch { /* sem security: dono */ }
+  if (papel !== 'guest') return null;
+  const base = caminhoReal(raiz);
+  const alvo = caminhoReal(p);
+  if (alvo === base || alvo.startsWith(base + path.sep)) return null;
+  return `Bloqueado: a sessão de convidado só lê arquivos dentro do projeto (${base}).`;
+}
+
 const MSG_SEGREDO =
   'Bloqueado: este arquivo (ou o destino deste link) guarda segredos do próprio gemini-code ' +
   '(API key, segredos de MCP ou token de acesso) e não pode ser lido por ferramentas do modelo. ' +
   'Para ver a configuração, peça ao usuário para rodar "gemini-code config show" (mostra mascarado).';
 
-module.exports = { caminhoReal, mesmoInode, isProtected, isSecret, verificadorDeSegredos, MSG_SEGREDO };
+module.exports = { caminhoReal, mesmoInode, isProtected, isSecret, verificadorDeSegredos, foraDoProjetoParaConvidado, MSG_SEGREDO };

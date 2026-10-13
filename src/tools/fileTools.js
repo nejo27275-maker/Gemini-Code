@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { backupBeforeWrite } = require('./backup');
 const rewind = require('../rewind');
-const { isProtected, isSecret, MSG_SEGREDO } = require('./protectedPaths');
+const { isProtected, isSecret, foraDoProjetoParaConvidado, MSG_SEGREDO } = require('./protectedPaths');
 
 // Achado num teste (set/2026): o agente reescreveu sozinho o config.json
 // (model/fastModel/imageModel) sem o usuário pedir nem confirmar, voltando
@@ -122,6 +122,8 @@ async function execute(name, args) {
       // v0.3.8: path ausente fazia path.resolve lançar um TypeError cru.
       if (typeof args.path !== 'string' || !args.path) return 'Erro: read_file precisa de "path".';
       if (isSecret(args.path)) return MSG_SEGREDO;
+      const foraR = foraDoProjetoParaConvidado(args.path);
+      if (foraR) return foraR;
       const p = path.resolve(args.path);
       if (!fs.existsSync(p)) return `Erro: arquivo não existe: ${args.path}`;
       const stat = fs.statSync(p);
@@ -199,6 +201,8 @@ async function execute(name, args) {
     }
     case 'list_dir': {
       const dir = args.path || '.';
+      const foraL = foraDoProjetoParaConvidado(dir);
+      if (foraL) return foraL;
       if (!fs.existsSync(dir)) return `Erro: diretório não existe: ${dir}`;
       if (!fs.statSync(dir).isDirectory()) return `Erro: "${dir}" não é um diretório.`;
       const entries = fs.readdirSync(dir, { withFileTypes: true });

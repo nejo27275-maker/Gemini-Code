@@ -9,7 +9,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { verificadorDeSegredos } = require('./protectedPaths');
+const { verificadorDeSegredos, foraDoProjetoParaConvidado } = require('./protectedPaths');
 
 const IGNORAR_DIRS = new Set(['node_modules', '.git', 'dist', 'build', '.cache', 'coverage']);
 const MAX_RESULTADOS = 100;
@@ -62,6 +62,8 @@ async function execute(name, args) {
   if (typeof args.pattern !== 'string' || args.pattern === '') return 'Erro: search_files precisa de "pattern" (texto não vazio).';
 
   const raiz = path.resolve(args.path || '.');
+  const fora = foraDoProjetoParaConvidado(raiz);
+  if (fora) return fora;
   if (!fs.existsSync(raiz)) return `Erro: diretório não existe: ${args.path || '.'}`;
 
   let matcher;
