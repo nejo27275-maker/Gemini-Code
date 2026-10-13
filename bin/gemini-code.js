@@ -261,7 +261,8 @@ async function chatLoop() {
   // de run_shell usa (src/ui/prompt.js), em vez de criar uma própria —
   // evita duas interfaces competindo pelo mesmo stdin.
   const rl = getSharedReadline();
-  let sessaoAtual = sessions.getActive() || sessions.create('Sessão principal');
+  // v0.41.0: sessão da pasta atual (src/sessions.js getActiveFor), não a última de qualquer projeto.
+  let sessaoAtual = sessions.getActiveFor(process.cwd()) || sessions.create(`Sessão de ${path.basename(process.cwd()) || 'raiz'}`);
   let history = Array.isArray(sessaoAtual.history) ? sessaoAtual.history : [];
   let modeloAtual = sessaoAtual.modelName || undefined; // undefined = usa o padrão do config
   if (history.length) console.log(chalk.dim(`Sessão retomada: ${sessaoAtual.name} (${sessaoAtual.id}) — ${history.length} mensagens no histórico. Use /session new para começar outra.\n`));
