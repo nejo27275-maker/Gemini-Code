@@ -225,7 +225,7 @@ async function runWorkflowData(workflow, deps = {}) {
     const tentativas = 1 + Math.max(0, Math.min(2, Number(step.retry) || 0));
     const opcoes = { history: manterHistorico ? history : [] };
     if (typeof step.model === 'string' && step.model.trim()) opcoes.modelName = step.model.trim();
-    if (Array.isArray(step.tools)) opcoes.allowedTools = step.tools.map(String); // [] = passo SEM ferramentas (quem trata é run_workflow)
+    if (Array.isArray(step.tools)) opcoes.allowedTools = step.tools.map(String); // [] = passo SEM ferramentas
     console.log(`\n=== Passo: ${step.id} ===`);
     let resposta = null; let ultimoErro = null; let usadas = 0;
     for (let i = 0; i < tentativas && !resposta; i++) {

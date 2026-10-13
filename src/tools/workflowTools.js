@@ -242,8 +242,8 @@ async function execute(name, args = {}, opts = {}) {
   if (faltam.length) return `Erro: o workflow \"${args.name}\" precisa de: ${faltam.map((v) => `\"${v}\"`).join(', ')}. Chame de novo com vars: {${faltam.map((v) => `${v}: "..."`).join(', ')}}.`;
   if (an.futuras.length) return `Erro: workflow mal montado (${an.futuras.join('; ')}).`;
   const { runOnce } = require('../agent');
-  // ATENÇÃO: na camada de ferramentas uma lista VAZIA significa "todas liberadas". Por isso "nenhuma ferramenta"
-  // (passo com tools: [], ou interseção vazia) é expressa com um nome que não existe: NENHUMA.
+  // Desde a v0.41.0 a camada de ferramentas já trata [] como "nenhuma"; NENHUMA continua valendo para
+  // compatibilidade (passo com tools: [], ou interseção vazia).
   const pai = Array.isArray(opts.allowedPai) && opts.allowedPai.length ? opts.allowedPai.filter((n) => n !== 'run_workflow') : undefined;
   const ferramentasDoPasso = (o) => {
     const doPasso = Array.isArray(o && o.allowedTools) ? o.allowedTools.filter((n) => n !== 'run_workflow') : undefined;

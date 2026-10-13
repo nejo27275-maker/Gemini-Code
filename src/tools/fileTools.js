@@ -3,9 +3,9 @@
 
 const fs = require('fs');
 const path = require('path');
-const { PROTECTED_PATHS } = require('../config');
 const { backupBeforeWrite } = require('./backup');
 const rewind = require('../rewind');
+const { isProtected, isSecret, MSG_SEGREDO } = require('./protectedPaths');
 
 // Achado num teste (set/2026): o agente reescreveu sozinho o config.json
 // (model/fastModel/imageModel) sem o usuário pedir nem confirmar, voltando
@@ -20,36 +20,8 @@ const rewind = require('../rewind');
 // e os tokens. A comparação era por path.resolve, então um symlink de dentro
 // de um repositório clonado (ex.: docs/settings.json -> ~/.gemini-code/config.json)
 // passava direto; agora compara o caminho REAL (symlinks resolvidos, inclusive
-// quebrados, e pastas que são symlink) e o inode (hard link).
-const MAX_SYMLINKS = 40;
-
-function caminhoReal(p, saltos = 0) {
-  const abs = path.resolve(p);
-  try { return fs.realpathSync(abs); } catch { /* não existe ou é symlink quebrado */ }
-  const pai = path.dirname(abs);
-  if (pai === abs || saltos > MAX_SYMLINKS) return abs;
-  const paiReal = caminhoReal(pai, saltos + 1);
-  try {
-    // Symlink quebrado: gravar nele CRIA o alvo (ex.: um hooks.json que ainda não existe).
-    if (fs.lstatSync(abs).isSymbolicLink()) {
-      return caminhoReal(path.resolve(paiReal, fs.readlinkSync(abs)), saltos + 1);
-    }
-  } catch { /* não existe: segue pelo pai */ }
-  return path.join(paiReal, path.basename(abs));
-}
-
-function mesmoInode(a, b) {
-  try {
-    const sa = fs.statSync(a);
-    const sb = fs.statSync(b);
-    return sa.ino !== 0 && sa.dev === sb.dev && sa.ino === sb.ino;
-  } catch { return false; }
-}
-
-function isProtected(p) {
-  const real = caminhoReal(p);
-  return PROTECTED_PATHS.some((prot) => real === caminhoReal(prot) || mesmoInode(real, prot));
-}
+// quebrados, e pastas que são symlink) e o inode (hard link) — src/tools/protectedPaths.js.
+// v0.41.0: read_file também recusa os segredos (SECRET_PATHS).
 
 // Achado num teste (set/2026, itens 1 e 2 da revisão): read_file não tinha
 // limite de tamanho nem tratamento de erro — um arquivo binário grande (ex.:
@@ -149,6 +121,7 @@ async function execute(name, args) {
     case 'read_file': {
       // v0.3.8: path ausente fazia path.resolve lançar um TypeError cru.
       if (typeof args.path !== 'string' || !args.path) return 'Erro: read_file precisa de "path".';
+      if (isSecret(args.path)) return MSG_SEGREDO;
       const p = path.resolve(args.path);
       if (!fs.existsSync(p)) return `Erro: arquivo não existe: ${args.path}`;
       const stat = fs.statSync(p);

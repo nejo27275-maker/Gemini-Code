@@ -34,6 +34,18 @@ const PROTECTED_PATHS = Object.freeze([
   ROUTINE_API_TOKEN_PATH,
 ]);
 
+// v0.41.0: destes o modelo nem LÊ (read_file, search_files, read_skill): guardam a API
+// key em texto puro, segredos de servidores MCP ou tokens que dão o agente inteiro pela
+// rede. Antes a sessão de convidado lia o cowork-token.txt e virava dona pelo cowork.
+const SECRET_PATHS = Object.freeze([
+  CONFIG_PATH,
+  `${CONFIG_PATH}.bak`,
+  `${CONFIG_PATH}.tmp`,
+  MCP_PATH,
+  COWORK_TOKEN_PATH,
+  ROUTINE_API_TOKEN_PATH,
+]);
+
 // Versão do formato do config.json. v2: config parou de gravar todos os padrões
 // em disco (ver migrarConfig). v3: 'gemini-2.5-flash' também virou padrão
 // antigo (404 "no longer available to new users"). v4: o mesmo vale pro
@@ -233,6 +245,7 @@ module.exports = {
   COWORK_TOKEN_PATH,
   ROUTINE_API_TOKEN_PATH,
   PROTECTED_PATHS,
+  SECRET_PATHS,
   DEFAULT_CONFIG,
   CONFIG_VERSION,
   migrarConfig,

@@ -156,7 +156,7 @@ async function execute(name, args = {}, opts = {}) {
       runOnceFn(prompt, {
         history: [],                       // contexto isolado
         extraSystemInstruction: tipo.instrucao + BASE_INSTRUCAO,
-        allowedTools: tools,               // sempre explícito (lista vazia = tudo, então nunca vazia)
+        allowedTools: tools,               // sempre explícito ([] = nenhuma ferramenta)
         maxSteps: tipo.maxSteps,
         logPrefix: '    ',
       })

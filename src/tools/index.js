@@ -11,16 +11,21 @@ const skillLoader = require('../skills/loader');
 const todoTools = require('./todoTools');
 const workflowTools = require('./workflowTools');
 
+// v0.41.0: lista VAZIA significa "nenhuma ferramenta"; só a AUSÊNCIA de lista
+// (undefined/null) libera todas. Antes `[]` liberava tudo: um passo de workflow
+// com `tools: []` rodado por `gemini-code agent run` recebia write_file e run_shell.
+const semRestricao = (allowedNames) => allowedNames == null;
+
 /**
  * @param {string[]} [allowedNames] Se informado, só devolve as ferramentas
  *   cujo nome está nessa lista (usado pelos agentes/personas de agents/*.json,
- *   campo "allowedTools"). Sem lista, devolve todas (comportamento antigo).
+ *   campo "allowedTools"); `[]` = nenhuma. Sem lista, devolve todas.
  */
 async function getAllDeclarations(allowedNames) {
   // Evita iniciar/consultar servidores MCP quando o perfil de permissão
   // só admite ferramentas locais (ex.: run --read-only). Só carregamos MCP
   // se não houver restrição ou se a allowlist pedir explicitamente uma delas.
-  const needsMcp = !allowedNames || !allowedNames.length || allowedNames.some((name) => name.startsWith('mcp__'));
+  const needsMcp = semRestricao(allowedNames) || allowedNames.some((name) => name.startsWith('mcp__'));
   const mcpDecls = needsMcp ? await mcpClient.declarationsForGemini() : [];
   const all = [
     ...fileTools.declarations,
@@ -33,12 +38,12 @@ async function getAllDeclarations(allowedNames) {
     ...subagent.declarations,
     ...mcpDecls,
   ];
-  if (!allowedNames || !allowedNames.length) return all;
+  if (semRestricao(allowedNames)) return all;
   return all.filter((d) => allowedNames.includes(d.name));
 }
 
 async function execute(name, args, allowedNames) {
-  if (allowedNames && allowedNames.length && !allowedNames.includes(name)) {
+  if (!semRestricao(allowedNames) && !allowedNames.includes(name)) {
     throw new Error(`Ferramenta "${name}" não está liberada para este agente.`);
   }
   if (fileTools.declarations.some((d) => d.name === name)) return fileTools.execute(name, args);
