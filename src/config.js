@@ -17,13 +17,15 @@ const HISTORY_DIR = path.join(HOME_DIR, 'history');
 const HOOKS_PATH = path.join(HOME_DIR, 'hooks.json');
 const COWORK_TOKEN_PATH = path.join(HOME_DIR, 'cowork-token.txt');
 const ROUTINE_API_TOKEN_PATH = path.join(HOME_DIR, 'routine-api-token.txt');
+const TRUST_PATH = path.join(HOME_DIR, 'confianca.json'); // v0.41.0: src/trust.js
 
 // Arquivos que o modelo nunca pode gravar sozinho (write_file/edit_file) e que
 // forçam confirmação no run_shell. Cada um, se reescrito, dá ao modelo mais
 // poder do que ele já tem: config.json desliga confirmShell; mcp.json e
 // hooks.json definem comandos que rodam sem confirmação; os tokens liberam o
 // agente para quem estiver na rede. O .bak é restaurado automaticamente se o
-// config.json sumir (ver config-manager.js).
+// config.json sumir (ver config-manager.js). confianca.json decide se instruções
+// de um repositório entram no prompt (o modelo não pode se dar confiança).
 const PROTECTED_PATHS = Object.freeze([
   CONFIG_PATH,
   `${CONFIG_PATH}.bak`,
@@ -32,6 +34,7 @@ const PROTECTED_PATHS = Object.freeze([
   HOOKS_PATH,
   COWORK_TOKEN_PATH,
   ROUTINE_API_TOKEN_PATH,
+  TRUST_PATH,
 ]);
 
 // v0.41.0: destes o modelo nem LÊ (read_file, search_files, read_skill): guardam a API
@@ -70,6 +73,9 @@ const DEFAULT_CONFIG = {
   // v0.41.0: regras FERRAMENTA(PADRÃO); "negar" bloqueia sempre, "permitir" dispensa a confirmação de
   // comandos simples do run_shell. Ver src/permissions.js e "gemini-code config regras".
   permissoes: { permitir: [], negar: [] },
+  // v0.41.0: 'perguntar' = o chat pergunta uma vez por pasta se confia nas instruções do projeto
+  // (AGENTS.md, CLAUDE.md...); 'sempre' = carrega sem perguntar (comportamento antigo). Ver src/trust.js.
+  confiancaProjeto: 'perguntar',
   shellTimeoutMs: 120000,
   coworkPort: 8765,
   // Item 4 da revisão: streaming da resposta de texto (via SSE) em modos
@@ -263,6 +269,7 @@ module.exports = {
   HOOKS_PATH,
   COWORK_TOKEN_PATH,
   ROUTINE_API_TOKEN_PATH,
+  TRUST_PATH,
   PROTECTED_PATHS,
   SECRET_PATHS,
   DEFAULT_CONFIG,

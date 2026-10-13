@@ -113,6 +113,7 @@ No modo "chat", digite /help para ver os comandos de sessão (/clear, /model, /s
   gemini-code config set-openai-key CHAVE | set-openai-model NOME | set-openai-url URL   API compatível com OpenAI (OpenRouter, OpenAI...)
   gemini-code config set-hybrid-cloud gemini|openai   Qual nuvem o modo hybrid usa
   gemini-code config negar|permitir "FERRAMENTA(PADRÃO)" | regras | remover-regra REGRA   Regras de permissão
+  gemini-code confianca [status|confiar|negar|esquecer] [PASTA]   Confiança nas instruções do projeto (AGENTS.md...)
   gemini-code config set-llamacpp-url URL      URL do llama.cpp (padrão http://127.0.0.1:8080)
   gemini-code config set-llamacpp-model NOME   Nome usado pelo servidor (padrão local-model)
   gemini-code config set-llamacpp-path CAMINHO Arquivo GGUF local (override opcional)
@@ -236,9 +237,26 @@ function salvarHistorico(history, nomeArg) {
   return arquivo;
 }
 
+// v0.41.0: confiança no projeto (src/trust.js). Pergunta uma vez por pasta, só se o projeto traz
+// instruções para agentes (AGENTS.md, CLAUDE.md, .cursorrules, .gemini-code/commands...).
+async function perguntarConfiancaNoProjeto() {
+  const trust = require('../src/trust');
+  if (loadConfig().confiancaProjeto === 'sempre' || trust.estado() !== null) return;
+  const instrucoes = trust.instrucoesDoProjeto();
+  if (!instrucoes.length) return;
+  console.log(chalk.yellow('Este projeto traz instruções para agentes, que entram no prompt do modelo:'));
+  for (const arq of instrucoes) console.log(chalk.yellow(`  ${path.relative(process.cwd(), arq) || arq}`));
+  console.log(chalk.yellow('Instruções de um repositório de terceiros podem mandar o agente fazer coisas que você não pediu.'));
+  const r = String(await ask('Confiar nelas? [s]im / [n]ão — fica salvo para esta pasta: ')).trim().toLowerCase();
+  if (r === 's' || r === 'y') { trust.definir(process.cwd(), 'confiar'); console.log(chalk.dim('(confiança salva; desfaça com: gemini-code confianca esquecer)\n')); }
+  else if (r === 'n') { trust.definir(process.cwd(), 'negar'); console.log(chalk.dim('(instruções do projeto ignoradas; só o conhecimento global vale. Mude com: gemini-code confianca confiar)\n')); }
+  else { trust.negarNestaSessao(); console.log(chalk.dim('(sem resposta: ignorando as instruções do projeto só nesta execução)\n')); }
+}
+
 async function chatLoop() {
   console.log(chalk.bold(`gemini-code v${PACKAGE_JSON.version} — modo conversa. Ctrl+C para sair, /help para comandos.\n`));
   if (require('../src/solo').ativo()) console.log(chalk.green('[solo] code-ia sozinho: nenhuma outra IA (Gemini, llama.cpp, Ollama) é usada.\n'));
+  await perguntarConfiancaNoProjeto();
   // Item 8 da revisão: usa a MESMA interface de readline que a confirmação
   // de run_shell usa (src/ui/prompt.js), em vez de criar uma própria —
   // evita duas interfaces competindo pelo mesmo stdin.
@@ -599,7 +617,7 @@ async function chatLoop() {
 // "agenda" e "projetos" são só arquivo local (sem API key nenhuma
 // envolvida) — pedir a chave de segurança pra só ver a lista seria atrito
 // à toa.
-const COMANDOS_SEM_DESBLOQUEIO = new Set([undefined, 'help', '--help', 'version', '--version', '-v', 'config', 'agenda', 'projetos', 'backups', 'routines', 'sessions', 'checkpoints', 'artifacts', 'context', 'doctor', 'solo', 'security', 'profiles', 'agents', 'code-ia', 'codeia']);
+const COMANDOS_SEM_DESBLOQUEIO = new Set([undefined, 'help', '--help', 'version', '--version', '-v', 'config', 'confianca', 'trust', 'agenda', 'projetos', 'backups', 'routines', 'sessions', 'checkpoints', 'artifacts', 'context', 'doctor', 'solo', 'security', 'profiles', 'agents', 'code-ia', 'codeia']);
 
 async function garantirDesbloqueio() {
   if (COMANDOS_SEM_DESBLOQUEIO.has(cmd)) return;
@@ -689,6 +707,24 @@ async function main() {
 
     case 'chat':
       return chatLoop();
+
+    case 'confianca':
+    case 'trust': {
+      // v0.41.0: gemini-code confianca [status|confiar|negar|esquecer] [PASTA]
+      const trust = require('../src/trust');
+      const [sub = 'status', pasta = process.cwd()] = rest;
+      if (sub === 'status') {
+        const e = trust.estado(pasta);
+        const inst = trust.instrucoesDoProjeto(pasta);
+        console.log(`Pasta: ${path.resolve(pasta)}\nDecisão: ${e || '(nenhuma — o chat pergunta; o run carrega)'}\nInstruções do projeto: ${inst.length ? inst.map((a) => path.relative(pasta, a) || a).join(', ') : '(nenhuma)'}`);
+        return;
+      }
+      const decisao = { confiar: 'confiar', negar: 'negar', esquecer: null }[sub];
+      if (decisao === undefined) throw new Error('Uso: gemini-code confianca [status|confiar|negar|esquecer] [PASTA]');
+      const alvo = trust.definir(pasta, decisao);
+      console.log(decisao ? `${alvo}: ${decisao}.` : `${alvo}: decisão apagada (o chat vai perguntar de novo).`);
+      return;
+    }
 
     case 'run': {
       const parsed = agentProfiles.parseRunArgs(rest);

@@ -43,7 +43,10 @@ function lerDir(dir) {
 function carregar({ cwd = process.cwd(), home } = {}) {
   const todos = new Map();
   if (home) for (const [k, v] of lerDir(path.join(home, 'commands'))) todos.set(k, { ...v, origem: 'global' });
-  for (const [k, v] of lerDir(path.join(cwd, '.gemini-code', 'commands'))) todos.set(k, { ...v, origem: 'projeto' });
+  // v0.41.0: comandos do projeto só se o usuário não negou confiança nele (src/trust.js).
+  if (require('./trust').projetoLiberado(cwd)) {
+    for (const [k, v] of lerDir(path.join(cwd, '.gemini-code', 'commands'))) todos.set(k, { ...v, origem: 'projeto' });
+  }
   return todos;
 }
 
