@@ -63,8 +63,12 @@ function instrucoesDoProjeto(dir = process.cwd()) {
   const { HOME_DIR } = require('./config');
   const globais = real(HOME_DIR) + path.sep;
   const arquivos = require('./knowledge').arquivosDeProjeto(dir).filter((f) => !real(f).startsWith(globais));
-  const comandos = path.join(dir, '.gemini-code', 'commands');
-  if (fs.existsSync(comandos) && !real(comandos).startsWith(globais)) arquivos.push(comandos + path.sep);
+  // Comandos e subagentes (src/subagent.js) do projeto também são instruções: sem listá-los, um repositório
+  // só com .gemini-code/subagentes/ entrava sem a pergunta de confiança.
+  for (const nome of ['commands', 'subagentes']) {
+    const pasta = path.join(dir, '.gemini-code', nome);
+    if (fs.existsSync(pasta) && !real(pasta).startsWith(globais)) arquivos.push(pasta + path.sep);
+  }
   return arquivos;
 }
 

@@ -93,6 +93,18 @@ test('chat real: pergunta uma vez; "n" salva negar; sem resposta não salva nada
   assert.equal(trust.estado(outro), null, 'não salva decisão sem resposta');
 });
 
+test('repositório só com .gemini-code/subagentes também passa pela pergunta de confiança', () => {
+  const dir = fs.mkdtempSync(path.join(HOME_FALSO, 'so-subagente-'));
+  const pasta = path.join(dir, '.gemini-code', 'subagentes');
+  fs.mkdirSync(pasta, { recursive: true });
+  fs.writeFileSync(path.join(pasta, 'do-repo.md'), '---\ndescription: do repositório\n---\nINSTRUCAO-DO-SUBAGENTE');
+  assert.deepEqual(trust.instrucoesDoProjeto(dir).map((f) => path.relative(dir, f)), [path.join('.gemini-code', 'subagentes')]);
+  const r = chat(dir, 'n\n');
+  assert.match(r.stdout, /Este projeto traz instruções para agentes/);
+  assert.equal(trust.estado(dir), 'negar');
+  assert.equal(require('../src/subagent').todosOsTipos(dir)['do-repo'], undefined);
+});
+
 test('CLI: confianca status/negar/esquecer', () => {
   const dir = projeto('p5');
   const cli = (...a) => spawnSync(process.execPath, [BIN, 'confianca', ...a], { cwd: dir, encoding: 'utf8', env: { ...process.env, HOME: HOME_FALSO, USERPROFILE: HOME_FALSO } });

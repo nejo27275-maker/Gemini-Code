@@ -238,7 +238,7 @@ function salvarHistorico(history, nomeArg) {
 }
 
 // v0.41.0: confiança no projeto (src/trust.js). Pergunta uma vez por pasta, só se o projeto traz
-// instruções para agentes (AGENTS.md, CLAUDE.md, .cursorrules, .gemini-code/commands...).
+// instruções para agentes (AGENTS.md, CLAUDE.md, .cursorrules, .gemini-code/commands e /subagentes...).
 async function perguntarConfiancaNoProjeto() {
   const trust = require('../src/trust');
   if (loadConfig().confiancaProjeto === 'sempre' || trust.estado() !== null) return;
