@@ -113,15 +113,42 @@ const MAX_SEGUNDO_PLANO = 5;
 const segundoPlano = new Map();
 let proximoId = 1;
 
+// O grupo de processos pode sobreviver ao shell que o iniciou ("npm run dev &", "a & b"): o sh sai
+// com 0 e o servidor continua. Por isso o limite e o encerramento olham o GRUPO, não só o código.
+function grupoVivo(item) {
+  if (process.platform === 'win32') return item.codigo === null;
+  try { process.kill(-item.filho.pid, 0); } catch { return false; }
+  return process.platform !== 'linux' || grupoTemProcessoNaoZumbi(item.filho.pid);
+}
+
+// kill(-pgid, 0) também responde por processo zumbi (morto, esperando o init recolher) — e em contêiner
+// sem init de verdade ele nunca é recolhido: o comando encerrado contaria para sempre no limite.
+function grupoTemProcessoNaoZumbi(pgid) {
+  const fs = require('fs');
+  try {
+    for (const n of fs.readdirSync('/proc')) {
+      if (!/^\d+$/.test(n)) continue;
+      let st;
+      try { st = fs.readFileSync(`/proc/${n}/stat`, 'utf8'); } catch { continue; }
+      const [estado, , pgrp] = st.slice(st.lastIndexOf(')') + 2).split(' '); // estado ppid pgrp ...
+      if (Number(pgrp) === pgid && estado !== 'Z') return true;
+    }
+    return false;
+  } catch { return true; } // sem /proc: fica com a resposta do kill
+}
+
 function encerrarGrupo(item) {
-  if (item.codigo !== null) return;
-  try { process.kill(process.platform === 'win32' ? item.filho.pid : -item.filho.pid, 'SIGTERM'); } catch { try { item.filho.kill('SIGTERM'); } catch { /* já saiu */ } }
+  if (process.platform === 'win32') {
+    if (item.codigo === null) { try { item.filho.kill('SIGTERM'); } catch { /* já saiu */ } }
+    return;
+  }
+  try { process.kill(-item.filho.pid, 'SIGTERM'); } catch { /* grupo já acabou */ }
 }
 
 process.on('exit', () => { for (const item of segundoPlano.values()) encerrarGrupo(item); });
 
 function iniciarSegundoPlano(command, cwd) {
-  const ativos = [...segundoPlano.values()].filter((i) => i.codigo === null).length;
+  const ativos = [...segundoPlano.values()].filter(grupoVivo).length;
   if (ativos >= MAX_SEGUNDO_PLANO) return `Erro: já há ${ativos} comandos em segundo plano (máximo ${MAX_SEGUNDO_PLANO}). Encerre um com shell_status (encerrar: true).`;
   const fs = require('fs');
   const { HOME_DIR } = require('../config');
@@ -154,16 +181,22 @@ function ultimasLinhas(arquivo, n) {
   } catch { return '(sem saída ainda)'; }
 }
 
+function estadoDe(item, prefixo = '') {
+  if (item.codigo === null) return 'rodando';
+  const fim = `terminou (${prefixo}${item.codigo})`;
+  return grupoVivo(item) ? `${fim}, mas deixou processos rodando no grupo — encerre com encerrar: true` : fim;
+}
+
 function statusSegundoPlano(args) {
   if (!args.id) {
     if (!segundoPlano.size) return 'Nenhum comando em segundo plano nesta sessão.';
-    return [...segundoPlano.values()].map((i) => `${i.id}: ${i.codigo === null ? 'rodando' : `terminou (${i.codigo})`} há ${Math.round((Date.now() - i.inicio) / 1000)}s — ${i.command}`).join('\n');
+    return [...segundoPlano.values()].map((i) => `${i.id}: ${estadoDe(i)} há ${Math.round((Date.now() - i.inicio) / 1000)}s — ${i.command}`).join('\n');
   }
   const item = segundoPlano.get(String(args.id));
   if (!item) return `Erro: não há comando em segundo plano com id "${args.id}". Chame shell_status sem id para listar.`;
   if (args.encerrar) encerrarGrupo(item);
   const n = Math.min(400, Math.max(1, Math.floor(Number(args.linhas)) || 40));
-  const estado = args.encerrar && item.codigo === null ? 'encerrando (sinal enviado)' : item.codigo === null ? 'rodando' : `terminou (exit ${item.codigo})`;
+  const estado = args.encerrar && grupoVivo(item) ? 'encerrando (sinal enviado)' : estadoDe(item, 'exit ');
   return `${item.id}: ${estado} — ${item.command}\n--- últimas linhas ---\n${ultimasLinhas(item.log, n)}`;
 }
 

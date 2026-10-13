@@ -71,6 +71,51 @@ s.execute('run_shell', { command: ${JSON.stringify(`"${process.execPath}" "${fun
   assert.equal(vivo, false, `o processo ${pid} ficou órfão`);
 });
 
+// Revisão adversarial da v0.41.0: com "&" no comando o sh sai na hora (código 0) e o processo continua
+// no grupo. Antes isso escapava do limite de 5 e do encerramento na saída (só olhavam o código do sh).
+test('processo que sobrevive ao shell ("cmd &") conta no limite e é encerrado', { skip: semPosix }, async () => {
+  const ids = [];
+  for (let i = 0; i < shell.MAX_SEGUNDO_PLANO; i++) ids.push(idDe(await shell.execute('run_shell', { command: `${no('setInterval(()=>{},1000)')} &`, em_segundo_plano: true })));
+  for (const id of ids) assert.ok(await ate(async () => /terminou \(exit 0\), mas deixou processos rodando/.test(await shell.execute('shell_status', { id }))), id);
+  assert.match(await shell.execute('run_shell', { command: no('1'), em_segundo_plano: true }), /máximo/, 'o limite vê os processos que ficaram');
+  for (const id of ids) await shell.execute('shell_status', { id, encerrar: true });
+  for (const id of ids) assert.ok(await ate(async () => /terminou \(exit 0\) —/.test(await shell.execute('shell_status', { id }))), `${id} encerrado`);
+});
+
+test('na saída do gemini-code, o processo deixado por "cmd &" também morre', { skip: semPosix }, () => {
+  const pidArq = path.join(HOME_FALSO, 'pid-amp.txt');
+  const fundo = path.join(HOME_FALSO, 'fundo-amp.js');
+  fs.writeFileSync(fundo, `require('fs').writeFileSync(${JSON.stringify(pidArq)}, String(process.pid)); setInterval(() => {}, 1000);`);
+  const pai = path.join(HOME_FALSO, 'pai-amp.js');
+  fs.writeFileSync(pai, `const s = require(${JSON.stringify(path.join(__dirname, '..', 'src', 'tools', 'shellTools'))});
+s.execute('run_shell', { command: ${JSON.stringify(`"${process.execPath}" "${fundo}" &`)}, em_segundo_plano: true })
+  .then((r) => { console.log(r); setTimeout(() => process.exit(0), 1500); });`);
+  const r = spawnSync(process.execPath, [pai], { encoding: 'utf8', timeout: 20000, env: { ...process.env, HOME: HOME_FALSO, USERPROFILE: HOME_FALSO } });
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(fs.existsSync(pidArq), `o comando de fundo não chegou a rodar: ${r.stdout}`);
+  const pid = Number(fs.readFileSync(pidArq, 'utf8'));
+  let vivo = true;
+  for (let i = 0; i < 40 && vivo; i++) { try { process.kill(pid, 0); spawnSync('sleep', ['0.05']); } catch { vivo = false; } }
+  if (vivo) { try { process.kill(pid, 'SIGKILL'); } catch { /* já saiu */ } }
+  assert.equal(vivo, false, `o processo ${pid} ficou órfão`);
+});
+
+test('terminal fechado (SIGHUP) passa pela limpeza do CLI em vez de matar o processo direto', { skip: semPosix }, async () => {
+  const { spawn } = require('child_process');
+  const dir = fs.mkdtempSync(path.join(HOME_FALSO, 'hup-'));
+  const filho = spawn(process.execPath, [path.join(__dirname, '..', 'bin', 'gemini-code.js'), 'chat'], {
+    cwd: dir, stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, HOME: HOME_FALSO, USERPROFILE: HOME_FALSO, GEMINI_CODE_SOLO: '1', GEMINI_API_KEY: '' },
+  });
+  let saida = '';
+  filho.stdout.on('data', (d) => { saida += d; });
+  assert.ok(await ate(() => /modo conversa/.test(saida), 15000), `o chat não abriu: ${saida}`);
+  const fim = new Promise((resolve) => filho.on('exit', (codigo, sinal) => resolve({ codigo, sinal })));
+  filho.kill('SIGHUP');
+  const r = await Promise.race([fim, esperar(10000).then(() => ({ codigo: 'timeout' }))]);
+  if (r.codigo === 'timeout') filho.kill('SIGKILL');
+  assert.deepEqual(r, { codigo: 0, sinal: null }, 'saiu por process.exit (que dispara o encerramento dos comandos de fundo)');
+});
+
 test('com confirmShell ligado e sem terminal, segundo plano também é recusado', { skip: semPosix }, () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'gc-bg-conf-'));
   fs.mkdirSync(path.join(home, '.gemini-code'));

@@ -61,6 +61,9 @@ function encerrarComLimpeza() {
 }
 process.on('SIGINT', encerrarComLimpeza);
 process.on('SIGTERM', encerrarComLimpeza);
+// v0.41.0: terminal fechado (SIGHUP) também passa pela limpeza — process.exit dispara o 'exit' que
+// encerra os comandos em segundo plano do run_shell; sem isto o Node saía direto e eles ficavam órfãos.
+process.on('SIGHUP', encerrarComLimpeza);
 
 function printHelp() {
   console.log(`
