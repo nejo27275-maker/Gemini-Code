@@ -17,7 +17,7 @@ function config(obj) {
 
 test('sem arquivo de hooks não faz nada', () => {
   hooks.definirArquivo(path.join(os.tmpdir(), 'nao-existe-hooks.json'));
-  assert.deepEqual(hooks.executar('PreToolUse', { tool: 'run_shell', args: {} }), { bloqueado: false, mensagem: '', avisos: [] });
+  assert.deepEqual(hooks.executar('PreToolUse', { tool: 'run_shell', args: {} }), { bloqueado: false, mensagem: '', avisos: [], saidas: [] });
   assert.deepEqual(hooks.resumo(), []);
 });
 

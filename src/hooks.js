@@ -19,11 +19,15 @@ const { spawnSync } = require('child_process');
 // HOOKS_PATH está em PROTECTED_PATHS: o modelo não grava este arquivo (write_file/edit_file).
 const { HOOKS_PATH } = require('./config');
 
-const EVENTOS = ['PreToolUse', 'PostToolUse'];
+// v0.41.0: + UserPromptSubmit (antes de mandar o pedido: código 2 bloqueia; a saída com código 0
+// vira contexto extra), SessionStart (uma vez por processo: a saída entra no prompt do sistema) e
+// Stop (quando o agente vai terminar: código 2 obriga a continuar, com a saída como motivo).
+// Nesses três o "matcher" não se aplica (omita).
+const EVENTOS = ['PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'SessionStart', 'Stop'];
 let arquivo = HOOKS_PATH;
 let cache = { mtime: -1, hooks: {} };
 
-function definirArquivo(p) { arquivo = p; cache = { mtime: -1, hooks: {} }; }
+function definirArquivo(p) { arquivo = p; cache = { mtime: -1, hooks: {} }; contextoDaSessao = null; }
 
 function carregar() {
   try {
@@ -48,12 +52,12 @@ function casa(matcher, tool) {
  * Roda os hooks do evento para a ferramenta.
  * @returns {{bloqueado:boolean, mensagem:string, avisos:string[]}}
  */
-function executar(evento, { tool, args, resultado, cwd = process.cwd() } = {}) {
-  const r = { bloqueado: false, mensagem: '', avisos: [] };
+function executar(evento, { tool = '', args, resultado, extra, cwd = process.cwd() } = {}) {
+  const r = { bloqueado: false, mensagem: '', avisos: [], saidas: [] };
   const lista = (carregar()[evento] || []).filter((h) => casa(h.matcher, tool));
   for (const h of lista) {
     const segundos = Math.min(60, Math.max(1, Number(h.timeout) || 10));
-    const entrada = JSON.stringify({ event: evento, tool, args, cwd, ...(resultado !== undefined ? { resultado: String(resultado).slice(0, 20000) } : {}) });
+    const entrada = JSON.stringify({ event: evento, tool, args, cwd, ...(extra || {}), ...(resultado !== undefined ? { resultado: String(resultado).slice(0, 20000) } : {}) });
     let p;
     try {
       p = spawnSync('sh', ['-c', h.command], { input: entrada, encoding: 'utf8', timeout: segundos * 1000, cwd, env: { ...process.env, GEMINI_CODE_EVENT: evento, GEMINI_CODE_TOOL: tool }, maxBuffer: 1024 * 1024 });
@@ -62,10 +66,22 @@ function executar(evento, { tool, args, resultado, cwd = process.cwd() } = {}) {
     if (p.error && p.error.code === 'EPIPE' && p.status !== null) p.error = undefined;
     if (p.error) { r.avisos.push(`hook "${h.command}" não terminou (${p.error.code === 'ETIMEDOUT' ? `passou de ${segundos}s` : p.error.message})`); continue; }
     const saida = `${p.stdout || ''}${p.stderr || ''}`.trim().slice(0, 2000);
-    if (p.status === 2) { r.bloqueado = true; r.mensagem = [r.mensagem, saida || `hook "${h.command}" respondeu código 2`].filter(Boolean).join('\n'); if (evento === 'PreToolUse') break; }
+    if (p.status === 2) { r.bloqueado = true; r.mensagem = [r.mensagem, saida || `hook "${h.command}" respondeu código 2`].filter(Boolean).join('\n'); if (evento === 'PreToolUse' || evento === 'UserPromptSubmit') break; }
     else if (p.status !== 0) r.avisos.push(`hook "${h.command}" saiu com código ${p.status}${saida ? `: ${saida.slice(0, 200)}` : ''}`);
+    else if (p.stdout && p.stdout.trim()) r.saidas.push(p.stdout.trim().slice(0, 2000));
   }
   return r;
+}
+
+// SessionStart roda uma vez por processo; o resultado fica guardado.
+let contextoDaSessao = null;
+function contextoDeInicio() {
+  if (contextoDaSessao === null) {
+    const r = executar('SessionStart', {});
+    contextoDaSessao = { texto: r.saidas.join('\n\n') };
+    return { texto: contextoDaSessao.texto, avisos: r.avisos }; // avisos só na 1ª vez
+  }
+  return { texto: contextoDaSessao.texto, avisos: [] };
 }
 
 function resumo() {
@@ -73,4 +89,4 @@ function resumo() {
   return EVENTOS.flatMap((ev) => (h[ev] || []).map((x) => `  ${ev} [${x.matcher || '*'}] ${x.command}`));
 }
 
-module.exports = { executar, resumo, definirArquivo, EVENTOS };
+module.exports = { executar, contextoDeInicio, resumo, definirArquivo, EVENTOS };

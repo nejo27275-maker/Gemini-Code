@@ -106,6 +106,7 @@ function buildSystemInstruction(extra, { cwd = process.cwd() } = {}) {
 // MAX_TURNOS_HISTORICO mensagens, mantém as 2 primeiras (contexto inicial da
 // conversa) + as últimas MANTER_RECENTES, descartando o meio.
 const MAX_TURNOS_HISTORICO = 40;
+const MAX_CONTINUACOES_STOP = 3; // hook Stop não pode prender o agente num laço sem fim
 const MANTER_RECENTES = 30;
 
 // Correção (v0.3.6): o corte antigo (`slice(0, 2)` + `slice(-30)`) ignorava a
@@ -207,9 +208,18 @@ async function runOnce(userMessage, opts = {}) {
   // fora dessa lista existem, e mesmo que insistisse, executeFn recusaria.
   const allowedToolsEfetivo = security.restringirParaSessao(allowedTools);
   const declarations = await getAllDeclarationsFn(allowedToolsEfetivo);
-  const systemInstruction = buildSystemInstructionFn(extraSystemInstruction);
+  // v0.41.0: hooks SessionStart (contexto no prompt do sistema, 1x por processo) e UserPromptSubmit
+  // (código 2 bloqueia o pedido; saída com código 0 vira contexto extra) — ver src/hooks.js.
+  const inicio = hooks.contextoDeInicio();
+  inicio.avisos.forEach((a) => console.log(chalk.yellow(`${logPrefix}[hook SessionStart] ${a}`)));
+  const systemInstruction = buildSystemInstructionFn(extraSystemInstruction) +
+    (inicio.texto ? `\n\nContexto adicionado pelo hook SessionStart do usuário:\n${inicio.texto}` : '');
+  const envio = hooks.executar('UserPromptSubmit', { extra: { prompt: userMessage } });
+  envio.avisos.forEach((a) => console.log(chalk.yellow(`${logPrefix}[hook UserPromptSubmit] ${a}`)));
+  if (envio.bloqueado) return { text: `Pedido bloqueado por hook do usuário (UserPromptSubmit): ${envio.mensagem}`, history: [...history] };
+  const mensagemFinal = envio.saidas.length ? `${userMessage}\n\n[contexto adicionado por hook do usuário]\n${envio.saidas.join('\n')}` : userMessage;
 
-  const convo = podarHistorico([...history, { role: 'user', parts: partesComImagens(userMessage, imagens) }]);
+  const convo = podarHistorico([...history, { role: 'user', parts: partesComImagens(mensagemFinal, imagens) }]);
   // Imagens valem para ESTE pedido; no histórico devolvido viram um marcador curto.
   const fechar = (resultado) => (imagens.length ? { ...resultado, history: tirarImagensDoHistorico(resultado.history) } : resultado);
 
@@ -224,6 +234,7 @@ async function runOnce(userMessage, opts = {}) {
   // v0.41.0: orçamento do histórico enviado a cada passo (ver enxugarResultadosAntigos). 0 desliga.
   const maxCharsContexto = cfg.contextoMaxChars === 0 ? 0 : Number(cfg.contextoMaxChars) || 300000;
   let avisouEnxugar = false;
+  let continuacoesStop = 0;
   for (let step = 0; step < maxSteps; step++) {
     const enxuto = enxugarResultadosAntigos(podarHistorico(convo), { maxChars: maxCharsContexto });
     if (enxuto.enxugados && !avisouEnxugar) {
@@ -242,6 +253,15 @@ async function runOnce(userMessage, opts = {}) {
     if (!calls || calls.length === 0) {
       const text = response.text();
       convo.push({ role: 'model', parts: [{ text }] });
+      // v0.41.0: hook Stop com código 2 obriga a continuar (ex.: "os testes não passaram"), até 3 vezes.
+      const parada = continuacoesStop < MAX_CONTINUACOES_STOP ? hooks.executar('Stop', { extra: { resposta: text } }) : null;
+      if (parada) parada.avisos.forEach((a) => console.log(chalk.yellow(`${logPrefix}[hook Stop] ${a}`)));
+      if (parada && parada.bloqueado) {
+        continuacoesStop++;
+        console.log(chalk.yellow(`${logPrefix}[hook Stop] ainda não terminou: ${parada.mensagem}`));
+        convo.push({ role: 'user', parts: [{ text: `[hook Stop do usuário] A tarefa ainda não terminou: ${parada.mensagem}\nContinue até resolver isso.` }] });
+        continue;
+      }
       return fechar({ text, history: convo });
     }
 
