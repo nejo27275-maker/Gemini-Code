@@ -97,3 +97,34 @@ test('/compact ia: usa o resumo do modelo; se o modelo falha, cai no resumo loca
   const curta = await compactarComModelo(h.slice(0, 2), { chat: async () => { throw new Error('não deveria chamar'); } });
   assert.equal(curta.compactou, false);
 });
+
+// Revisão adversarial da v0.41.0: (1) a compactação seguinte descartava o resumo do modelo; (2) o auto-compact
+// media a própria chamada do resumo e rodava logo no turno seguinte; (3) com contexto pequeno o modelo só via o
+// fim das mensagens antigas e o resumo dele substituía todas.
+test('/compact ia: o resumo do modelo sobrevive à compactação seguinte e leva o registro local junto', async () => {
+  const { compactar } = require('../src/compact');
+  const h = [];
+  for (let i = 0; i < 8; i++) {
+    h.push({ role: 'user', parts: [{ text: `PEDIDO-${i}` }] });
+    h.push({ role: 'model', parts: [{ text: `resposta ${i}` }] });
+  }
+  // O "modelo" só viu o fim (como o llama.cpp com contexto pequeno) e resumiu só isso.
+  const r = await compactarComModelo(h, { manter: 4, chat: async () => ({ text: () => 'RESUMO-IA: só vi o fim.' }) });
+  const resumo = r.history[0].parts[0].text;
+  assert.match(resumo, /RESUMO-IA/);
+  assert.match(resumo, /Registro local das mensagens compactadas:[\s\S]*PEDIDO-0/, 'o registro local cobre o começo');
+  let depois = [...r.history];
+  for (let i = 8; i < 14; i++) depois.push({ role: 'user', parts: [{ text: `PEDIDO-${i}` }] }, { role: 'model', parts: [{ text: `resposta ${i}` }] });
+  const segunda = compactar(depois, { manter: 4 }).history[0].parts[0].text;
+  assert.match(segunda, /Resumo anterior:\nRESUMO-IA: só vi o fim\./, 'o resumo do modelo é levado adiante');
+  assert.doesNotMatch(segunda, /Última resposta do modelo \(trecho\): Entendido\./, 'o "Entendido" do resumo não conta como resposta');
+});
+
+test('depois de compactar, o tamanho da chamada do resumo não dispara o auto-compact', () => {
+  const usage = require('../src/usage');
+  usage.zerar();
+  usage.registrar({ local: true, promptTokens: 3000 }); // a chamada do /compact ia levou as mensagens antigas
+  assert.equal(usage.contextoGrande(60000, { ctxLocal: 4096 }), true);
+  usage.contextoCompactado();
+  assert.equal(usage.contextoGrande(60000, { ctxLocal: 4096 }), false);
+});

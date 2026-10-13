@@ -300,6 +300,7 @@ async function chatLoop() {
       if (!r.compactou) console.log(chalk.dim('(conversa ainda curta, nada pra compactar)\n'));
       else {
         history = r.history;
+        usage.contextoCompactado();
         sessaoAtual = sessions.save(sessaoAtual.id, { history, modelName: modeloAtual });
         const como = comIa && !r.comModelo ? ' (o modelo não respondeu; usei o resumo local)' : comIa ? ' feito pelo modelo' : '';
         console.log(chalk.dim(`(compactei ${r.removidas} mensagens antigas num resumo${como}; sessão salva)\n`));
@@ -581,6 +582,7 @@ async function chatLoop() {
       const rc = compactar(history);
       if (rc.compactou) {
         history = rc.history;
+        usage.contextoCompactado();
         sessaoAtual = sessions.save(sessaoAtual.id, { history, modelName: modeloAtual });
         console.log(chalk.dim(`(contexto grande: compactei ${rc.removidas} mensagens antigas sozinho para gastar menos)`));
       }

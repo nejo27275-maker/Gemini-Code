@@ -12,16 +12,23 @@ function textoDe(msg) {
 }
 const curto = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
 
+const ACK = 'Entendido. Continuo a partir deste resumo e das mensagens recentes.';
+const MAX_RESUMO_ANTERIOR = 4000;
+
 /** Resumo em texto de uma lista de mensagens. */
 function resumir(msgs) {
   const pedidos = [];
   const ferramentas = new Map();
   const arquivos = new Set();
   let ultimaResposta = '';
+  let anterior = '';
   for (const m of msgs) {
     if (m.role === 'user' && !temParte(m, 'functionResponse')) {
       const t = textoDe(m);
-      if (t && !t.startsWith('[Resumo da conversa')) pedidos.push(curto(t.replace(/\s+/g, ' '), 160));
+      // v0.41.0: um resumo anterior (do /compact ia, feito pelo modelo, ou do local) é levado adiante em vez
+      // de descartado — antes a compactação seguinte apagava o resumo do modelo e o contexto antigo sumia.
+      if (t.startsWith('[Resumo da conversa')) anterior = t.slice(t.indexOf('\n') + 1).trim();
+      else if (t) pedidos.push(curto(t.replace(/\s+/g, ' '), 160));
     }
     for (const p of m.parts || []) {
       if (p && p.functionCall) {
@@ -30,9 +37,10 @@ function resumir(msgs) {
         if (args && typeof args.path === 'string') arquivos.add(args.path);
       }
     }
-    if (m.role === 'model') { const t = textoDe(m); if (t) ultimaResposta = t; }
+    if (m.role === 'model') { const t = textoDe(m); if (t && t !== ACK) ultimaResposta = t; }
   }
   const linhas = ['[Resumo da conversa até aqui — as mensagens antigas foram compactadas]'];
+  if (anterior) linhas.push('Resumo anterior:', curto(anterior, MAX_RESUMO_ANTERIOR));
   if (pedidos.length) linhas.push('Pedidos do usuário:', ...pedidos.slice(-12).map((p, i) => `${i + 1}. ${p}`));
   if (ferramentas.size) linhas.push('Ferramentas usadas: ' + [...ferramentas].map(([n, c]) => `${n}×${c}`).join(', '));
   if (arquivos.size) linhas.push('Arquivos tocados: ' + [...arquivos].slice(-20).join(', '));
@@ -52,7 +60,7 @@ function compactar(history, { manter = 6 } = {}) {
   if (corte <= 1) return { history: h, removidas: 0, compactou: false };
   const antigas = h.slice(0, corte);
   const resumo = { role: 'user', parts: [{ text: resumir(antigas) }] };
-  const ack = { role: 'model', parts: [{ text: 'Entendido. Continuo a partir deste resumo e das mensagens recentes.' }] };
+  const ack = { role: 'model', parts: [{ text: ACK }] };
   return { history: [resumo, ack, ...h.slice(corte)], removidas: antigas.length, compactou: true };
 }
 
@@ -124,8 +132,11 @@ async function compactarComModelo(history, { chat, manter = 6 } = {}) {
     texto = String((r && r.text && r.text()) || '').trim();
   } catch { /* cai no resumo local */ }
   if (!texto) return { ...local, comModelo: false };
-  const resumo = { role: 'user', parts: [{ text: `[Resumo da conversa até aqui, feito pelo modelo]\n${texto}` }] };
-  const ack = { role: 'model', parts: [{ text: 'Entendido. Continuo a partir deste resumo e das mensagens recentes.' }] };
+  // O resumo local vai junto: com contexto pequeno (llama.cpp) o modelo só recebe o FIM das mensagens antigas
+  // e resumiria só isso; com os dois, /compact ia nunca perde o que o /compact local guardaria.
+  const doLocal = local.history[0].parts[0].text.replace(/^[^\n]*\n?/, '');
+  const resumo = { role: 'user', parts: [{ text: `[Resumo da conversa até aqui, feito pelo modelo]\n${texto}${doLocal ? `\n\nRegistro local das mensagens compactadas:\n${doLocal}` : ''}` }] };
+  const ack = { role: 'model', parts: [{ text: ACK }] };
   return { history: [resumo, ack, ...h.slice(local.removidas)], removidas: local.removidas, compactou: true, comModelo: true };
 }
 
