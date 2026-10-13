@@ -61,9 +61,17 @@ function regrasDe(cfg, chave) {
   return lista.map(parseRegra).filter(Boolean);
 }
 
+// edit_files (v0.41.0) faz o mesmo que várias chamadas de edit_file: regras e hooks escritos para
+// edit_file valem para cada edição dele — senão "negar": ["edit_file(*.env)"] era contornado.
+function equivalentes(nome, args = {}) {
+  if (nome === 'edit_files' && Array.isArray(args.edits)) return args.edits.filter((e) => e && typeof e === 'object').map((e) => ({ nome: 'edit_file', args: e }));
+  return [];
+}
+
 /** @returns {string|null} a regra de "negar" que bloqueia esta chamada, ou null. */
 function negada(nome, args, cfg) {
-  const r = regrasDe(cfg, 'negar').find((regra) => bate(regra, nome, args, { cadaParteDoShell: true }));
+  const chamadas = [{ nome, args }, ...equivalentes(nome, args)];
+  const r = regrasDe(cfg, 'negar').find((regra) => chamadas.some((c) => bate(regra, c.nome, c.args, { cadaParteDoShell: true })));
   return r ? r.texto : null;
 }
 
@@ -77,4 +85,4 @@ function validar(regra) {
   return parseRegra(regra) ? null : `Regra inválida: "${regra}". Use FERRAMENTA ou FERRAMENTA(PADRÃO), ex.: run_shell(npm test*)`;
 }
 
-module.exports = { negada, shellPermitido, parseRegra, validar, globParaRegex, alvos };
+module.exports = { negada, shellPermitido, parseRegra, validar, globParaRegex, alvos, equivalentes };

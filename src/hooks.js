@@ -54,8 +54,15 @@ function casa(matcher, tool) {
  */
 function executar(evento, { tool = '', args, resultado, extra, cwd = process.cwd() } = {}) {
   const r = { bloqueado: false, mensagem: '', avisos: [], saidas: [] };
-  const lista = (carregar()[evento] || []).filter((h) => casa(h.matcher, tool));
-  for (const h of lista) {
+  // Hook de edit_file vale para cada edição de um edit_files (uma execução por edição, com os args dela);
+  // o que já casa com edit_files (ex.: "*") roda uma vez só, com a chamada inteira.
+  const execucoes = [];
+  const equivalentes = require('./permissions').equivalentes(tool, args);
+  for (const h of carregar()[evento] || []) {
+    if (casa(h.matcher, tool)) execucoes.push({ h, tool, args });
+    else for (const e of equivalentes) if (casa(h.matcher, e.nome)) execucoes.push({ h, tool: e.nome, args: e.args });
+  }
+  for (const { h, tool, args } of execucoes) {
     const segundos = Math.min(60, Math.max(1, Number(h.timeout) || 10));
     const entrada = JSON.stringify({ event: evento, tool, args, cwd, ...(extra || {}), ...(resultado !== undefined ? { resultado: String(resultado).slice(0, 20000) } : {}) });
     let p;

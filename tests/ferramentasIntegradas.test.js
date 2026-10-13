@@ -76,3 +76,41 @@ test('loop do agente: edit_files muda dois arquivos numa chamada só', async () 
   assert.equal(fs.readFileSync(path.join(dir, 'a.js'), 'utf8'), 'const nome = calcularTotal();\n');
   assert.equal(fs.readFileSync(path.join(dir, 'b.js'), 'utf8'), 'module.exports = { calcularTotal };\n');
 });
+
+// Revisão adversarial da v0.41.0: "negar" e hooks escritos para edit_file não valiam para edit_files.
+test('regra negar e hook PreToolUse de edit_file também valem para cada edição do edit_files', { skip: process.platform === 'win32' }, async () => {
+  const hooks = require('../src/hooks');
+  const dir = fs.mkdtempSync(path.join(HOME_FALSO, 'alias-'));
+  for (const n of ['a.js', 'segredo.env', 'prod.js']) fs.writeFileSync(path.join(dir, n), 'velho\n');
+  const registro = path.join(dir, 'hook.log');
+  const hook = path.join(dir, 'hook.js');
+  fs.writeFileSync(hook, `let d='';process.stdin.on('data',(c)=>d+=c).on('end',()=>{const e=JSON.parse(d);require('fs').appendFileSync(${JSON.stringify(registro)},e.tool+' '+(e.args.path||'*')+'\\n');if(String(e.args.path).includes('prod'))process.exit(2);});`);
+  const arqHooks = path.join(dir, 'hooks.json');
+  const cmd = `${JSON.stringify(process.execPath)} ${JSON.stringify(hook)}`;
+  fs.writeFileSync(arqHooks, JSON.stringify({ PreToolUse: [{ matcher: 'edit_file', command: cmd }, { matcher: '*', command: cmd }] }));
+  hooks.definirArquivo(arqHooks);
+  const edicao = (n) => ({ path: path.join(dir, n), old_text: 'velho', new_text: 'novo' });
+  const rodar = async (edits, cfgUsuario) => {
+    let passo = 0;
+    const resp = (calls, text = '') => ({ functionCalls: () => calls, text: () => text, rawParts: () => calls.map((c) => ({ functionCall: c })) });
+    const log = console.log;
+    console.log = () => {};
+    try {
+      const r = await runOnce('edite', { deps: { chatWithTools: async () => (++passo === 1 ? resp([{ name: 'edit_files', args: { edits } }]) : resp([], 'fim')), buildSystemInstruction: () => '', loadConfig: () => cfgUsuario } });
+      return r.history[2].parts[0].functionResponse.response.result;
+    } finally { console.log = log; }
+  };
+  try {
+    assert.match(await rodar([edicao('a.js'), edicao('segredo.env')], { permissoes: { negar: ['edit_file(*.env)'] } }), /Bloqueado pela regra de permissão "edit_file\(\*\.env\)"/);
+    assert.equal(fs.readFileSync(path.join(dir, 'a.js'), 'utf8'), 'velho\n', 'nada gravado (atômico)');
+
+    fs.writeFileSync(registro, '');
+    assert.match(await rodar([edicao('a.js'), edicao('prod.js')], {}), /Bloqueado por hook do usuário/);
+    assert.equal(fs.readFileSync(path.join(dir, 'prod.js'), 'utf8'), 'velho\n');
+    // Uma execução por edição, com os args dela; o código 2 na de prod.js para tudo (o "*" nem roda).
+    assert.deepEqual(fs.readFileSync(registro, 'utf8').trim().split('\n'), [`edit_file ${path.join(dir, 'a.js')}`, `edit_file ${path.join(dir, 'prod.js')}`]);
+    fs.writeFileSync(registro, '');
+    assert.match(await rodar([edicao('a.js')], {}), /^Editado: .*a\.js/);
+    assert.deepEqual(fs.readFileSync(registro, 'utf8').trim().split('\n'), [`edit_file ${path.join(dir, 'a.js')}`, 'edit_files *'], 'o "*" roda uma vez, com a chamada inteira');
+  } finally { hooks.definirArquivo(require('../src/config').HOOKS_PATH); }
+});
