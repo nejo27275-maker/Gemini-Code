@@ -214,7 +214,10 @@ async function runOnce(userMessage, opts = {}) {
   inicio.avisos.forEach((a) => console.log(chalk.yellow(`${logPrefix}[hook SessionStart] ${a}`)));
   const systemInstruction = buildSystemInstructionFn(extraSystemInstruction) +
     (inicio.texto ? `\n\nContexto adicionado pelo hook SessionStart do usuário:\n${inicio.texto}` : '');
-  const envio = hooks.executar('UserPromptSubmit', { extra: { prompt: userMessage } });
+  // UserPromptSubmit e Stop são do pedido do USUÁRIO: dentro de um subagente (delegate_task) não rodam —
+  // senão um Stop "npm test ainda falha" obrigava até o explorador somente leitura a continuar.
+  const dentroDeSubagente = subagent.profundidadeAtual() > 0;
+  const envio = dentroDeSubagente ? { avisos: [], bloqueado: false, saidas: [] } : hooks.executar('UserPromptSubmit', { extra: { prompt: userMessage } });
   envio.avisos.forEach((a) => console.log(chalk.yellow(`${logPrefix}[hook UserPromptSubmit] ${a}`)));
   if (envio.bloqueado) return { text: `Pedido bloqueado por hook do usuário (UserPromptSubmit): ${envio.mensagem}`, history: [...history] };
   const mensagemFinal = envio.saidas.length ? `${userMessage}\n\n[contexto adicionado por hook do usuário]\n${envio.saidas.join('\n')}` : userMessage;
@@ -254,7 +257,7 @@ async function runOnce(userMessage, opts = {}) {
       const text = response.text();
       convo.push({ role: 'model', parts: [{ text }] });
       // v0.41.0: hook Stop com código 2 obriga a continuar (ex.: "os testes não passaram"), até 3 vezes.
-      const parada = continuacoesStop < MAX_CONTINUACOES_STOP ? hooks.executar('Stop', { extra: { resposta: text } }) : null;
+      const parada = !dentroDeSubagente && continuacoesStop < MAX_CONTINUACOES_STOP ? hooks.executar('Stop', { extra: { resposta: text } }) : null;
       if (parada) parada.avisos.forEach((a) => console.log(chalk.yellow(`${logPrefix}[hook Stop] ${a}`)));
       if (parada && parada.bloqueado) {
         continuacoesStop++;

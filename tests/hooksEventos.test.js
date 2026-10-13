@@ -67,3 +67,26 @@ test('Stop que sempre bloqueia não prende o agente: no máximo 3 continuações
   assert.equal(n, 4, '1 resposta + 3 continuações');
   assert.equal(r.text, 'resposta 4');
 });
+
+// Revisão adversarial da v0.41.0: UserPromptSubmit e Stop são do pedido do usuário; dentro de um subagente
+// (delegate_task) rodavam de novo e um Stop "npm test ainda falha" obrigava o explorador a continuar.
+test('dentro de um subagente, UserPromptSubmit e Stop não rodam', { skip }, async () => {
+  const subagent = require('../src/subagent');
+  configurar({
+    UserPromptSubmit: [{ command: script('ups-bloqueia.js', "process.stderr.write('bloqueado');process.exit(2)") }],
+    Stop: [{ command: script('stop-sub.js', "process.stderr.write('nunca satisfeito');process.exit(2)") }],
+  });
+  let n = 0;
+  const log = console.log;
+  console.log = () => {};
+  let r;
+  try {
+    r = await subagent.execute('delegate_task', { task: 'explore', type: 'explorador' }, {
+      runOnceFn: (prompt, o) => runOnce(prompt, { ...o, deps: deps(async () => { n++; return resp('relatório'); }) }),
+    });
+  } finally { console.log = log; }
+  assert.equal(n, 1, 'uma resposta, sem continuações do Stop');
+  assert.match(r, /relatório/);
+  // Fora do subagente os mesmos hooks continuam valendo.
+  assert.match((await runOnce('x', { deps: deps(async () => resp('y')) })).text, /bloqueado por hook/);
+});

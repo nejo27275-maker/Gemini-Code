@@ -230,5 +230,5 @@ async function execute(name, args = {}, opts = {}) {
 
 module.exports = {
   get declarations() { return montarDeclaracoes(); },
-  execute, TIPOS, todosOsTipos, ehSomenteLeitura, MAX_RELATORIO, MAX_PROFUNDIDADE,
+  execute, TIPOS, todosOsTipos, ehSomenteLeitura, MAX_RELATORIO, MAX_PROFUNDIDADE, profundidadeAtual,
 };
