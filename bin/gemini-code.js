@@ -183,6 +183,7 @@ Comandos disponíveis no chat:
   /agenda listar             lista tudo que está marcado
   /projetos                  lista os projetos registrados (gemini-code projetos add "nome" fora do chat)
   /compact           resume a conversa antiga (sem custo) e mantém só as últimas mensagens inteiras
+  /compact ia        o próprio modelo resume a conversa antiga (perde menos detalhe; custa 1 chamada)
   /tarefas           mostra a lista de tarefas que o agente está seguindo (todo_write)
   /rewind [N|lista]  desfaz o que o agente gravou no(s) último(s) N turno(s) (como Ctrl+Z; --force sobrescreve o que você mudou depois)
   /snapshots         fotos automáticas do projeto (git escondido, inclui o que o shell mudou); /snapshots restaurar N volta à foto N
@@ -258,13 +259,18 @@ async function chatLoop() {
       console.log(CHAT_HELP);
       return ask();
     }
-    if (cmd === '/compact') {
-      const r = compactar(history);
+    if (cmd === '/compact' || cmd === '/compact ia') {
+      // v0.41.0: "/compact ia" pede o resumo ao próprio modelo (1 chamada); sem "ia", resumo local grátis.
+      const comIa = cmd === '/compact ia';
+      const r = comIa
+        ? await require('../src/compact').compactarComModelo(history, { chat: (a) => require('../src/provider').chatWithTools({ ...a, modelName: modeloAtual }) })
+        : compactar(history);
       if (!r.compactou) console.log(chalk.dim('(conversa ainda curta, nada pra compactar)\n'));
       else {
         history = r.history;
         sessaoAtual = sessions.save(sessaoAtual.id, { history, modelName: modeloAtual });
-        console.log(chalk.dim(`(compactei ${r.removidas} mensagens antigas num resumo; sessão salva)\n`));
+        const como = comIa && !r.comModelo ? ' (o modelo não respondeu; usei o resumo local)' : comIa ? ' feito pelo modelo' : '';
+        console.log(chalk.dim(`(compactei ${r.removidas} mensagens antigas num resumo${como}; sessão salva)\n`));
       }
       return ask();
     }

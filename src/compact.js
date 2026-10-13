@@ -56,4 +56,74 @@ function compactar(history, { manter = 6 } = {}) {
   return { history: [resumo, ack, ...h.slice(corte)], removidas: antigas.length, compactou: true };
 }
 
-module.exports = { compactar, resumir };
+// ---------------------------------------------------------------------------
+// v0.41.0 — contexto DENTRO de um pedido longo
+// podarHistorico só corta numa fala de texto do usuário; numa tarefa de dezenas de
+// ferramentas seguidas não há esse ponto, e cada chamada reenviava tudo (medido: 103
+// mensagens, ~1 MB). Agora, acima do orçamento, os resultados de ferramenta ANTIGOS viram
+// um aviso curto (os mais recentes ficam inteiros). Os pares chamada/resposta e os ids
+// continuam, então a API aceita; o modelo pode chamar a ferramenta de novo se precisar.
+// ---------------------------------------------------------------------------
+
+const PREFIXO_OMITIDO = '[resultado antigo de ';
+const tamanhoDe = (v) => JSON.stringify(v).length;
+
+/** @returns {{ history: object[], enxugados: number }} sem alterar o histórico recebido. */
+function enxugarResultadosAntigos(history, { maxChars = 300000, manterRecentes = 6 } = {}) {
+  const h = Array.isArray(history) ? history : [];
+  if (!maxChars || maxChars <= 0) return { history: h, enxugados: 0 };
+  let total = tamanhoDe(h);
+  if (total <= maxChars) return { history: h, enxugados: 0 };
+  const posicoes = [];
+  h.forEach((m, i) => (m.parts || []).forEach((p, j) => { if (p && p.functionResponse) posicoes.push([i, j]); }));
+  const candidatos = posicoes.slice(0, Math.max(0, posicoes.length - manterRecentes));
+  const novo = h.slice();
+  let enxugados = 0;
+  for (const [i, j] of candidatos) {
+    if (total <= maxChars) break;
+    if (novo[i] === h[i]) novo[i] = { ...h[i], parts: h[i].parts.slice() };
+    const fr = novo[i].parts[j].functionResponse;
+    const res = fr.response && fr.response.result !== undefined ? fr.response.result : fr.response;
+    const texto = typeof res === 'string' ? res : JSON.stringify(res === undefined ? '' : res);
+    if (texto.length < 400 || texto.startsWith(PREFIXO_OMITIDO)) continue;
+    const aviso = `${PREFIXO_OMITIDO}${fr.name} omitido para economizar contexto (${texto.length} caracteres); chame a ferramenta de novo se precisar dele]`;
+    const antes = tamanhoDe(novo[i].parts[j]);
+    novo[i].parts[j] = { functionResponse: { ...fr, response: { result: aviso } } };
+    total -= antes - tamanhoDe(novo[i].parts[j]);
+    enxugados++;
+  }
+  return { history: novo, enxugados };
+}
+
+const INSTRUCAO_RESUMO =
+  'Resuma a conversa abaixo para que outro assistente continue o trabalho sem ela. Em português, até 400 palavras, ' +
+  'nestas seções: Objetivo; Decisões tomadas; Arquivos criados/alterados e estado atual; O que falta fazer; ' +
+  'Fatos importantes (nomes, caminhos, comandos, erros). Não invente nada que não esteja na conversa.';
+
+/**
+ * /compact ia: o PRÓPRIO modelo resume as mensagens antigas (perde menos que o resumo local,
+ * que só lista pedidos, ferramentas e arquivos). Custa uma chamada. Se o modelo falhar ou
+ * devolver vazio, usa o resumo local — compactar nunca piora a conversa.
+ * @returns {Promise<{ history, removidas, compactou, comModelo }>}
+ */
+async function compactarComModelo(history, { chat, manter = 6 } = {}) {
+  const h = Array.isArray(history) ? history : [];
+  const local = compactar(h, { manter });
+  if (!local.compactou) return { ...local, comModelo: false };
+  const antigas = h.slice(0, local.removidas);
+  let texto = '';
+  try {
+    const r = await chat({
+      systemInstruction: INSTRUCAO_RESUMO,
+      history: [...antigas, { role: 'user', parts: [{ text: 'Faça agora o resumo pedido nas instruções.' }] }],
+      tools: [],
+    });
+    texto = String((r && r.text && r.text()) || '').trim();
+  } catch { /* cai no resumo local */ }
+  if (!texto) return { ...local, comModelo: false };
+  const resumo = { role: 'user', parts: [{ text: `[Resumo da conversa até aqui, feito pelo modelo]\n${texto}` }] };
+  const ack = { role: 'model', parts: [{ text: 'Entendido. Continuo a partir deste resumo e das mensagens recentes.' }] };
+  return { history: [resumo, ack, ...h.slice(local.removidas)], removidas: local.removidas, compactou: true, comModelo: true };
+}
+
+module.exports = { compactar, resumir, enxugarResultadosAntigos, compactarComModelo, PREFIXO_OMITIDO };

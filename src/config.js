@@ -87,6 +87,9 @@ const DEFAULT_CONFIG = {
   confirmarEscrita: false,
   // autoCompactTokens: no chat, se o contexto da última chamada passou disso, roda /compact sozinho (grátis) antes do próximo turno. 0 desliga.
   autoCompactTokens: 60000,
+  // v0.41.0: dentro de um pedido longo (muitas ferramentas seguidas), acima disto (caracteres do histórico)
+  // os resultados de ferramenta antigos viram um aviso curto; os 6 mais recentes ficam inteiros. 0 desliga.
+  contextoMaxChars: 300000,
   // --- Modelos locais/online ---
   // 'hybrid' usa llama.cpp local e, se houver chave, Gemini para pedidos mais complexos.
   // O local funciona sem internet depois de baixar um GGUF. Não requer Ollama.

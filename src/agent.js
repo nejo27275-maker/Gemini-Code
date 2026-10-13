@@ -19,6 +19,7 @@ const hooks = require('./hooks');
 const stepApproval = require('./stepApproval');
 const loopGuard = require('./loopGuard');
 const outputCompact = require('./outputCompact');
+const { enxugarResultadosAntigos } = require('./compact');
 
 // Item 4 do roadmap "top 1" (set/2026): antes o agente só sabia em que
 // projeto estava se o usuário explicasse (nome, stack, scripts disponíveis)
@@ -215,11 +216,19 @@ async function runOnce(userMessage, opts = {}) {
   // v0.32.0: corta o modelo repetindo a mesma chamada com o mesmo resultado (ver src/loopGuard.js).
   const guarda = loopGuard.criar();
   let loopDetectado = '';
+  // v0.41.0: orçamento do histórico enviado a cada passo (ver enxugarResultadosAntigos). 0 desliga.
+  const maxCharsContexto = cfg.contextoMaxChars === 0 ? 0 : Number(cfg.contextoMaxChars) || 300000;
+  let avisouEnxugar = false;
   for (let step = 0; step < maxSteps; step++) {
+    const enxuto = enxugarResultadosAntigos(podarHistorico(convo), { maxChars: maxCharsContexto });
+    if (enxuto.enxugados && !avisouEnxugar) {
+      avisouEnxugar = true;
+      console.log(chalk.dim(`${logPrefix}(contexto grande: resultados antigos de ferramenta viraram resumo curto para caber e gastar menos)`));
+    }
     const response = await chatWithToolsFn({
       modelName, // undefined = o roteador (src/provider.js) escolhe conforme o config
       systemInstruction,
-      history: podarHistorico(convo),
+      history: enxuto.history,
       tools: declarations,
       onText,
     });
