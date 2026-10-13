@@ -96,9 +96,10 @@ function lerMcp(mcpPath) {
 
 function gravarMcp(mcpPath, dados) {
   fs.mkdirSync(path.dirname(mcpPath), { recursive: true });
-  if (fs.existsSync(mcpPath)) { try { fs.copyFileSync(mcpPath, `${mcpPath}.bak`); } catch { /* sem backup: segue */ } }
+  // v0.41.0: a cópia e o temporário guardam os mesmos tokens do mcp.json — só o dono lê (e o modelo nem isso: SECRET_PATHS).
+  if (fs.existsSync(mcpPath)) { try { fs.copyFileSync(mcpPath, `${mcpPath}.bak`); fs.chmodSync(`${mcpPath}.bak`, 0o600); } catch { /* sem backup: segue */ } }
   const tmp = `${mcpPath}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(dados, null, 2) + '\n', 'utf8');
+  fs.writeFileSync(tmp, JSON.stringify(dados, null, 2) + '\n', { encoding: 'utf8', mode: 0o600 });
   fs.renameSync(tmp, mcpPath);
   try { fs.chmodSync(mcpPath, 0o600); } catch { /* best-effort (pode haver segredos) */ }
 }

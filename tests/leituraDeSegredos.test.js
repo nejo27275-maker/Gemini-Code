@@ -58,6 +58,17 @@ test('nenhum modelo (nem o do dono) lê a API key, o mcp.json ou os tokens', asy
   assert.doesNotMatch(busca, /AIza-FICTICIA/);
 });
 
+test('a cópia mcp.json.bak que o "mcp remove" deixa também é segredo', async () => {
+  // O mcp.json guarda tokens de servidores (env/headers); cada gravação pelo CLI copia a versão anterior.
+  fs.writeFileSync(config.MCP_PATH, JSON.stringify({ mcpServers: { github: { command: 'x', env: { GITHUB_TOKEN: 'ghp-FICTICIO-NA-COPIA' } } } }));
+  require('../src/mcpPresets').comando(['remove', 'github'], { mcpPath: config.MCP_PATH });
+  const copia = `${config.MCP_PATH}.bak`;
+  assert.match(fs.readFileSync(copia, 'utf8'), /ghp-FICTICIO-NA-COPIA/); // a cópia existe com o token
+  if (process.platform !== 'win32') assert.equal(fs.statSync(copia).mode & 0o077, 0, 'mcp.json.bak só para o dono');
+  assert.match(await fileTools.execute('read_file', { path: copia }), /^Bloqueado/);
+  assert.doesNotMatch(await searchTools.execute('search_files', { pattern: 'FICTICIO-NA-COPIA', path: HOME_DIR }), /ghp-FICTICIO/);
+});
+
 test('symlink e hard link para o token também são barrados na leitura e na busca', { skip: semSymlink }, async () => {
   const projeto = fs.mkdtempSync(path.join(HOME_FALSO, 'projeto-'));
   fs.symlinkSync(TOKEN_PATH, path.join(projeto, 'leia-me.txt'));

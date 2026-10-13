@@ -26,11 +26,14 @@ const TRUST_PATH = path.join(HOME_DIR, 'confianca.json'); // v0.41.0: src/trust.
 // agente para quem estiver na rede. O .bak é restaurado automaticamente se o
 // config.json sumir (ver config-manager.js). confianca.json decide se instruções
 // de um repositório entram no prompt (o modelo não pode se dar confiança).
+// mcp.json.bak/.tmp: cópia e arquivo temporário do `gemini-code mcp add` (src/mcpPresets.js).
 const PROTECTED_PATHS = Object.freeze([
   CONFIG_PATH,
   `${CONFIG_PATH}.bak`,
   `${CONFIG_PATH}.tmp`,
   MCP_PATH,
+  `${MCP_PATH}.bak`,
+  `${MCP_PATH}.tmp`,
   HOOKS_PATH,
   COWORK_TOKEN_PATH,
   ROUTINE_API_TOKEN_PATH,
@@ -45,6 +48,8 @@ const SECRET_PATHS = Object.freeze([
   `${CONFIG_PATH}.bak`,
   `${CONFIG_PATH}.tmp`,
   MCP_PATH,
+  `${MCP_PATH}.bak`,
+  `${MCP_PATH}.tmp`,
   COWORK_TOKEN_PATH,
   ROUTINE_API_TOKEN_PATH,
 ]);
