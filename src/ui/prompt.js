@@ -18,9 +18,23 @@ const readline = require('readline');
 
 let rl = null;
 
+// v0.40.0: sem terminal (cron, CI, `< /dev/null`, pipe já lido), a readline
+// fecha no fim do stdin e a pergunta pendente nunca era respondida — sem nada
+// mais no event loop, o processo SAÍA no meio da tarefa com código 0 e sem
+// resposta (ex.: `gemini-code run` pedindo para confirmar um run_shell).
+// Agora a pergunta resolve com '' (quem chama trata como "não") e, se o stdin
+// acabou, as próximas também, sem recriar a interface.
+let semEntrada = false;
+const AVISO_SEM_ENTRADA = '[sem resposta: a entrada (stdin) foi encerrada — tratado como "não"]\n';
+
 function getShared() {
   if (!rl) {
-    rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    const atual = readline.createInterface({ input: process.stdin, output: process.stdout });
+    atual.on('close', () => {
+      if (process.stdin.readableEnded) semEntrada = true;
+      if (rl === atual) rl = null;
+    });
+    rl = atual;
   }
   return rl;
 }
@@ -28,7 +42,24 @@ function getShared() {
 /** Pergunta algo e devolve a resposta (trim), usando a interface compartilhada. */
 function ask(question) {
   return new Promise((resolve) => {
-    getShared().question(question, (answer) => resolve(answer.trim()));
+    if (semEntrada) {
+      process.stdout.write(`${question}\n${AVISO_SEM_ENTRADA}`);
+      return resolve('');
+    }
+    const atual = getShared();
+    let feito = false;
+    const terminar = (resposta) => {
+      if (feito) return;
+      feito = true;
+      atual.removeListener('close', aoFechar);
+      resolve(resposta);
+    };
+    function aoFechar() {
+      process.stdout.write(`\n${AVISO_SEM_ENTRADA}`);
+      terminar('');
+    }
+    atual.once('close', aoFechar);
+    atual.question(question, (answer) => terminar(answer.trim()));
   });
 }
 
