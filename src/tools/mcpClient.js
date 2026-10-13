@@ -8,6 +8,17 @@
 const { spawn } = require('child_process');
 const { loadMcpServers } = require('../config');
 
+// v0.41.0: o servidor MCP (muitas vezes de terceiros) herdava o process.env inteiro, inclusive
+// as chaves do PRÓPRIO gemini-code. Estas saem; o que o servidor precisar vai no "env" dele no
+// mcp.json. Outras variáveis do seu shell (ex.: GITHUB_TOKEN) continuam herdadas de propósito.
+const SEGREDOS_DO_GEMINI_CODE = ['GEMINI_API_KEY', 'GOOGLE_API_KEY', 'GEMINI_CODE_OPENAI_KEY', 'ROUTINE_API_TOKEN'];
+
+function ambienteSemSegredosDoGeminiCode(env = process.env) {
+  const limpo = { ...env };
+  for (const nome of SEGREDOS_DO_GEMINI_CODE) delete limpo[nome];
+  return limpo;
+}
+
 let VERSAO = '0.0.0';
 try { VERSAO = require('../../package.json').version; } catch { /* sem package.json: segue */ }
 
@@ -47,7 +58,7 @@ class McpConnection {
 
   start() {
     this.proc = spawn(this.cfg.command, this.cfg.args || [], {
-      env: { ...process.env, ...(this.cfg.env || {}) },
+      env: { ...ambienteSemSegredosDoGeminiCode(), ...(this.cfg.env || {}) },
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     this.proc.stdout.on('data', (chunk) => this._onData(chunk));
@@ -222,4 +233,4 @@ function stopAll() {
 // Só para testes: injeta conexões falsas e a função de pergunta.
 function _testar({ conexoes, ask, servidores } = {}) { if (conexoes !== undefined) connections = conexoes; if (ask) perguntar = ask; if (servidores) lerServidores = servidores; }
 
-module.exports = { declarationsForGemini, execute, stopAll, McpConnection, formatarResultado, precisaConfirmar, _testar };
+module.exports = { declarationsForGemini, execute, stopAll, McpConnection, formatarResultado, precisaConfirmar, ambienteSemSegredosDoGeminiCode, SEGREDOS_DO_GEMINI_CODE, _testar };

@@ -25,7 +25,8 @@ function rotacionarSeGrande() {
 }
 
 function resumir(valor) {
-  const texto = typeof valor === 'string' ? valor : JSON.stringify(valor);
+  // v0.41.0: um comando com chave (ex.: curl -H "Authorization: Bearer ...") ia em texto puro para o log.
+  const texto = require('./securityScan').mascararSegredos(typeof valor === 'string' ? valor : JSON.stringify(valor));
   if (!texto) return '';
   return texto.length > MAX_CAMPO_CHARS
     ? texto.slice(0, MAX_CAMPO_CHARS) + `...(+${texto.length - MAX_CAMPO_CHARS} chars)`
