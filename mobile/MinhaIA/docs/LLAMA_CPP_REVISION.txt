@@ -1,0 +1,1 @@
+Este arquivo é gerado por scripts/bootstrap-llama.sh após clonar o repositório upstream. Ele registra o commit real utilizado e os patches locais. Não há commit registrado nesta distribuição inicial porque a origem GitHub não pôde ser acessada pelo ambiente de criação.

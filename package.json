@@ -1,7 +1,7 @@
 {
   "name": "gemini-code",
-  "version": "0.1.0",
-  "description": "Agente de linha de comando estilo Claude Code/Codex, só que usando a API do Gemini. Roda no Termux (Android) ou em qualquer PC com Node.js.",
+  "version": "0.39.0",
+  "description": "Agente Gemini Code com modelo local llama.cpp no Android/Termux, modo híbrido online/offline e base de conhecimento personalizável.",
   "type": "commonjs",
   "bin": {
     "gemini-code": "./bin/gemini-code.js"
@@ -9,10 +9,14 @@
   "engines": {
     "node": ">=18"
   },
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "lint": "node scripts/lint.js",
+    "start:routines": "node bin/gemini-code.js routines service",
+    "security:scan": "node bin/gemini-code.js security scan ."
+  },
   "dependencies": {
-    "@google/generative-ai": "^0.21.0",
-    "ws": "^8.18.0",
-    "chalk": "^4.1.2"
+    "ws": "^8.18.0"
   },
   "license": "MIT"
 }

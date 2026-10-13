@@ -12,13 +12,17 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const os = require('os');
-const WebSocket = require('ws');
 const { loadConfig, HOME_DIR } = require('../config');
 const { runOnce } = require('../agent');
 
 const TOKEN_PATH = path.join(HOME_DIR, 'cowork-token.txt');
 
 function getOrCreateToken() {
+  // Corrigido: antes presumia que ~/.gemini-code já existia (só funcionava
+  // porque startServer() sempre chama loadConfig() — que cria os
+  // diretórios — antes de chamar isto aqui). Chamar getOrCreateToken()
+  // isoladamente, fora dessa ordem, quebrava com ENOENT.
+  fs.mkdirSync(HOME_DIR, { recursive: true });
   if (fs.existsSync(TOKEN_PATH)) return fs.readFileSync(TOKEN_PATH, 'utf8').trim();
   const token = crypto.randomBytes(16).toString('hex');
   fs.writeFileSync(TOKEN_PATH, token);
@@ -43,11 +47,77 @@ function localIps() {
   return ips;
 }
 
+/**
+ * Processa uma mensagem recebida de um cliente conectado. Extraído do
+ * `wss.on('connection', ...)` original para poder ser testado sem precisar
+ * de um WebSocket de verdade (ver tests/cowork-server.test.js): em vez de
+ * mandar pela conexão diretamente, recebe um `send(objeto)` que quem chama
+ * decide como entregar (na wiring real, `ws.send(JSON.stringify(objeto))`).
+ *
+ * `connState` é `{ authed, history }` e é mutado in-place — o mesmo objeto
+ * deve ser reaproveitado entre chamadas para a mesma conexão.
+ */
+async function handleMessage(raw, connState, { token, send, runOnceFn = runOnce }) {
+  let msg;
+  try {
+    msg = JSON.parse(raw.toString());
+  } catch {
+    return send({ type: 'error', error: 'JSON inválido' });
+  }
+
+  if (msg.type === 'auth') {
+    // Antes comparava com "===", que vaza timing (o tempo de comparação
+    // varia com quantos caracteres batem no começo) — em teoria dá pra
+    // usar isso pra descobrir o token caractere por caractere. Como o
+    // token tem tamanho fixo (32 hex), comparamos os hashes SHA-256 dos
+    // dois lados com timingSafeEqual, que sempre leva o mesmo tempo.
+    connState.authed = tokensBatem(msg.token, token);
+    return send({ type: 'auth_result', ok: connState.authed });
+  }
+
+  if (!connState.authed) {
+    return send({ type: 'error', error: 'Não autenticado. Envie {type:"auth", token}.' });
+  }
+
+  if (msg.type === 'reset') {
+    connState.history = [];
+    return send({ type: 'reset_ok' });
+  }
+
+  if (msg.type === 'task') {
+    // Item 9 da revisão: msg.prompt não era validado — podia chegar
+    // undefined, um objeto, número etc., e só quebrava lá dentro do
+    // runOnce/Gemini com um erro confuso. Valida aqui, cedo, com uma
+    // mensagem clara pro cliente.
+    if (typeof msg.prompt !== 'string' || !msg.prompt.trim()) {
+      return send({ type: 'error', error: 'Campo "prompt" ausente ou vazio na tarefa.' });
+    }
+    try {
+      send({ type: 'status', status: 'rodando' });
+      const { text, history: newHistory } = await runOnceFn(msg.prompt, { history: connState.history });
+      connState.history = newHistory;
+      send({ type: 'result', text });
+    } catch (err) {
+      send({ type: 'error', error: err.message });
+    }
+  }
+}
+
 function startServer(port) {
+  // Verifica a dependência de transporte antes de criar configurações ou tokens.
+  // Assim, uma instalação incompleta não deixa arquivos laterais ao falhar.
+  let WebSocket;
+  try {
+    WebSocket = require('ws');
+  } catch (err) {
+    const error = new Error('O recurso Cowork por WebSocket precisa da dependência ws. Execute `npm install` com acesso à internet e tente novamente.');
+    error.cause = err;
+    throw error;
+  }
+
   const cfg = loadConfig();
   const finalPort = port || cfg.coworkPort;
   const token = getOrCreateToken();
-
   const wss = new WebSocket.Server({ port: finalPort });
 
   console.log(`\nGemini Cowork rodando na porta ${finalPort}.`);
@@ -57,50 +127,12 @@ function startServer(port) {
   console.log('\nNo celular, rode: gemini-code cowork connect <ip> --token ' + token);
 
   wss.on('connection', (ws) => {
-    let authed = false;
-    let history = [];
-
-    ws.on('message', async (raw) => {
-      let msg;
-      try {
-        msg = JSON.parse(raw.toString());
-      } catch {
-        return ws.send(JSON.stringify({ type: 'error', error: 'JSON inválido' }));
-      }
-
-      if (msg.type === 'auth') {
-        // Antes comparava com "===", que vaza timing (o tempo de comparação
-        // varia com quantos caracteres batem no começo) — em teoria dá pra
-        // usar isso pra descobrir o token caractere por caractere. Como o
-        // token tem tamanho fixo (32 hex), comparamos os hashes SHA-256 dos
-        // dois lados com timingSafeEqual, que sempre leva o mesmo tempo.
-        authed = tokensBatem(msg.token, token);
-        return ws.send(JSON.stringify({ type: 'auth_result', ok: authed }));
-      }
-
-      if (!authed) {
-        return ws.send(JSON.stringify({ type: 'error', error: 'Não autenticado. Envie {type:"auth", token}.' }));
-      }
-
-      if (msg.type === 'reset') {
-        history = [];
-        return ws.send(JSON.stringify({ type: 'reset_ok' }));
-      }
-
-      if (msg.type === 'task') {
-        try {
-          ws.send(JSON.stringify({ type: 'status', status: 'rodando' }));
-          const { text, history: newHistory } = await runOnce(msg.prompt, { history });
-          history = newHistory;
-          ws.send(JSON.stringify({ type: 'result', text }));
-        } catch (err) {
-          ws.send(JSON.stringify({ type: 'error', error: err.message }));
-        }
-      }
-    });
+    const connState = { authed: false, history: [] };
+    const send = (obj) => ws.send(JSON.stringify(obj));
+    ws.on('message', (raw) => handleMessage(raw, connState, { token, send }));
   });
 
   return wss;
 }
 
-module.exports = { startServer, getOrCreateToken, localIps };
+module.exports = { startServer, getOrCreateToken, localIps, tokensBatem, handleMessage };

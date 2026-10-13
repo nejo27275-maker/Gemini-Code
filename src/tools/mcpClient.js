@@ -8,6 +8,32 @@
 const { spawn } = require('child_process');
 const { loadMcpServers } = require('../config');
 
+let VERSAO = '0.0.0';
+try { VERSAO = require('../../package.json').version; } catch { /* sem package.json: segue */ }
+
+// v0.3.7: o resultado de `tools/call` do MCP é um objeto
+// ({ content: [{ type: 'text', text }, ...], isError }). O agente fazia
+// String(resultado) e o modelo recebia literalmente "[object Object]" —
+// ou seja, NENHUMA ferramenta de MCP devolvia algo útil. Aqui vira texto.
+function formatarResultado(result) {
+  if (result == null) return '(sem resultado)';
+  if (typeof result === 'string') return result;
+  const partes = Array.isArray(result.content) ? result.content : null;
+  if (!partes) return JSON.stringify(result, null, 2);
+  const texto = partes
+    .map((p) => {
+      if (!p) return '';
+      if (p.type === 'text') return p.text || '';
+      if (p.type === 'image') return `[imagem ${p.mimeType || ''} omitida]`;
+      if (p.type === 'resource' && p.resource) return p.resource.text || `[recurso ${p.resource.uri || ''}]`;
+      return JSON.stringify(p);
+    })
+    .filter(Boolean)
+    .join('\n');
+  const corpo = texto || (result.structuredContent ? JSON.stringify(result.structuredContent, null, 2) : '(sem saída)');
+  return result.isError ? `Erro reportado pela ferramenta MCP:\n${corpo}` : corpo;
+}
+
 class McpConnection {
   constructor(name, cfg) {
     this.name = name;
@@ -26,6 +52,9 @@ class McpConnection {
     });
     this.proc.stdout.on('data', (chunk) => this._onData(chunk));
     this.proc.stderr.on('data', () => {}); // logs do servidor MCP são ignorados aqui
+    // v0.3.7: escrever no stdin de um servidor que já morreu emite 'error'
+    // (EPIPE) — sem handler isso derrubava o gemini-code inteiro.
+    this.proc.stdin.on('error', (err) => this._rejectAllPending(err));
     // Se o processo do servidor morrer ou nem conseguir iniciar, destrava
     // qualquer chamada que estivesse esperando resposta dele.
     this.proc.on('error', (err) => this._rejectAllPending(err));
@@ -81,12 +110,22 @@ class McpConnection {
     });
   }
 
+  // Notificação JSON-RPC (sem id, sem resposta).
+  _notify(method, params) {
+    if (!this.proc || !this.proc.stdin.writable) return;
+    this.proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', method, params }) + '\n');
+  }
+
   async initialize() {
     await this._send('initialize', {
       protocolVersion: '2024-11-05',
       capabilities: {},
-      clientInfo: { name: 'gemini-code', version: '0.1.0' },
+      clientInfo: { name: 'gemini-code', version: VERSAO },
     });
+    // v0.3.7: o protocolo MCP exige esta notificação depois do initialize.
+    // Servidores que seguem a especificação à risca ignoram (ou recusam)
+    // tools/list enquanto ela não chega — o cliente antigo nunca mandava.
+    this._notify('notifications/initialized');
     const listed = await this._send('tools/list', {});
     this.tools = (listed && listed.result && listed.result.tools) || [];
     return this.tools;
@@ -104,16 +143,29 @@ class McpConnection {
 
 let connections = null;
 
+// v0.34.0: servidor com "confirmar": ["execute", ...] no mcp.json pede s/n antes de cada ferramenta cujo nome
+// contenha um desses trechos ("*" = todas). Serve para ferramentas que rodam código (Blender, Roblox).
+let perguntar = (q) => require('../ui/prompt').ask(q);
+function precisaConfirmar(cfg, toolName) {
+  const lista = [].concat(cfg && cfg.confirmar ? cfg.confirmar : []).map((x) => String(x).toLowerCase());
+  const n = String(toolName).toLowerCase();
+  return lista.some((x) => x === '*' || n.includes(x));
+}
+
+let lerServidores = () => loadMcpServers();
+
+// v0.36.0: os servidores sobem EM PARALELO (antes eram um por vez: 3 servidores lentos somavam até 60 s de espera
+// antes da primeira resposta) e um servidor com "desativado": true no mcp.json é ignorado (não gasta tempo nem
+// tokens com as declarações das ferramentas). Falha de um não derruba os outros.
 async function loadAllMcpTools() {
   if (connections) return connections;
-  connections = {};
-  const servers = loadMcpServers();
-  for (const [name, cfg] of Object.entries(servers)) {
+  const servers = Object.entries(lerServidores()).filter(([, cfg]) => !(cfg && cfg.desativado === true));
+  const resultados = await Promise.all(servers.map(async ([name, cfg]) => {
     const conn = new McpConnection(name, cfg);
     try {
       conn.start();
       await conn.initialize();
-      connections[name] = conn;
+      return [name, conn];
     } catch (err) {
       console.error(`[mcp] falha ao iniciar "${name}": ${err.message}`);
       // Se initialize() falhou (timeout, erro etc.), o processo do servidor
@@ -121,8 +173,11 @@ async function loadAllMcpTools() {
       // que ninguém mais tenha referência pra matá-lo depois — isso sozinho
       // já era o suficiente pra impedir o Node de encerrar no final.
       conn.stop();
+      return null;
     }
-  }
+  }));
+  connections = {};
+  for (const r of resultados) if (r) connections[r[0]] = r[1];
   return connections;
 }
 
@@ -143,12 +198,20 @@ async function declarationsForGemini() {
 }
 
 async function execute(fullName, args) {
-  const [, serverName, ...rest] = fullName.split('__');
-  const toolName = rest.join('__');
   const conns = await loadAllMcpTools();
-  const conn = conns[serverName];
-  if (!conn) throw new Error(`Servidor MCP não encontrado: ${serverName}`);
-  return conn.callTool(toolName, args);
+  // v0.3.7: o nome do servidor pode conter "__"; casa pelo prefixo dos
+  // servidores conhecidos (o mais longo vence) em vez de split('__').
+  const nomes = Object.keys(conns).sort((a, b) => b.length - a.length);
+  const serverName = nomes.find((n) => fullName.startsWith(`mcp__${n}__`));
+  if (!serverName) throw new Error(`Servidor MCP não encontrado para a ferramenta: ${fullName}`);
+  const toolName = fullName.slice(`mcp__${serverName}__`.length);
+  if (precisaConfirmar(conns[serverName].cfg, toolName)) {
+    const resumo = JSON.stringify(args || {}).slice(0, 600);
+    const resp = String(await perguntar(`\n[gemini-code] O servidor "${serverName}" vai executar "${toolName}":\n  ${resumo}\nConfirmar? (s/n) `) || '').trim().toLowerCase();
+    if (resp !== 's' && resp !== 'y') return 'Chamada cancelada pelo usuário.';
+  }
+  const res = await conns[serverName].callTool(toolName, args);
+  return formatarResultado(res);
 }
 
 function stopAll() {
@@ -156,4 +219,7 @@ function stopAll() {
   Object.values(connections).forEach((c) => c.stop());
 }
 
-module.exports = { declarationsForGemini, execute, stopAll };
+// Só para testes: injeta conexões falsas e a função de pergunta.
+function _testar({ conexoes, ask, servidores } = {}) { if (conexoes !== undefined) connections = conexoes; if (ask) perguntar = ask; if (servidores) lerServidores = servidores; }
+
+module.exports = { declarationsForGemini, execute, stopAll, McpConnection, formatarResultado, precisaConfirmar, _testar };

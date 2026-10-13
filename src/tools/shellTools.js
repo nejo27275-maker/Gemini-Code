@@ -19,8 +19,8 @@
 'use strict';
 
 const { exec } = require('child_process');
-const readline = require('readline');
 const { loadConfig, CONFIG_PATH, MCP_PATH } = require('../config');
+const { ask } = require('../ui/prompt');
 
 // Achado num teste (set/2026): com confirmShell:false, o agente rodou um
 // "node -e ...fs.writeFileSync(configPath...)" via run_shell e reescreveu
@@ -38,41 +38,84 @@ function touchesProtectedFile(command) {
   );
 }
 
+// Item 2 do roadmap "top 1" (set/2026): mesmo com confirmShell:false, um
+// comando que destrói dados sem chance de recuperação (apagar em massa,
+// reescrever histórico do git, formatar) merece confirmação explícita —
+// diferente de write_file/edit_file, aqui não dá pra fazer backup
+// automático antes (o próprio comando decide o que apaga). Lista
+// deliberadamente conservadora: prefere pedir confirmação a mais do que a
+// menos.
+const PADROES_DESTRUTIVOS = [
+  /\brm\s+(-\w*r\w*f\w*|-\w*f\w*r\w*)\b/i, // rm -rf, rm -fr, rm -Rf...
+  /\bgit\s+push\s+.*(--force|-f)\b/i,
+  /\bgit\s+reset\s+--hard\b/i,
+  /\bgit\s+clean\s+.*-[a-z]*f/i,
+  /\bdrop\s+(table|database)\b/i,
+  /\bmkfs\b/i,
+  /\bdd\s+if=/i,
+  />\s*\/dev\/sd/i,
+  /\btruncate\s+-s\s*0\b/i,
+  /\bchmod\s+-R\s+000\b/i,
+  // v0.3.6 — o padrão antigo só pegava rm -rf; faltavam variações igualmente
+  // irreversíveis (e o clássico "baixa e executa").
+  /\brm\b[^|;&\n]*\s(-[a-z]*r[a-z]*|--recursive)\b/i, // rm -r, rm -r -f, rm --recursive
+  /\bfind\b[^|;&\n]*\s-delete\b/i,
+  /\bshred\b/i,
+  /\bgit\s+branch\s+(-D\b|.*--delete\s+--force)/,
+  /\bgit\s+checkout\s+(--\s+)?\.(\s|$)/,
+  /\bgit\s+restore\s+(?!--staged)[^|;&\n]*\./i,
+  /\bgit\s+stash\s+(drop|clear)\b/i,
+  /\b(curl|wget)\b[^|;&\n]*\|\s*(sudo\s+)?(ba|z)?sh\b/i, // curl ... | sh
+  /\bmv\s+[^|;&\n]*\s\/dev\/null\b/i,
+];
+
+function isDestructiveCommand(command) {
+  return PADROES_DESTRUTIVOS.some((re) => re.test(command));
+}
+
 const declarations = [
   {
     name: 'run_shell',
     description: 'Executa um comando no shell do Termux/Linux e retorna a saída.',
     parameters: {
       type: 'object',
-      properties: { command: { type: 'string' } },
+      properties: {
+        command: { type: 'string' },
+        cwd: { type: 'string', description: 'Diretório onde rodar o comando (padrão: diretório atual do processo)' },
+      },
       required: ['command'],
     },
   },
 ];
 
-function ask(question) {
-  return new Promise((resolve) => {
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-    rl.question(question, (answer) => {
-      rl.close();
-      resolve(answer.trim().toLowerCase());
-    });
-  });
-}
-
-function runCommand(command, { timeoutMs, maxBuffer }) {
+// Item 7 da revisão (set/2026): antes não dava pra escolher `cwd` (todo
+// comando rodava no diretório em que o próprio agente foi iniciado — em
+// tarefas de várias etapas em pastas diferentes isso obrigava a prefixar
+// tudo com "cd pasta && ..."), e `stdout || stderr` escondia o stderr
+// sempre que também havia stdout (comum: um comando que imprime aviso no
+// stderr e ainda assim produz saída normal). Agora as duas saídas vêm
+// concatenadas e identificadas, junto com o exit code.
+function runCommand(command, { timeoutMs, maxBuffer, cwd }) {
   return new Promise((resolve) => {
     const child = exec(
       command,
-      { encoding: 'utf8', maxBuffer, timeout: timeoutMs, killSignal: 'SIGKILL' },
+      { encoding: 'utf8', maxBuffer, timeout: timeoutMs, killSignal: 'SIGKILL', cwd: cwd || undefined },
       (err, stdout, stderr) => {
+        const partes = [];
+        if (stdout) partes.push(stdout);
+        if (stderr) partes.push(`[stderr]\n${stderr}`);
+        const saida = partes.join('\n').trim() || '(sem saída)';
+
         if (err) {
-          const motivo = err.killed
+          // v0.3.8: estouro do maxBuffer aparecia como "exit code ERR_CHILD_PROCESS_..."
+          const motivo = err.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER'
+            ? 'a saída passou do limite de 10 MB e o comando foi interrompido — redirecione para um arquivo ou filtre com head/tail/grep'
+            : err.killed
             ? `comando cancelado após ${timeoutMs}ms sem terminar (timeout)`
-            : err.message;
-          resolve(`Erro ao executar (${motivo}):\n${stdout || ''}${stderr || ''}`.trim());
+            : `exit code ${err.code ?? '?'}`;
+          resolve(`Erro ao executar (${motivo}):\n${saida}`);
         } else {
-          resolve(stdout || stderr || '(sem saída)');
+          resolve(`${saida}\n[exit code 0]`);
         }
       }
     );
@@ -88,34 +131,24 @@ function runCommand(command, { timeoutMs, maxBuffer }) {
   });
 }
 
-// Frase que precisa ser digitada por extenso para liberar um comando que
-// mexe em config.json/mcp.json. Antes bastava "s"/"y" — igual à confirmação
-// de qualquer outro comando — o que é fácil demais de aprovar no automático
-// (reflexo de sempre apertar "s", ou um script/atalho que sempre manda "y").
-// Essa é a ÚNICA confirmação do gemini-code que exige uma frase, de propósito:
-// o resto continua rápido (s/n), só o caminho que já causou um incidente real
-// (o agente resetando a própria config sozinho) fica com atrito extra.
-const FRASE_CONFIRMACAO = 'sim, tenho certeza';
-
 async function execute(name, args) {
   if (name !== 'run_shell') throw new Error(`Ferramenta de shell desconhecida: ${name}`);
   const cfg = loadConfig();
 
-  const protegido = touchesProtectedFile(args.command);
+  if (args.cwd && !require('fs').existsSync(args.cwd)) {
+    return `Erro: diretório cwd não existe: ${args.cwd}`;
+  }
 
-  if (protegido) {
-    const pergunta =
-      `\n[gemini-code] ATENÇÃO: esse comando mexe no arquivo de configuração do gemini-code.\n` +
-      `  ${args.command}\n` +
-      `Isso já causou perda de configuração antes. Para confirmar, digite exatamente:\n` +
-      `  ${FRASE_CONFIRMACAO}\n> `;
-    const answer = await ask(pergunta);
-    if (answer !== FRASE_CONFIRMACAO) {
-      return 'Comando cancelado: frase de confirmação não digitada corretamente.';
-    }
-  } else if (cfg.confirmShell) {
-    const pergunta = `\n[gemini-code] Rodar comando?\n  ${args.command}\n(s/n) `;
-    const answer = await ask(pergunta);
+  const protegido = touchesProtectedFile(args.command);
+  const destrutivo = isDestructiveCommand(args.command);
+
+  if (cfg.confirmShell || protegido || destrutivo) {
+    const pergunta = protegido
+      ? `\n[gemini-code] ATENÇÃO: esse comando mexe no arquivo de configuração do gemini-code.\n  ${args.command}\nConfirmar mesmo assim? (s/n) `
+      : destrutivo
+      ? `\n[gemini-code] ATENÇÃO: esse comando parece destrutivo/irreversível.\n  ${args.command}\nConfirmar mesmo assim? (s/n) `
+      : `\n[gemini-code] Rodar comando?\n  ${args.command}\n(s/n) `;
+    const answer = (await ask(pergunta)).toLowerCase();
     if (answer !== 's' && answer !== 'y') {
       return 'Comando cancelado pelo usuário.';
     }
@@ -124,7 +157,8 @@ async function execute(name, args) {
   return runCommand(args.command, {
     timeoutMs: cfg.shellTimeoutMs,
     maxBuffer: 1024 * 1024 * 10,
+    cwd: args.cwd,
   });
 }
 
-module.exports = { declarations, execute };
+module.exports = { declarations, execute, touchesProtectedFile, isDestructiveCommand };

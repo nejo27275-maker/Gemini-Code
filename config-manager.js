@@ -36,6 +36,11 @@ class ConfigManager {
     const main = this._tryReadJSON(this.configPath);
     if (this._isValid(main)) return main;
 
+    // Primeira execução (nem principal nem backup existem) não é corrupção:
+    // não assusta o usuário com um aviso à toa.
+    const primeiraExecucao = !fs.existsSync(this.configPath) && !fs.existsSync(this.backupPath);
+    if (primeiraExecucao) return null;
+
     console.error('[config] Arquivo principal ausente ou corrompido. Tentando restaurar do backup...');
 
     const backup = this._tryReadJSON(this.backupPath);

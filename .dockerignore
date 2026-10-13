@@ -1,0 +1,14 @@
+node_modules/
+.git/
+coverage/
+saida-design/
+saida-media/
+*.log
+.env
+.env.*
+!.env.example
+
+tests/
+teste-design/
+CORRECOES.md
+knowledge-exemplo/

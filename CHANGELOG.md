@@ -1,0 +1,375 @@
+## 0.39.0 — modo solo: o code-ia sozinho, sem nenhuma outra IA por trás
+
+- **`gemini-code solo on | off | status`** (`src/solo.js`): liga o code-ia como única IA. O `solo on` guarda o provedor anterior, troca para `code-ia`, **para o llama-server** se estava no ar e instala/atualiza o modelo próprio. `solo off` restaura o provedor de antes.
+- **Três travas independentes** (se uma falhar, as outras seguram):
+  1. **Roteador:** no solo, `escolher()` devolve SEMPRE `code-ia`, mesmo com chave Gemini, `provider=hybrid` ou pedido forçado (`/cloud`, `/local`, modelo explícito, `ollama:`...). Não há fallback para outro lado, e `chamar()` recusa qualquer outro provedor.
+  2. **Comandos que dependem de outra IA** (`design`, `media`, `live`, `models`, `ollama`, `llamacpp start`) são recusados com explicação; `/local`, `/cloud` e `/auto` no chat também; `config set-provider` para outro provedor é recusado.
+  3. **Guarda de rede:** todo `fetch` para serviço de IA conhecido (Gemini, OpenAI, Anthropic, OpenRouter, Groq, Mistral, Together, DeepSeek, xAI, HF Inference) ou para o endereço configurado do llama.cpp/Ollama é bloqueado antes de sair do processo. Outros destinos passam (um servidor MCP seu continua funcionando).
+- `GEMINI_CODE_SOLO=1` força ligado e `=0` força desligado (acima do config). `doctor` mostra `modoSolo`. O chat mostra uma linha verde quando está no solo.
+- **code-ia mais útil sozinho:** entende `rode os testes` / `executar lint` (→ `run_checks`), `git status` / `status do git` e `git log` / `últimos commits` (→ `run_shell`, que continua pedindo s/n), sem outra IA para interpretar. No solo, quando não sabe responder, não sugere mais `/cloud`.
+- 9 testes novos (`tests/solo.test.js`): inclui conversa inteira com `fetch` que falha se for chamado (0 chamadas) e o CLI de ponta a ponta. `npm test`: 497 passando.
+- **Limites (importante):** o code-ia é uma busca BM25 sobre o que ele aprendeu + gerador n-grama, **não um LLM**: no solo ele não raciocina nem escreve código novo fora do que sabe; para isso ensine (`code-ia learn`, `/ensinar`). A guarda de rede cobre `fetch` e uma lista de serviços conhecidos; um servidor MCP ou script seu que chame outra IA por conta própria não é visto por ela. Não testado em Termux real.
+
+## 0.38.0 — o modelo local não esquece mais o que você ensinou, e a conversa é compactada a tempo
+
+- **Auto-compact para o modelo local:** antes só disparava com 60 000 tokens (limiar da nuvem) e as chamadas locais nem registravam o tamanho do prompt, então no celular a conversa nunca era compactada: o histórico só era cortado em silêncio dentro do `llamacpp.js`. Agora a chamada local registra o tamanho estimado do prompt (`usage.registrar({ local: true, promptTokens })`) e, se a última chamada foi local, o chat compacta (`/compact` automático, sem custo) ao chegar a **60% do contexto do servidor**. `autoCompactTokens: 0` continua desligando tudo. Se a última chamada foi na nuvem, vale o limiar antigo.
+- **Conhecimento fixo preservado (`compactarSistema`):** o system era cortado pelo fim, e é no fim que ficam os seus conhecimentos (spec da NetoLang, convenções do projeto). Agora, quando não cabe, primeiro saem os parágrafos sobre `delegate_task`/`todo_write`/`run_workflow` (ferramentas que já saem no modo local) e a lista de skills; identidade, regra do `run_checks`, contexto do projeto e conhecimento ficam.
+- **Orçamento do system dinâmico:** de 40% (conversa longa) a 70% (conversa curta) do espaço disponível, em vez de 45% fixo. Conversa curta = mais conhecimento no prompt; conversa crescendo devolve espaço ao histórico.
+- 4 testes novos (`tests/localContexto.test.js`), incluindo um com arquivo de conhecimento real que falhava na 0.37.0. `npm test`: 488 passando.
+- **Limites:** tamanho do prompt local é **estimado** (3 caracteres ≈ 1 token), não o contado pelo llama.cpp; não testado com llama.cpp/Termux reais. Não troquei o modelo padrão (Qwen2.5-1.5B): um modelo maior (ex. 3B) ajudaria em ferramentas, mas não consigo confirmar URL e SHA-256 sem rede aqui.
+
+## 0.37.0 — modelo local de verdade no celular: contexto, streaming, timeout e servidor em segundo plano
+
+**Bug principal corrigido.** As ferramentas do agente (~2 100 tokens) + o prompt do sistema (~1 100) somavam mais de 3 000 tokens, mas o `start-llama-server.sh` subia o servidor com contexto de **2048**. Resultado: o modelo local recusava (HTTP 400, contexto estourado) ou perdia o prompt. Agora:
+
+- **Ferramentas compactas (`compactarTools`):** descrições encurtadas e, se ainda não couberem em 35% do contexto, descarta as dispensáveis (`delegate_task`, `run_workflow`, `todo_write`, `read_skill`, depois `mcp__*`). As essenciais (`read_file`, `write_file`, `edit_file`, `list_dir`, `run_shell`, `search_files`, `run_checks`) nunca saem. O prompt avisa o modelo do que ficou de fora. Medido no projeto real: 2 129 → 1 215 tokens (ctx 4096) e 976 (ctx 2048).
+- **Histórico podado por orçamento (`ajustarAoContexto`):** mantém system + o mais recente, nunca começa com `tool` órfã, trunca mensagem gigante e o system se precisar. Se o contexto é apertado, a reserva da resposta encolhe (mín. 128 tokens) em vez de estourar.
+- **Contexto padrão 4096** (`llamaCppCtx`, `LLAMA_CTX`, `config set-llamacpp-ctx`). O roteador híbrido agora usa o contexto do llama.cpp (antes olhava o do Ollama, 8192, e só mandava para a nuvem tarde demais).
+- **Streaming (SSE):** o texto aparece enquanto o modelo escreve; `tool_calls` que chegam em pedaços são remontados. Respeita `enableStreaming`.
+- **Timeout por inatividade** (`llamaCppTimeoutMs`, padrão 180 s): servidor travado vira erro recuperável (o híbrido cai na nuvem) em vez de pendurar para sempre.
+- **Contexto estourado** no servidor → mensagem clara (`/compact`, aumentar ctx) e erro recuperável (híbrido tenta a nuvem).
+- **`--jinja` no servidor:** sem ele, versões antigas do llama-server recusam o campo `tools`. Se o erro aparecer, a mensagem explica.
+- **Chamada de ferramenta escrita em texto** (`<tool_call>{...}</tool_call>` do Qwen ou JSON puro) vira chamada de verdade, só se a ferramenta existir.
+- **`gemini-code llamacpp start | stop | status | log`** (`src/localServer.js`): sobe o llama-server **em segundo plano** (destacado, PID e log em `~/.gemini-code/`, `termux-wake-lock` se existir). Acabou a segunda aba. `status` distingue **pronto / carregando / offline**. Só mexe em endereço local.
+- **`config set-llamacpp-autostart on`:** o chat sobe o servidor sozinho na 1ª pergunta (o instalador já liga). Modelo ainda carregando (HTTP 503) → espera em vez de falhar.
+- **`doctor`** mostra binário do llama-server, modelo GGUF, contexto, autostart, PID e espaço livre.
+- **Instalador:** confere 3 GB livres; pula a compilação se o `llama-server` já existe (`REBUILD=1` força); **verifica o SHA-256 antes de aceitar o download** (antes um download quebrado ficava como "pronto" e nunca era refeito) e apaga modelo corrompido.
+- 15 testes novos (`tests/llamacppV037.test.js`), incluindo um que usa as ferramentas e o prompt **reais** do projeto e confere que o pedido cabe no contexto. `npm test`: 484 passando; lint de sintaxe ok.
+- **Limites:** não rodei llama.cpp, modelo GGUF nem Termux de verdade (sem rede neste ambiente); streaming, timeout e `llamacpp start` foram testados com servidor/spawn simulados. Tokens são **estimados** (3 caracteres = 1 token), com folga de 64 tokens. Em ctx 2048 sobra pouco espaço de conversa; use 4096 (padrão) se o celular aguentar.
+
+## 0.36.0 — MCP mais rápido e ligar/desligar servidores
+
+- **Subida em paralelo:** os servidores MCP agora iniciam ao mesmo tempo (antes um por vez; com 3 servidores lentos a primeira resposta podia esperar até 60 s). Falha de um servidor não derruba os outros; o processo do que falhou é encerrado. Teste: 3 servidores de 400 ms sobem em menos de 1,1 s.
+- **`gemini-code mcp off NOME` / `mcp on NOME`:** desliga um servidor sem apagar a configuração (`"desativado": true`). Servidor desligado não sobe e **suas ferramentas não entram no pedido ao modelo**, então não gastam tokens. `mcp list` mostra `[DESLIGADO]` e `mcp check` ignora os desligados. Dica: deixe Blender/Roblox desligados quando não estiver usando.
+- 3 testes novos + 1 de CLI (`tests/mcpFakeServer.test.js`, `tests/mcpPresets.test.js`). `npm test`: 469 passando; lint ok. Não testado: servidores reais (Spotify/Blender/Roblox), Termux real.
+
+## 0.35.1 — teste de ponta a ponta do MCP contra um servidor stdio de verdade
+
+- **`tests/fixtures/fake-roblox-mcp.js` + `tests/mcpFakeServer.test.js`:** sobe um servidor MCP FALSO (processo real, JSON-RPC real, ferramentas `get_data_model` e `execute_luau`, no estilo do Roblox Studio) e confere com o cliente do gemini-code: initialize, lista de ferramentas, nomes `mcp__roblox__*`, resultado em texto, `s/n` antes do `execute_luau` (recusar não executa; aceitar muda o estado do servidor), erro do servidor e servidor que morre no meio.
+- 3 testes novos; `npm test`: 466 passando. **O que isto NÃO prova:** não é o Roblox Studio real nem os nomes reais das ferramentas dele; não testa o modelo (Gemini/local) nem o workflow `jogo-roblox-x1` rodando; não compara com Claude Code/Codex.
+
+## 0.35.0 — kit do teste X1 (Roblox): workflow `jogo-roblox-x1` + roteiro
+
+- **`workflows/exemplos/jogo-roblox-x1.json`:** usa os recursos do Gemini Code juntos: plano sem ferramentas → construção no Roblox Studio pelo MCP (com `retry`) → playtest lendo o console (opcional, não derruba o resto) → autoavaliação por rubrica que limita a nota a 5 no que não foi testado. Teto de 150 000 tokens para o workflow inteiro. Variável: `ideia`. Instale com `/workflows instalar jogo-roblox-x1` e rode com `/workflows rodar jogo-roblox-x1 ideia="..."`; `retomar`, `historico` e o detector de laço (0.32) valem aqui também.
+- **`docs/TESTE_X1_ROBLOX.md`:** regras iguais para Gemini Code, Claude Code e Codex, prompt padrão (obby de 5 fases), rubrica de 8 critérios e como rodar. A nota que vale é a sua, jogando às cegas.
+- O teste existente que valida TODOS os exemplos do projeto cobre o novo workflow. `npm test`: 463 passando.
+- **Limite:** o teste real NÃO foi executado (sem Roblox Studio, sem API do Gemini, sem Claude Code/Codex neste ambiente). Nenhum resultado ou vencedor está medido; os nomes das ferramentas do MCP do Roblox não foram confirmados (o passo de construção herda as ferramentas disponíveis).
+
+## 0.34.0 — MCP pronto para Spotify, Blender e Roblox Studio
+
+- **`gemini-code mcp presets | add NOME | list | remove NOME | check`** (`src/mcpPresets.js`): instala servidores MCP prontos em `~/.gemini-code/mcp.json` sem editar JSON. Presets:
+  - **spotify** (`varunneal/spotify-mcp` via `uvx`): `--client-id`, `--client-secret`, `--redirect`; lê `SPOTIFY_CLIENT_ID/SECRET` do ambiente se existirem (o segredo não fica no histórico). Controle de reprodução exige Premium.
+  - **blender** (`blender-mcp` via `uvx`): `--host`, `--port` (padrão localhost:9876); telemetria já vem desligada.
+  - **roblox** (servidor MCP **embutido** no Roblox Studio, pois o antigo `studio-rust-mcp-server` foi descontinuado): caminho do Windows por padrão, `--launcher CAMINHO` para outros sistemas e `--ssh usuario@ip` para usar a partir do celular.
+- **Confirmação antes de ferramentas que rodam código:** um servidor com `"confirmar": ["execute", ...]` no mcp.json pede `s/n` antes de cada ferramenta cujo nome contenha o trecho (`"*"` = todas). Sem terminal para responder, cancela. Blender e Roblox já vêm marcados.
+- **Segurança do arquivo:** não sobrescreve servidor existente sem `--forcar` (guarda `mcp.json.bak`), preserva os outros servidores e chaves, **não toca** num mcp.json com JSON quebrado, grava com permissão 600 e `list` mascara chaves/segredos.
+- 12 testes novos (`tests/mcpPresets.test.js`). `npm test`: 463 passando. Conferido no CLI com HOME temporário.
+- **Limites (importante):** Blender e Roblox Studio são programas de computador; não rodam no Android. No celular só funcionam apontando para o PC (`--host`/`--ssh`), e NÃO testei esses caminhos de rede, nem o login do Spotify no Termux, nem nenhum dos três servidores reais (sem rede neste ambiente). Não confirmei os nomes exatos das ferramentas de execução de código do Roblox; use `"confirmar": ["*"]` se quiser confirmar todas.
+
+## 0.33.0 — saída de comando mais enxuta (menos tokens)
+
+- **`src/outputCompact.js`:** a saída de `run_shell` e `run_checks` é limpa ANTES de ir ao modelo e antes do corte de 20 000 caracteres: remove cores/cursor ANSI e links OSC, deixa só o último estado das barras de progresso (`\r`), troca linhas idênticas seguidas por `linha (×N)` e reduz várias linhas em branco a uma. Isso gasta menos tokens e evita que `npm install` ou testes verbosos empurrem o erro útil para a parte omitida.
+- **Seguro:** `read_file`, `search_files` e as demais ferramentas NÃO passam por isso (conteúdo de arquivo continua exato). Linhas repetidas que não são vizinhas ficam como estão. O que o usuário vê no terminal não muda; só o que vai ao modelo.
+- 6 testes novos (`tests/outputCompact.test.js`). `npm test`: 451 passando; lint de sintaxe ok. Não testado: Gemini real, Termux real.
+
+## 0.32.0 — detector de laço: o agente para de repetir a mesma chamada
+
+- **`src/loopGuard.js`:** antes, um modelo preso repetindo a mesma ferramenta só era cortado no teto de 60 passos, gastando cota até lá. Agora, se ele faz a MESMA chamada (nome + argumentos) e recebe o MESMO resultado: na **3ª** vez o resultado volta com um aviso pedindo para mudar de abordagem; na **5ª** o turno é encerrado e a mensagem `[loop] ...` entra no histórico (o próximo turno não perde o fio).
+- **Sem punir trabalho legítimo:** se o resultado muda (acompanhar um processo, ler um arquivo que está sendo editado), a contagem zera; chamadas diferentes não se misturam; a ordem das chaves dos argumentos não importa. O teto de 60 passos continua valendo para o resto.
+- 5 testes novos (`tests/loopGuard.test.js`) e 1 teste antigo ajustado (`tests/agent.test.js`: o resultado agora varia a cada passo, senão o detector encerraria antes dos 60). Não testado: modelo real do Gemini, Termux real.
+
+## 0.31.0 — comandos `config set-*` num módulo testável, com URL validada
+
+- **`src/configCommands.js`:** os setters simples (`set-model`, `set-fast-model`, `set-fallback-model`, `set-provider`, `set-llamacpp-url/model`, `set-ollama-url/model`, `set-wait-quota`) saíram do `bin/gemini-code.js` (1379 → 1356 linhas) e viraram uma função que devolve o texto pronto, então dá para testar sem abrir o terminal. Mensagens e comportamento continuam os mesmos.
+- **Correção:** `set-llamacpp-url` e `set-ollama-url` agora recusam endereço que não começa com `http://` ou `https://` (antes salvava qualquer texto e o erro só aparecia depois, na hora de conversar com o modelo). `set-model`/`set-fast-model` sem nome mostram o uso em vez de salvar `undefined`.
+- Passphrases, `set-key`, `unlock` e `show` continuam no bin (são interativos).
+- 5 testes novos (`tests/configCommands.test.js`). Conferido no CLI real com `HOME` temporário: URL inválida recusada, `set-provider` e `set-wait-quota` salvam. Não testado: Termux real.
+
+## 0.30.0 — espera opcional do 429 por minuto
+
+- **`esperarCotaSegundos` (padrão 0 = desligado):** se o Gemini responder 429 pedindo para aguardar até N segundos, a chamada espera N+1s (com aviso na tela) e repete **uma única vez**. Ligue com `gemini-code config set-wait-quota 60` (máx. 300) ou `GEMINI_CODE_WAIT429=60`.
+- **Seguro por desenho:** nunca repete `limit: 0` (modelo sem cota no projeto), 429 sem tempo informado nem espera maior que o teto; o 429 não consome as tentativas do retry de 503. Quem não ligar a opção não vê nenhuma mudança (o comportamento "não repetir sozinho" do 0.29 continua o padrão).
+- 5 testes novos (`tests/geminiWait429.test.js`). `npm test`: 435 passando; `npm run lint`: sintaxe ok. Não testado contra a API real do Gemini nem em Termux real.
+
+## 0.28.0 — IA local generativa como padrão
+
+- **Resposta aberta local:** o provedor padrão passa a ser Ollama, com `qwen3:4b-instruct` como modelo geral inicial. A rota sem chave da nuvem usa Ollama em vez da `code-ia` baseada em busca e n-gramas.
+- **Modo `code-ia` fica opcional:** continua disponível para busca de conhecimento e exemplos ensinados, mas a documentação deixa claro que ele não é um LLM geral. A instalação do corpus não acontece automaticamente no uso comum; é preparada se o usuário selecionar esse provedor.
+- **Configuração e mensagens:** documentação para baixar o modelo local uma vez, instruções de erro de conexão com Ollama e orientação para usar um computador na mesma rede quando o dispositivo não conseguir executar o modelo localmente.
+- **Testes:** coberta a rota padrão com pergunta aberta simulada e a seleção do modelo generalista. `npm test`: 425 testes passando; `npm run lint`: sintaxe aprovada em 116 arquivos JavaScript (ESLint não instalado no ambiente).
+- **Limites:** o modelo não é incluído no ZIP (os pesos são grandes e precisam ser baixados uma vez); a qualidade/respostas continuam dependentes do modelo e do hardware. Não foi possível testar contra uma instalação real do Ollama neste ambiente.
+
+## 0.27.0 — /workflows criar: a IA escreve o rascunho, você aprova
+
+- **`/workflows criar <nome> <o que ele deve fazer>`:** pede ao modelo um workflow em JSON a partir da sua descrição (UMA chamada de IA, sem ferramentas) e salva como **rascunho** em `~/.gemini-code/workflow-rascunhos/`. O rascunho **não está em uso**: o agente não o lista nem o aciona. Mostra o resumo dos passos (igual ao `/workflows ver`), os avisos do validador e, à parte, **ATENÇÃO** para o que merece olho humano: passo sem `tools` (herda TODAS as ferramentas, inclusive gravar e rodar comando) e passo com `write_file`, `edit_file` ou `run_shell`. A instrução pede `tools` em todo passo, só leitura quando possível, e explica `each`, `paralelo`, `when`, `retry`, `maxTokens`.
+- **Defesas:** o nome do workflow é o que VOCÊ digitou (o modelo não escolhe); só campos que existem são mantidos (campo estranho no topo ou no passo é descartado); resposta sem JSON, JSON quebrado ou workflow com erro de validação (id repetido, uso de passo futuro, `paralelo` com ferramenta que grava...) **não salva nada** e diz o motivo; nome que já está em uso é recusado antes de gastar IA.
+- **`/workflows rascunhos`** lista; **`/workflows aprovar <nome>`** valida de novo (você pode ter editado o arquivo), move para a pasta ativa e apaga o rascunho (não sobrescreve sem `--forcar`); **`/workflows descartar <nome>`** joga fora.
+- 7 testes novos (`tests/workflowsV027.test.js`) com modelo simulado: nome forçado, campos descartados, geração sem ferramentas, avisos de risco, 5 casos de falha sem salvar, validação de nome/pedido sem gastar IA, aprovar/descartar e nomes perigosos. Total: 424, todos passando (rodados 2 vezes). Conferido no chat real só o caminho de erro (modelo local offline não devolve JSON; nada foi salvo).
+- Limites: a qualidade do rascunho depende do modelo (o Gemini deve ir bem; o code-ia local não escreve JSON de workflow); a IA não roda o workflow para testar, só você, com `/workflows rodar`; o aviso de risco olha o campo `tools`, não o conteúdo dos prompts. Não testado: Gemini real, Termux real.
+
+## 0.26.0 — instalar exemplos, criar esqueleto e ver workflows sem mexer em arquivo
+
+- **`/workflows exemplos`** lista os workflows de exemplo que vêm no projeto (nome, nº de passos, descrição). **`/workflows instalar <exemplo>`** copia um deles para `~/.gemini-code/workflows/` (antes era "copie o .json" na mão, ruim no celular). Não sobrescreve um arquivo que você já editou (precisa de `--forcar`), só aceita nomes de exemplos que existem (`[a-z0-9_-]`, sem caminho) e se recusa a instalar um exemplo que tenha erro de validação.
+- **`/workflows novo <nome>`** cria um esqueleto VÁLIDO (dois passos, só leitura, com `maxTokens`) para você editar; nunca sobrescreve. O `validar` avisa enquanto a `description` ainda for o texto de preenchimento, porque o agente aciona workflows pela descrição.
+- **`/workflows ver <nome>`** mostra num resumo legível os passos, opções (each, paralelo, ferramentas, condicional, opcional, retry, modelo), o teto de tokens e as variáveis que o workflow pede.
+- Teste novo garante que TODOS os exemplos do projeto passam na validação e instalam de verdade (um exemplo quebrado futuro derruba o `npm test`).
+- 6 testes novos (`tests/workflowsV026.test.js`). Total: 417, todos passando. Conferido no chat real: `exemplos`, `instalar`, `ver`, `novo` e a lista.
+- Limites: o esqueleto é fixo (não gera workflow a partir de uma descrição com IA); `instalar` só copia os exemplos do projeto, não baixa nada da internet. Não testado: modelo real, Termux real.
+
+## 0.25.1 — each em paralelo (2 ou 3 itens ao mesmo tempo)
+
+- **`"paralelo": 1-3` no passo com `each`:** os itens saem em LOTES (ex.: `paralelo: 3` revisa 3 arquivos juntos) e o resultado volta na ordem da lista, igual antes. Sem o campo (ou `1`) nada muda. Custo em tokens é o mesmo; o que cai é o tempo de espera.
+- **Só onde é seguro:** `paralelo` acima de 1 exige `each` e `tools` apenas de leitura (`read_file`, `list_dir`, `search_files`) ou `[]`. Itens simultâneos não podem gravar no mesmo arquivo nem pedir confirmação ao mesmo tempo no terminal; o `run_workflow` e o `agent check` recusam o resto com mensagem clara. O `agent check` ainda avisa que vão várias chamadas juntas (se a API reclamar de limite, volte para 1).
+- **Combina com o resto:** `retry` e `optional` valem por item; o orçamento (`maxTokens`) é checado antes de cada LOTE (pode passar um pouco do teto dentro do lote que já saiu); se um item sem `optional` falhar, só os itens ANTES dele (em ordem) são guardados e a retomada continua dali; os que já tinham dado certo depois dele naquele lote são refeitos.
+- Exemplo `revisar-cada-arquivo` agora usa `"paralelo": 2`.
+- 6 testes novos (`tests/workflowsV0251.test.js`; checam concorrência máxima, ordem, falha no lote, `optional`, orçamento por lote e validação). Total: 411, todos passando (rodados 4 vezes, sem oscilar).
+- Limites: máximo 3 ao mesmo tempo; o log dos itens do mesmo lote pode sair intercalado; em lote, um item que falha descarta os que passaram depois dele (gasto de IA refeito na retomada). Não testado: modelo real (limites de taxa do Gemini), Termux real.
+
+## 0.25.0 — comandos /workflows num módulo testável, /workflows limpar e historico --erros
+
+- **`src/workflowCommands.js`:** toda a lógica dos comandos `/workflows` saiu do `bin/gemini-code.js` (que perdeu ~1,5 KB e um bloco de ifs) e virou um módulo que devolve linhas prontas, então dá para testar sem abrir o terminal (antes esses comandos não tinham teste nenhum). O comportamento dos comandos que já existiam não mudou; `/workflows` (lista) agora também mostra `[INTERROMPIDO no passo X: /workflows retomar nome]`.
+- **`/workflows historico [nome] [--erros]`:** com `--erros` mostra só as execuções que falharam (ou "Nenhuma execução com erro registrada.").
+- **`/workflows limpar historico`** apaga o histórico (e diz quantas execuções tinha). **`/workflows limpar <nome>`** descarta a execução interrompida daquele workflow (some o aviso de "retomar disponível"); o nome é validado (`[a-z0-9_-]`), então não dá para apontar para outro caminho. Só roda quando VOCÊ digita; o agente não tem acesso a esses comandos.
+- 5 testes novos (`tests/workflowsV025.test.js`). Total: 405, todos passando. Também conferido no chat real (`/workflows`, `/workflows limpar`, `/workflows resumo`).
+- Limites: o resto do `bin/gemini-code.js` (~72 KB) continua num arquivo só; a limpeza apaga tudo de uma vez (sem filtro por data). Não testado: modelo real, Termux real.
+
+## 0.24.0 — retomar o laço each do item que parou, histórico do terminal e resumo por workflow
+
+- **`each` retoma do item certo:** se o laço parar no meio (falha de item sem `optional`, ou orçamento de tokens), o progresso guarda os itens já feitos. Ao retomar (`/workflows retomar <nome>` ou `retomar: true`), o passo continua do próximo item, sem refazer nem pagar de novo os anteriores; o log mostra `(retomando: 2 de 4 itens já feitos, continuando do item 3)`. Trava de segurança: se a lista mudou de tamanho entre a falha e a retomada, o passo recomeça do item 1. Isso corrige o limite que o 0.22.0 avisava.
+- **`gemini-code agent run` entra no histórico:** workflows rodados direto no terminal passam a ser registrados (ok ou erro, passos, tokens, duração), marcados `(terminal)` em `/workflows historico`. Mesmas regras de privacidade: só números, nunca saídas nem variáveis. Persona (chat) não é registrada. Corrige o limite que o 0.23.0 avisava.
+- **`/workflows resumo [nome]`:** estatísticas por workflow sobre as últimas 200 execuções guardadas: nº de execuções, % de sucesso, média e total de tokens, duração média, retomadas e o passo que mais falha. O agente consegue o mesmo com `run_workflow` e `resumo: true` (com `name` opcional). Custo de IA: zero.
+- 6 testes novos (`tests/workflowsV024.test.js`); 1 teste antigo ajustado à nova mensagem do orçamento no `each` (`tests/workflowsV022.test.js`). Total: 400, todos passando (rodados duas vezes).
+- Limites: a retomada do `each` só vale para o passo onde parou e com a lista do mesmo tamanho; o resumo olha no máximo as últimas 200 execuções; o histórico do terminal só registra workflow (não persona). Não testado: modelo real do Gemini, Termux real.
+
+## 0.23.0 — histórico de execuções dos workflows (/workflows historico)
+
+- **Cada execução fica registrada:** nome, data/hora, resultado (OK ou ERRO no passo X), nº de passos e de pulados, tokens do Gemini gastos, duração e se foi uma retomada. Em `~/.gemini-code/workflow-runs/historico.jsonl` (custo de IA: zero).
+- **`/workflows historico [nome]`** mostra as últimas 10 (mais nova primeiro; filtra por workflow). O agente consegue o mesmo com `run_workflow` e `historico: true` (com `name` opcional), útil para ele ver "esse workflow costuma falhar?" ou "quanto gasta".
+- **Privacidade:** NUNCA grava saídas dos passos nem as variáveis (podem ter senha/token); só números e a mensagem de erro cortada em 200 caracteres. Teste garante que `SENHA123` passada em `vars` não aparece no arquivo.
+- **Sem lixo:** guarda só as últimas 200 execuções; linha estragada é ignorada; falha ao gravar histórico nunca derruba o workflow; erro de validação (variável faltando, workflow inexistente) não entra, só execuções que realmente começaram.
+- 5 testes novos (`tests/workflowsV023.test.js`). Total: 394, todos passando.
+- Limites: o contador de tokens é o da sessão (só Gemini; local conta 0); o histórico é só do que passou pelo `run_workflow`/`/workflows rodar` (o `gemini-code agent run` direto no terminal não registra). Não testado: modelo real, Termux real.
+
+## 0.22.0 — laço por lista (each): revisar vários arquivos, um a um
+
+- **`"each": "{{lista}}"` num passo:** repete o prompt do passo para CADA linha da lista (normalmente a saída de um passo anterior), com `{{item}}` (a linha) e `{{indice}}` (1, 2, 3...). Marcadores `-`, `*`, `•`, `1.` e `2)` são removidos; linhas vazias e `[falhou:...]` são ignoradas. As saídas voltam juntas em `{{id_do_passo}}` no formato `--- 1. item ---` + resposta, prontas para um passo de resumo.
+- **Limite duro de 10 itens** (`"maxItens": 1-10` para baixar). O resto é ignorado e o log avisa. Cada item é uma chamada de IA: 10 itens = 10 chamadas.
+- **Combina com o resto:** `retry` vale por item; `optional` faz um item que falhou virar `[falhou: motivo]` (o resumo conta `N falharam`) em vez de derrubar o passo; `tools`/`model` valem para todos os itens; `when`/`unless` decidem se o laço roda; lista vazia pula o passo sem gastar IA; o `maxTokens` do workflow é checado antes de CADA item.
+- **Retomar:** se o laço for interrompido (falha de item sem `optional` ou orçamento), o passo recomeça do item 1 ao retomar (os itens já feitos naquele passo não são guardados; os passos anteriores continuam salvos).
+- **Validação (`agent check`):** `each` precisa ser texto, `maxItens` 1 a 10, aviso se o prompt não usa `{{item}}` ou se há `keepHistory` (ignorado no laço). `{{item}}`/`{{indice}}` não contam como variáveis obrigatórias.
+- **Exemplo novo:** `workflows/exemplos/revisar-cada-arquivo.json` (lista até 5 arquivos, revisa cada um com `read_file` apenas, resume; com `maxTokens`).
+- 7 testes novos (`tests/workflowsV022.test.js`). Total: 389, todos passando.
+- Limites: máximo 10 itens por passo; sem laço dentro de laço; itens rodam em sequência (sem paralelo); a lista é texto linha a linha, então o passo anterior precisa ser instruído a responder "um por linha". Não testado: modelo real, Termux real.
+
+## 0.21.0 — custo por passo e orçamento de tokens do workflow (maxTokens)
+
+- **Tokens por passo:** o resultado do `run_workflow` ganha uma linha `Tokens do Gemini neste workflow: 2.300 (a 1.000, b 1.000, c 300)`, e o `agent run` mostra `(N tokens neste passo)` depois de cada passo. São os tokens REAIS que a API informa (o mesmo contador do `/custo`); tentativas que falharam também contam. Modelo local (Ollama/code-ia) não informa tokens: conta 0.
+- **`"maxTokens": 30000` no workflow:** teto de tokens do Gemini POR EXECUÇÃO. É checado antes de cada passo que ia rodar; se já estourou, para ali (passo pulado por `when` nunca é barrado). Dá para gastar um pouco acima do teto no último passo permitido: o teto barra o PRÓXIMO passo, não corta uma chamada no meio.
+- **Parar não perde nada:** o estouro salva o progresso como qualquer falha. `/workflows retomar <nome>` continua do passo barrado com orçamento zerado, e mudar só o `maxTokens` no arquivo NÃO invalida a retomada (o hash olha os passos). Combina com `"model": "@local"` nos passos baratos.
+- `maxTokens` inválido (negativo, decimal) é recusado e o `agent check` aponta. Exemplo `diagnosticar-e-resumir` agora traz `"maxTokens": 30000`.
+- 7 testes novos (`tests/workflowsV021.test.js`). Total: 382, todos passando.
+- Limites: só conta tokens do Gemini (não preço); o teto é por execução, não por dia; a checagem acontece entre passos (um passo único muito grande ainda pode passar do teto). Não testado: modelo real, Termux real.
+
+## 0.20.0 — retomar workflow que falhou (sem pagar de novo pelos passos que já deram certo)
+
+- **Progresso salvo na falha:** se um passo falha (acabou o retry, cota, rede), o workflow guarda em `~/.gemini-code/workflow-runs/<nome>.json` as variáveis, o resultado de cada passo e onde parou. A mensagem de erro já diz como continuar.
+- **`run_workflow` com `retomar: true` (ou `/workflows retomar <nome>`):** roda SÓ do passo que falhou em diante, reaproveitando o resultado dos anteriores. Não refaz nem gasta IA de novo com o que já deu certo. As `vars` salvas voltam sozinhas; se você passar `vars` novas, elas sobrescrevem.
+- **Travas:** o estado vale 24 h; se o arquivo do workflow mudou depois da falha, a retomada é recusada e o estado descartado (os resultados antigos não combinariam mais com os prompts novos); workflows com `keepHistory` não salvam estado (o histórico da conversa não é guardado); só a pasta global; nome só `[a-z0-9_-]`. Terminar com sucesso apaga o estado. `/workflows` e a lista do agente marcam `[INTERROMPIDO no passo X: retomar disponível]`.
+- No runner: o erro de passo agora traz `indice` e `ctx`, e `runWorkflowData` aceita `deps.retomar = {ctx, results, desde}`.
+- 5 testes novos (`tests/workflowsV020.test.js`); nos testes, trocar a pasta de workflows também isola o estado, então nada é gravado no `~/.gemini-code` real. Total: 375, todos passando.
+- Limites: só retoma falha de PASSO (não se o processo foi morto no meio de um passo: aí o estado não chega a ser gravado); passo que falhou refaz do começo dele; o estado guarda o texto dos resultados em disco (pasta do usuário, sem segredos extras além do que os passos produziram). Não testado: modelo real, Termux real.
+
+## 0.19.0 — workflows com condição (when/unless) e validação (agent check)
+
+- **`when` / `unless` por passo:** o passo só roda se a condição for verdadeira (`unless` = só se for falsa). Passo pulado NÃO gasta chamada de IA, deixa `{{id}}` vazio e o resumo marca `(pulado)`. Duas formas: texto (`"when": "{{achados}}"` é falso se vazio, `false`, `não`, `0` ou `[falhou:...]`, então um passo opcional que falhou também pula quem dependia dele) e objeto (`{"var":"achados","contains":"bug"}`, `{"var":"modo","equals":"rapido"}`, `{"var":"x","empty":true}`; sem diferenciar maiúsculas). Combina com `{{var|padrão}}`: `{{correcao|nenhum, estava limpo}}`.
+- **Resultado final** passa a ser o último passo QUE RODOU; se nenhum rodou, o agente recebe a explicação.
+- **`gemini-code agent check <arquivo ou nome>` e `/workflows validar <nome>`:** confere o workflow sem rodar nada e sem gastar IA, listando TODOS os problemas de uma vez. Erros: `id` repetido ou inválido, passo sem `prompt`, `retry`/`tools`/`when` inválidos, mais de 10 passos, passo usando resultado de passo futuro. Avisos: sem `description` (o agente escolhe pela descrição), campo com erro de digitação (`retries`, sugere `retry`), ferramenta que não existe, último passo condicional, variáveis obrigatórias. Código de saída 1 se houver erro (serve em script/CI).
+- **Exemplo novo:** `workflows/exemplos/revisar-e-corrigir.json` (só propõe o patch se a revisão achar bug; senão só confirma). Agora são 4 exemplos, todos validados por teste.
+- 9 testes novos (`tests/workflowsV019.test.js`). Total: 370, todos passando.
+- Limites: a condição olha texto (`contains` é heurística: depende de o prompt do passo anterior pedir uma resposta fácil de checar, como "responda apenas: sem bugs"); ainda sem loop, paralelo ou aninhamento. Não testado: modelo real, Termux real.
+
+## 0.18.0 — workflows à prova de erro (variáveis, retry, passo opcional, tools por passo)
+
+- **Variáveis conferidas ANTES de gastar IA:** `run_workflow` agora lê os `{{...}}` do arquivo. Variável sem valor e sem padrão (`{{alvo}}`) vira erro claro dizendo o que passar em `vars` (antes sumia em silêncio e o prompt saía furado). Passo que usa `{{resultado}}` de um passo que só roda DEPOIS é recusado ("mal montado"). A lista de workflows mostra `[vars obrigatórias: ...] [opcionais: ...]`, então o agente já sabe o que pedir.
+- **Valor padrão:** `{{linhas|6}}` usa 6 quando a variável não vem (ou vem vazia). Vale no `agent run` também.
+- **Por passo:** `"retry": 0-2` (tenta de novo se a chamada falhar; erro final cita as tentativas), `"optional": true` (se falhar, o passo vira `[falhou: motivo]` para os próximos e o workflow continua; o resumo avisa), `"model"` (modelo só daquele passo, ex. `@local` para gastar zero cota) e `"tools"` (lista de ferramentas do passo; `[]` = passo sem ferramentas, bom para resumir sem risco). `tools` só RESTRINGE: é a interseção com as ferramentas de quem chamou, e `run_workflow` nunca entra.
+- **`/workflows rodar <nome> var=valor ...`:** roda direto, sem o modelo escolher (`"var=valor com espaço"` entre aspas). `/workflows` mostra o que cada um precisa.
+- **Erro no meio:** a mensagem diz qual passo falhou e quais já tinham rodado.
+- **Novo exemplo:** `workflows/exemplos/diagnosticar-e-resumir.json` (checagens como passo opcional com retry + resumo sem ferramentas).
+- **Correção de segurança:** na camada de ferramentas, lista vazia significa "todas liberadas". Um passo com `tools: []`, uma interseção vazia, ou um pai que só tinha `run_workflow` poderiam virar acesso a TODAS as ferramentas. Agora "nenhuma" é um marcador próprio e tem teste.
+- **Correção do `/rewind`:** o id do turno era `t_<ms>_<aleatório>` e ordenado por nome; dois turnos no mesmo milissegundo saíam na ordem errada de vez em quando (o teste "/rewind N volta vários turnos" falhava ~1 em 3 rodadas). Carimbo agora sempre cresce.
+- 14 testes novos (`tests/workflowsV018.test.js` + 1 no `rewind`); 3 testes antigos de workflow ajustados ao novo comportamento (vars obrigatórias, mensagem de erro do passo). Total: 361, todos passando.
+- Limites: workflows continuam só na pasta global, máx. 10 passos, sem aninhamento, sem condição/loop/paralelo; `retry` só repete erro de chamada, não resposta ruim. Não testado: modelo real escolhendo/preenchendo `vars`, Termux real.
+
+## 0.17.0 — o agente aciona workflows sozinho (run_workflow)
+
+- **`run_workflow`:** nova ferramenta. Sem argumentos lista os workflows salvos em `~/.gemini-code/workflows/*.json` (nome, nº de passos, descrição); com `name` (e `vars` opcional, que preenche `{{variavel}}` nos prompts) roda os passos em ordem, cada um alimentando o próximo por `{{id_do_passo}}`, e devolve o resultado final mais um resumo dos passos. Os mesmos arquivos de `gemini-code agent run` servem, sem mudar nada.
+- **O agente sabe que existem:** se houver workflows, o prompt do sistema ganha UMA linha com os nomes (sem workflows, nada é adicionado: custo zero). Ele lista as descrições e escolhe quando o pedido combina.
+- **Travas:** só a pasta GLOBAL (um repositório baixado não injeta workflows); nome só `[a-z0-9_-]` (sem `../`); no máximo 10 passos; um workflow não chama outro; os passos herdam as ferramentas liberadas de quem chamou (perfil explore/plan nunca ganha `run_workflow`). Hooks, `/passo` e o limite de tokens valem dentro dos passos. Erro vira texto, não derruba o agente.
+- `/workflows` lista no chat. Exemplo novo: `workflows/exemplos/revisar-e-resumir.json` (revisão só de leitura com `{{alvo}}`).
+- 5 testes novos (`tests/workflowTools.test.js`).
+- Limite: o agente decide pela descrição; vale caprichar no campo `description` do workflow. Cada passo é uma chamada de IA, então um workflow de N passos custa N chamadas.
+
+## 0.16.0 — aprovação passo a passo (/passo)
+
+- **`/passo [on|off]`:** com o modo ligado, antes de CADA `write_file`/`edit_file` o chat mostra uma prévia e pergunta `s/n/t`. Arquivo novo mostra o número de linhas; sobrescrita mostra `antes → depois`; edição mostra o trecho `-` e `+` (cortado em 12 linhas). `s` grava, `n` recusa e o modelo recebe "Recusado pelo usuário… pergunte o que ele prefere", `t` grava e desliga o modo.
+- **Seguro por padrão:** resposta vazia, estranha, erro ao perguntar ou stdin fechado = RECUSA. Nunca grava por engano. `run_shell` continua com a confirmação própria (não é perguntado duas vezes). `run` e rotinas nunca perguntam.
+- **Ordem:** hooks `PreToolUse` rodam primeiro; só o que passar por eles chega à pergunta. Vale também para as gravações dos subagentes. Combina com `/plano` (aprova o plano inteiro) e `/rewind` (desfaz depois).
+- `confirmarEscrita: true` na config já abre o chat com o `/passo` ligado.
+- 5 testes novos (`tests/stepApproval.test.js`), incluindo o loop real do agente.
+- Limite: a prévia mostra o início do conteúdo, não um diff linha a linha de arquivos grandes.
+
+## 0.15.0 — custo de IA sob controle (/custo, limite e compactação automática)
+
+- **`/custo`:** mostra, desta sessão, as chamadas ao Gemini e os tokens REAIS que a API informa (`usageMetadata`: entrada, saída incluindo pensamento, por modelo), as chamadas locais (Ollama/code-ia, que não gastam cota) e o tamanho do contexto da última chamada. `/custo zerar` recomeça. Funciona com e sem streaming. Não mostra preço de propósito (tabelas mudam; tokens são o dado confiável).
+- **`maxTokensSessao` (config, padrão 0 = sem limite):** teto de tokens do Gemini por sessão. Avisa uma vez ao passar de 80% e, ao estourar, recusa a próxima chamada de nuvem com mensagem clara (`/compact`, `/local`, `/codeia`, `/custo zerar` ou aumentar o limite). Modelo local nunca é bloqueado.
+- **`autoCompactTokens` (config, padrão 60000; 0 desliga):** no chat, se o contexto da última chamada passou desse valor, roda o `/compact` sozinho antes do próximo turno (resumo local, sem chamar modelo). Cada chamada seguinte manda menos tokens.
+- 7 testes novos (`tests/usage.test.js`), incluindo streaming SSE e o roteador bloqueando a nuvem mas não o local.
+- Limites: a contagem é só do processo atual (não persiste); só conta o chat/agente (não `generateText` do design/mídia); Ollama não informa tokens, então só conta chamadas.
+
+## 0.14.0 — modo plano com aprovação (/plano e /aprovar)
+
+- **`/plano [pedido]`:** o agente só LÊ e planeja; nada é gravado nem executado. A trava é uma allowlist real (`read_file`, `list_dir`, `search_files`, `read_skill` + `todo_write`, que só guarda a lista em memória), não só um pedido no prompt: se o modelo insistir em `write_file`/`run_shell`, a execução é recusada. O plano termina numerado, com arquivos que serão tocados e como será verificado. O prompt do chat vira `você [plano]>`.
+- **`/aprovar [ajuste]`:** sai do modo plano e manda o agente executar o plano que está na conversa (com seu ajuste, se houver). Sem plano pendente, só avisa. `/plano off` (ou `sair`/`cancelar`) cancela sem executar nada.
+- Combina com o resto: o turno executado ganha `/rewind` e foto do `/snapshots`, e os hooks continuam valendo. `plano` e `aprovar` entraram nos nomes reservados.
+- 4 testes novos (`tests/planMode.test.js`), incluindo o loop real com o modelo insistindo em gravar.
+- Limite: a aprovação é do plano inteiro, não passo a passo; a confirmação s/n do `run_shell` continua valendo na execução.
+
+## 0.13.0 — hooks (comandos seus antes/depois das ferramentas)
+
+- **`src/hooks.js`:** `~/.gemini-code/hooks.json` registra comandos que rodam em `PreToolUse` (antes) e `PostToolUse` (depois) de cada ferramenta, inclusive nas dos subagentes. Sem custo de IA.
+- **Formato:** `{ "PreToolUse": [{ "matcher": "run_shell", "command": "meu-filtro.sh", "timeout": 10 }], "PostToolUse": [{ "matcher": "edit_file|write_file", "command": "npm run lint --silent" }] }`. O `matcher` é regex e precisa casar com o nome INTEIRO da ferramenta (`*` ou vazio = todas). O comando roda com `sh -c`, recebe `{event, tool, args, cwd, resultado}` em JSON no stdin e as variáveis `GEMINI_CODE_EVENT` e `GEMINI_CODE_TOOL`. Timeout em segundos (padrão 10, máx. 60).
+- **Código de saída 2:** em `PreToolUse` BLOQUEIA a ferramenta e o texto da saída vai ao modelo como motivo ("Bloqueado por hook do usuário: …"). Em `PostToolUse` anexa a saída ao resultado (bom para erros de lint). Qualquer outro código ≠ 0 só mostra um aviso amarelo.
+- **Segurança:** só o arquivo GLOBAL é lido. Um repositório baixado não consegue registrar comandos que rodam na sua máquina sozinho. Hook com erro, inexistente, com regex inválido ou que estoura o tempo nunca derruba o agente nem bloqueia. Hook que sai sem ler o stdin (EPIPE) conta pelo código de saída.
+- `/hooks` lista os hooks ativos. 7 testes novos (`tests/hooks.test.js`), incluindo o loop real do agente.
+- Limite: um hook só vê o nome e os argumentos da ferramenta; não edita os argumentos.
+
+## 0.12.1 — git automático (fotos do projeto a cada turno)
+
+- **`src/snapshots.js`:** dentro de um repositório git, o chat tira uma foto do projeto antes e depois de cada turno, numa referência escondida (`refs/gemini-code/snapshots`). Não mexe na sua branch, no índice nem no stash, não precisa de `user.name`/`email` e nunca faz `git init`. Nada mudou = nenhuma foto nova. Custo de IA: zero.
+- **Complementa o `/rewind`:** a foto também pega o que `run_shell` mudou (rm, mv, npm install…). `/snapshots` lista; `/snapshots restaurar N` volta os arquivos à foto N (1 = a mais nova). Antes de restaurar, o estado atual vira uma foto, então a restauração é reversível. Arquivos criados depois da foto não são apagados.
+- **Segredos fora da foto:** `.env*`, `*.pem`, `*.key`, `*.p12`, `id_rsa*`, `credentials.json` e `node_modules`.
+- Ligado por padrão; desligue com `autoGit: false` na config. 4 testes novos (`tests/snapshots.test.js`).
+- Limite: arquivos grandes versionados entram na foto e ocupam espaço em `.git`.
+
+## 0.12.0 — /rewind: desfazer por turno
+
+- **Diário automático por turno (`src/rewind.js`):** no chat, antes de `write_file`/`edit_file` mexerem num arquivo, o conteúdo anterior é guardado (ou o fato de ele não existir). Só o estado de ANTES do primeiro toque no turno. Fica em `~/.gemini-code/rewind/`, últimos 20 turnos, arquivo de até 2 MB. Custo de IA: zero.
+- **`/rewind [N]`:** volta o último turno que gravou arquivos (ou os N últimos); arquivo criado no turno é removido. `/rewind lista` mostra os turnos do projeto atual; turnos de outras pastas não são tocados.
+- **Trava de segurança:** se o arquivo mudou depois do que o agente gravou (você editou, ou um comando de shell mexeu), ele é pulado e listado; `--force` sobrescreve. Arquivo grande demais para guardar é avisado, não apagado em silêncio.
+- Depois de cada turno que gravou arquivos, o chat avisa quantos foram e que `/rewind` desfaz. `rewind` entrou na lista de nomes reservados dos comandos seus.
+- 6 testes novos (`tests/rewind.test.js`).
+- Limite: não rastreia o que `run_shell` faz (rm, mv, npm install…), e não usa git.
+
+## 0.11.0 — funções de agente inspiradas em Claude Code, Codex e similares
+
+Inspiradas em padrões públicos desses agentes (lista de tarefas, compactação de contexto, comandos de barra seus). Não copia código de nenhum deles.
+
+- **`todo_write` (lista de tarefas do agente):** em trabalho com 3+ passos o modelo escreve o plano como checklist e marca uma tarefa `in_progress` por vez; lista inválida (duas em andamento, status errado, vazia) é recusada e a anterior continua. `/tarefas` mostra a lista no chat. O prompt do agente orienta a usar só em tarefa com vários passos. Fica só na memória do processo.
+- **`/compact`:** troca o começo da conversa por um resumo feito localmente (sem chamar modelo, sem custo): pedidos, ferramentas usadas, arquivos tocados e a última resposta. Mantém as últimas mensagens inteiras e nunca separa chamada de ferramenta da resposta (a API do Gemini recusa isso). Salva a sessão.
+- **Comandos de barra seus:** um `.md` em `.gemini-code/commands/` (projeto) ou `~/.gemini-code/commands/` vira `/nome`. Aceita `$ARGUMENTS`, `$1..$9` e `description:` opcional. Projeto vence global; nomes embutidos (`/help`, `/clear`…) nunca são substituídos; arquivo > 20 KB é ignorado. `/commands` lista.
+- 5 testes novos (`tests/agentePadroes.test.js`) e verificação no chat real de `/tarefas`, `/commands`, `/compact` e de um comando seu.
+
+## 0.10.0 — mais conteúdo para bots e Termux, e gerenciar o que você ensinou
+
+- **Corpus 116 → 126 blocos:** placar/partidas de bot no SQLite (better-sqlite3), webhook do Mercado Pago, canal privado por partida, dar/tirar cargo, embed e menu de seleção no discord.js, instalar pacotes que compilam no Termux, atualizar o Termux, túnel com cloudflared, bateria/espaço e evitar que o Termux feche sozinho.
+- **Gerenciar o que você ensinou:** `/ensinados` lista, `/esquecer pergunta` apaga UMA coisa (no chat); na CLI, `code-ia notes` e `code-ia unteach "pergunta"`. Aceita um pedaço do título; se der mais de uma opção, pede a pergunta completa. `forget` continua apagando tudo.
+- Avaliação: 67 → 76 perguntas (≥ 90% no 1º resultado; hoje 76/76). Pergunta ambígua "termux fecha sozinho" continua achando o bloco de erro de memória, que também é resposta válida e 1 teste novo.
+
+## 0.9.0 — code-ia entende erro colado e conhece mais erros
+
+- **Cole o erro inteiro:** stack trace do Node (`at ...`) ou `Traceback` do Python é reduzido às linhas que dizem o erro (sem caminhos nem linhas de pilha) antes da busca. Pergunta normal não é alterada.
+- **8 erros comuns novos (corpus 108 → 116 blocos):** `Cannot read properties of undefined`, `ENOENT`, `EACCES`, `require is not defined` (ES module), `ModuleNotFoundError`, `IndentationError`, `fetch failed`/`ETIMEDOUT` e `git push rejected`.
+- Avaliação: 59 → 67 perguntas (≥ 90% no 1º resultado) e 1 teste novo.
+
+## 0.8.0 — code-ia edita arquivo existente (com trava)
+
+- **Troca exata de trecho:** `troque "3000" por "8080" em server.js` (também `substitua`, `mude`, aspas simples ou crases) chama `edit_file`, com o backup de sempre. Só se `edit_file` estiver liberado no perfil/sessão.
+- **Travas:** o arquivo precisa existir; fica restrito à pasta atual; recusa `.env`/segredos; se o trecho não existe, não muda nada; se aparece mais de uma vez, pede mais contexto em vez de adivinhar qual trocar.
+- Novo teste em `tests/codeia-v070.test.js`.
+
+## 0.7.0 — code-ia mais rápido, mais conversável e com mais conteúdo
+
+- **Gerador de código bem mais rápido:** o `completar` deixou de varrer o corpus inteiro a cada token; agora usa um índice (token → posições) montado na hora e não gravado em disco. Mesma saída de antes (testado contra a varredura completa); em ~118 mil tokens de código, 5 completações caíram de ~177 ms para ~69 ms (já contando a montagem do índice). Quanto mais código você ensinar, maior o ganho.
+- **"outra" no chat:** se a resposta não era a que você queria, diga `outra`, `próxima` ou `não era isso` e o code-ia mostra o 2º melhor resultado da mesma pergunta; pedir de novo avança para o 3º. Quando acabam as boas respostas, ele diz isso em vez de inventar.
+- **"só o código" no chat:** `só o código`, `código` ou `mostra o código` devolve apenas os blocos de código da última resposta, sem título nem explicação.
+- **Corpus maior (92 → 108 blocos):** Pix com Mercado Pago, `Promise.all`/`allSettled`, `unhandledRejection`, pm2, validação de POST e middleware de token no Express, Map/Set, desestruturação/spread, node-cron, Docker, SQL (JOIN/INSERT/UPDATE), f-string, CSV em Python, stream de câmera com Flask + OpenCV, jq e fetch com Authorization.
+- **Correção de digitação mais segura:** em pergunta com 3+ palavras, o bloco só vale se casar com ao menos uma palavra exata (antes "receita" virava "rejeita" e achava resposta sem sentido). Pergunta curta, como `ffmepg`, continua sendo corrigida.
+- A avaliação passou de 43 para 59 perguntas (exige ≥ 90% no 1º resultado) e há 8 testes novos em `tests/codeia-v070.test.js`.
+
+## 0.6.0 — code-ia entende erro de digitação, cria arquivos e aprende no chat
+
+- **Tolera erro de digitação:** "servido express", "arqivo", "ffmepg", "discorde" encontram a resposta certa (palavra que não existe no vocabulário vira a mais parecida, com troca de letras vizinhas contando como 1 erro). Palavra totalmente sem sentido continua sem resposta. A avaliação passou a ter 43 perguntas, 6 delas com erro de digitação (exige ≥ 90%).
+- **Cria arquivos (com trava):** "crie server.js com servidor express", "crie um servidor express em app.js" e "salve isso em x.js" (salva o 1º código da última resposta) chamam `write_file`. Só arquivo NOVO: nunca sobrescreve um que já existe, nunca escreve fora da pasta atual, nunca `.env`/segredos, e só se `write_file` estiver liberado no perfil/sessão. Se não conhece código pro assunto, diz isso em vez de criar arquivo vazio ou inventado. Quem escreve é a ferramenta do agente (com o backup de sempre).
+- **Ensinar na hora:** no chat, `/ensinar pergunta :: resposta`; na CLI, `code-ia teach "pergunta" "resposta"`. Mesma pergunta de novo substitui a resposta; `#` no meio do texto não quebra a estrutura; `forget` desfaz.
+- **Início mais rápido e modelo menor:** o code-ia confere só nome/tamanho/data dos arquivos antes de decidir se precisa ler e refazer o modelo, e o código não é mais gravado em duplicidade no disco (modelo em disco passa para a versão 3; quem vinha da 0.5.x é atualizado sozinho). Com muito código ensinado, isso pesa bastante.
+- 5 novos testes (digitação, criação segura de arquivo, loop do agente com `write_file`, `/ensinar`, início rápido).
+
+## 0.5.0 — code-ia mais esperto
+
+- **Busca melhor:** sinônimos e flexões PT/EN (criar/crie/create, arquivo/file, servidor/server…), camelCase separado e também inteiro (`readFileSync`, `JavaScript`) e bônus quando o título do bloco é "sobre" a pergunta. Novo `tests/codeia-eval.test.js` mede 37 perguntas reais (exige ≥ 90% de acerto no 1º resultado; corrigiu a quebra de "JavaScript" em "java"+"script").
+- **Corpus embutido mais que dobrou (44 → 92 blocos):** SQLite, WebSocket, Express (estáticos, CORS), chaves/ambiente, retry/timeout, ESM, regex, datas, API do Gemini, Ollama, streaming, slash commands e botões do Discord, Three.js, toque/colisão em jogos, Minecraft Bedrock, overlay Android (Kotlin), ffmpeg, Termux:API, cron, git, e uma seção de **erros comuns** (EADDRINUSE, Cannot find module, ECONNREFUSED, 429, CORS…).
+- **Completar código mais fiel:** o gerador agora usa contexto longo (até 12 tokens) em vez de tabela n-grama fixa; copia o que aprendeu, fecha a instrução e **para sem inventar** quando não reconhece o trecho (ou quando o contexto ficaria curto demais, evitando emendar dois trechos). Modelo menor em disco.
+- **Aprende com o SEU código:** `code-ia learn pasta` aceita `.js .py .html .sh .css .json .kt .java .lua …`; vira blocos pesquisáveis ("onde está a função X?") com a fonte citada, e alimenta o gerador com o seu estilo. Ignora `node_modules`, `.git`, `.env*`, chaves/segredos, `package-lock`, `*.min.*` e arquivos > 200 KB. Novo `code-ia forget` apaga o que foi ensinado.
+- **Ferramentas somente-leitura:** pedidos claros ("leia package.json", "liste a pasta src", "procure TODO em src") chamam `read_file`, `list_dir` e `search_files` — só se a ferramenta está liberada no perfil/sessão atual (convidado e perfis restritos continuam valendo). Nunca escreve, edita, apaga nem roda comando.
+- **Conversa:** responde saudação, "quem é você" (não finge ser Qwen/DeepSeek/Gemini), "ajuda"; entende pergunta curta de acompanhamento ("e em python?"); quando não sabe, mostra o mais próximo que achou.
+- Modelo em disco passa para a versão 2; quem vinha da 0.4.0 é atualizado sozinho, com aviso claro.
+
+## 0.4.0 — code-ia: modelo próprio, instalado automaticamente
+
+- Novo modelo **code-ia**, escrito do zero em JavaScript puro (`src/code-ia/`): nenhum Qwen, DeepSeek, Ollama ou outro modelo de terceiros por trás, nenhuma chamada de rede.
+- Como funciona: memória de conhecimento com busca BM25 (corpus embutido + `~/.gemini-code/knowledge` + `skills` + o que você ensinar) e gerador de código n-grama (ordem 4, com backoff) treinado nesse corpus. É um modelo pequeno: responde o que aprendeu e melhora quando você ensina mais; não é um LLM generalista e não chama ferramentas.
+- Instalação automática: na primeira execução (`chat`, `run`, `sub`, `agent`, `live`, `voice`, `ciencia` ou `gemini-code` sem argumentos) o modelo é construído no aparelho e salvo em `~/.gemini-code/code-ia/model.json`; nas seguintes só confere o hash do corpus e reconstrói sozinho se o conhecimento mudou. Arquivo corrompido é refeito.
+- `gemini-code` sem argumentos: na 1ª vez instala o code-ia e já abre a conversa; com modelo instalado e API key, mostra a ajuda como antes.
+- Sem API key do Gemini o agente passa a usar o code-ia em vez de falhar (`codeIaAuto`, padrão `true`; com `false` volta o erro "Nenhuma API key configurada").
+- Novos comandos: `code-ia status|ask|complete|learn|reinstall`, `config set-provider code-ia`, `/codeia` no chat; `doctor` mostra se o code-ia está instalado.
+- Ajusta dois testes de CLI ao novo comportamento e adiciona `tests/codeia.test.js`.
+
+## 0.3.16 — Tratamento claro da cota Gemini (HTTP 429)
+
+- Interpreta o `RetryInfo`, o cabeçalho HTTP `Retry-After` e o tempo sugerido no texto de erro do Google.
+- Em `429 RESOURCE_EXHAUSTED`, mostra a espera indicada pela API e orienta a reenviar a mensagem manualmente, sem repetir automaticamente a chamada nem consumir mais cota.
+- Exibe métrica, limite e modelo indicados na mensagem quando disponíveis; remove a dica enganosa que sugeria trocar para o mesmo modelo que já estava limitado.
+- Mantém o provedor padrão como `gemini`; nenhuma chamada ao vivo foi feita durante os testes para respeitar a cota do usuário.
+- Adiciona testes unitários para mensagens 429, parsing de `RetryInfo`, `Retry-After` e ausência de repetição automática.
+
+## 0.3.15 — Corrige testes offline e verificação sintática
+
+- Removeu a dependência obrigatória de `chalk` usando um adaptador de cores local compatível com TTY e `NO_COLOR`.
+- Tornou o carregamento de `ws` tardio, permitindo importar e testar a lógica Cowork sem inicializar o transporte de rede; chamadas reais sem a dependência agora mostram uma mensagem clara.
+- Corrigiu o comando `npm run lint`: usa ESLint se estiver instalado e, caso contrário, executa verificação sintática de todos os arquivos JavaScript, avisando que as regras de estilo não foram verificadas.
+- Tornou possível executar os testes de unidade no ambiente offline atual sem instalar dependências; o transporte WebSocket real ainda precisa de `ws` instalado.
+- Permitiu passar `cwd` explicitamente para `buildSystemInstruction`, isolando testes e permitindo construir instruções para diretórios de projeto escolhidos.
+- Corrigiu um teste de conhecimento que lia arquivos de contexto do repositório em vez do diretório temporário vazio do teste.
+
+# Changelog
+
+## 0.3.14 — Profiles, Kimi Code patterns, and Higgsfield readiness
+
+- Added real tool-allowlisted `coder`, `explore`, `plan`, `review`, and `test` profiles for `gemini-code run`.
+- Added `profiles list/show` and kept `--read-only` as a backwards-compatible alias for `explore`.
+- Added bounded, isolated subagent aliases aligned with Kimi's `explore`, `plan`, `reviewer`, and `coder` roles.
+- Expanded project context discovery with `KIMI.md`, `KIMI_CODE.md`, and `SYSTEM.md`.
+- Added local `kimi`, `kimi-code`, and `higgsfield` executable detection to `doctor`.
+- Added an optional Higgsfield CLI + Skills guide with explicit authorization, authentication, and credit-spend safeguards; no external install/login/generation is performed automatically.
+- Added a reusable Kimi-style multi-agent workflow Skill.
+- Updated interoperability docs and added profile permission tests.
+
+### Verification limitations for this build
+
+The eight previous v0.3.13 tests and the new profile/subagent tests are run separately where possible. Full-suite status remains dependent on installing `chalk` and `ws`; the npm registry was not reachable (`EAI_AGAIN`) during this build. Syntax checks do not require those packages. See the delivery report for verified commands.
+
+## 0.3.13 — Agent workflow upgrades
+
+- Added persistent sessions with active-session selection and automatic chat history saving.
+- Added bounded workspace checkpoints with SHA-256 manifests, secret-file exclusions, explicit restore confirmation, pre-validation and an automatic safety checkpoint before restore.
+- Added local execution artifacts with SHA-256 integrity verification and CLI inspection commands.
+- Added a read-only `run` profile and optional pre-run checkpoint.
+- Added a heuristic secret-pattern scanner that reports file, line and category without printing detected values.
+- Expanded project context discovery to common instruction filenames used across coding agents.
+- Added a `doctor` command for local CLI detection, a reusable engineering Skill, interoperability documentation and a GitHub Actions CI workflow.
+- Added tests for persistence, checkpoint safety, artifact integrity, context discovery and secret scanning.
+
+### Verification limitations for this build
+
+The eight tests added for v0.3.13 pass. The complete suite reports 163/184 passing in the current build environment; 21 test files/CLI cases are blocked because the environment has no installed `chalk` and `ws` dependencies. `npm ci` could not reach `registry.npmjs.org` because DNS returned `EAI_AGAIN`. JavaScript syntax checks and the repository's own secret-pattern self-scan pass. See the delivery report for exact details.

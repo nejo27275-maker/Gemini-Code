@@ -1,0 +1,24 @@
+{
+  "name": "diagnosticar-e-resumir",
+  "description": "Roda as checagens do projeto (testes/lint) e resume o que falhou, com um plano de correção em {{linhas|6}} linhas. Só leitura e checagens; nada é editado.",
+  "maxTokens": 30000,
+  "steps": [
+    {
+      "id": "checagens",
+      "prompt": "Rode as checagens do projeto em {{pasta|.}} e liste cada falha com arquivo e mensagem. Não edite nada.",
+      "retry": 1,
+      "optional": true,
+      "tools": [
+        "run_checks",
+        "read_file",
+        "list_dir",
+        "search_files"
+      ]
+    },
+    {
+      "id": "plano",
+      "prompt": "Com base só nisto:\n{{checagens}}\n\nEscreva em até {{linhas|6}} linhas, por ordem de gravidade, o que corrigir primeiro. Se começar com [falhou:, diga que as checagens não rodaram e não invente erros.",
+      "tools": []
+    }
+  ]
+}
