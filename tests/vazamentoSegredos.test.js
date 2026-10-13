@@ -57,6 +57,15 @@ test('actions.log não guarda chave em texto puro', () => {
   assert.match(log, /segredo omitido/);
 });
 
+test('actions.log: segredo em atribuição dentro dos args (aspas escapadas pelo JSON) também é mascarado', () => {
+  // Revisão adversarial da v0.41.0: a máscara rodava depois do JSON.stringify, e password = "..." virava password = \"...\".
+  const SENHA = 'SenhaFicticiaDeTeste1234567890abc';
+  logAcao({ tool: 'write_file', args: { path: '.env.local', content: `password = "${SENHA}"\napi_key: '${SENHA}x'` }, resultado: 'ok' });
+  const log = fs.readFileSync(LOG_PATH, 'utf8');
+  assert.doesNotMatch(log, new RegExp(SENHA));
+  assert.match(log, /Senh…\[segredo omitido\]/);
+});
+
 test('mídia (Veo): a chave vai no cabeçalho, nunca na URL', async () => {
   const config = require('../src/config');
   config.saveConfig({ apiKey: CHAVE_GOOGLE });

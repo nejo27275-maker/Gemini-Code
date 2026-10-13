@@ -24,9 +24,19 @@ function rotacionarSeGrande() {
   } catch { /* log ainda não existe */ }
 }
 
+// Mascara cada texto ANTES do JSON.stringify: depois dele as aspas viram \" e a regra
+// 'segredo em atribuição' (password = "...") não casava mais nos args.
+function mascararProfundo(v, mascarar) {
+  if (typeof v === 'string') return mascarar(v);
+  if (Array.isArray(v)) return v.map((x) => mascararProfundo(x, mascarar));
+  if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, mascararProfundo(x, mascarar)]));
+  return v;
+}
+
 function resumir(valor) {
   // v0.41.0: um comando com chave (ex.: curl -H "Authorization: Bearer ...") ia em texto puro para o log.
-  const texto = require('./securityScan').mascararSegredos(typeof valor === 'string' ? valor : JSON.stringify(valor));
+  const { mascararSegredos } = require('./securityScan');
+  const texto = typeof valor === 'string' ? mascararSegredos(valor) : mascararSegredos(JSON.stringify(mascararProfundo(valor, mascararSegredos)));
   if (!texto) return '';
   return texto.length > MAX_CAMPO_CHARS
     ? texto.slice(0, MAX_CAMPO_CHARS) + `...(+${texto.length - MAX_CAMPO_CHARS} chars)`
