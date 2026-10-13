@@ -1,0 +1,149 @@
+openapi: 3.0.3
+info:
+  title: Gemini Code Routine API
+  version: 0.3.13
+  description: API autenticada para criar, acompanhar, executar e pausar rotinas de monitoramento HTTP.
+servers:
+  - url: http://127.0.0.1:8787
+security:
+  - BearerAuth: []
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+  schemas:
+    HttpCheckRoutineInput:
+      type: object
+      required: [name, trigger, action]
+      properties:
+        name:
+          type: string
+          maxLength: 120
+        description:
+          type: string
+          maxLength: 1000
+        category:
+          type: string
+        priority:
+          type: string
+          enum: [baixa, normal, alta, critica]
+        trigger:
+          oneOf:
+            - type: object
+              required: [type, intervalMs]
+              properties:
+                type: { type: string, enum: [interval] }
+                intervalMs: { type: integer, minimum: 60000, maximum: 31536000000 }
+                timezone: { type: string, default: America/Recife }
+            - type: object
+              required: [type, runAt]
+              properties:
+                type: { type: string, enum: [once] }
+                runAt: { type: string, format: date-time }
+                timezone: { type: string, default: America/Recife }
+            - type: object
+              required: [type, expression]
+              properties:
+                type: { type: string, enum: [cron] }
+                expression: { type: string, example: "*/5 * * * *" }
+                timezone: { type: string, default: America/Recife }
+        action:
+          type: object
+          required: [type, url]
+          properties:
+            type: { type: string, enum: [http-check] }
+            url: { type: string, format: uri }
+            timeoutMs: { type: integer, minimum: 1000, maximum: 60000, default: 10000 }
+            expectedStatus: { type: integer, minimum: 100, maximum: 599 }
+paths:
+  /health:
+    get:
+      security: []
+      summary: Verificação básica de disponibilidade
+      responses:
+        '200': { description: Serviço operacional }
+  /api/routines:
+    get:
+      summary: Lista rotinas
+      responses:
+        '200': { description: Lista de rotinas }
+        '401': { description: Token ausente ou inválido }
+    post:
+      summary: Cria uma rotina como rascunho
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/HttpCheckRoutineInput' }
+      responses:
+        '201': { description: Rotina criada como rascunho }
+        '400': { description: Entrada inválida }
+        '401': { description: Token ausente ou inválido }
+  /api/routines/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      summary: Consulta uma rotina
+      responses:
+        '200': { description: Rotina encontrada }
+        '404': { description: Rotina não encontrada }
+  /api/routines/{id}/activate:
+    post:
+      summary: Ativa a execução automática de uma rotina
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Rotina ativada }
+  /api/routines/{id}/pause:
+    post:
+      summary: Pausa uma rotina
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Rotina pausada }
+  /api/routines/{id}/resume:
+    post:
+      summary: Retoma uma rotina pausada
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Rotina retomada }
+  /api/routines/{id}/run:
+    post:
+      summary: Executa uma verificação imediatamente
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Execução concluída }
+        '502': { description: Verificação falhou após retentativas }
+  /api/routines/{id}/executions:
+    get:
+      summary: Lista execuções de uma rotina
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Histórico de execuções }
+  /api/executions:
+    get:
+      summary: Lista execuções recentes
+      responses:
+        '200': { description: Histórico de execuções }

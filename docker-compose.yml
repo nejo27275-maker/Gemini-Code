@@ -1,0 +1,20 @@
+services:
+  gemini-code-routines:
+    build: .
+    restart: unless-stopped
+    environment:
+      HOME: /data
+      ROUTINE_API_HOST: 0.0.0.0
+      ROUTINE_API_PORT: 8787
+      # Recomendado: defina um token aleatório longo no ambiente antes do deploy.
+      # Se omitido, o serviço gera um token salvo no volume e o mostra só na primeira inicialização.
+      ROUTINE_API_TOKEN: ${ROUTINE_API_TOKEN:-}
+      ROUTINE_ALLOW_PRIVATE_TARGETS: ${ROUTINE_ALLOW_PRIVATE_TARGETS:-0}
+    ports:
+      # Não exponha HTTP diretamente à internet. Para acesso remoto, use proxy HTTPS autenticado.
+      - "127.0.0.1:8787:8787"
+    volumes:
+      - gemini-code-data:/data
+
+volumes:
+  gemini-code-data:

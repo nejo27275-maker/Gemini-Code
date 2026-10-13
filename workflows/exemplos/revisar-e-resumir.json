@@ -1,0 +1,8 @@
+{
+  "name": "revisar-e-resumir",
+  "description": "Revisa um arquivo ou pasta ({{alvo}}) procurando bugs e depois resume os achados em até 5 linhas. Só leitura.",
+  "steps": [
+    { "id": "achados", "prompt": "Leia {{alvo}} e liste os bugs e riscos reais que encontrar (caminho e linha quando possível). Não edite nada." },
+    { "id": "resumo", "prompt": "Resuma em no máximo 5 linhas, por ordem de gravidade:\n{{achados}}" }
+  ]
+}

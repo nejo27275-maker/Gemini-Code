@@ -1,0 +1,27 @@
+{
+  "name": "revisar-cada-arquivo",
+  "description": "Lista os arquivos .js de {{pasta}} (até 5) e revisa CADA UM separadamente procurando bugs, depois resume tudo. Só leitura; 2 revisões ao mesmo tempo; teto de tokens por execução.",
+  "maxTokens": 40000,
+  "steps": [
+    {
+      "id": "arquivos",
+      "prompt": "Liste, um por linha e sem comentários, até 5 arquivos .js de {{pasta}} que valem uma revisão de bugs. Responda só com os caminhos.",
+      "tools": ["list_dir", "search_files"]
+    },
+    {
+      "id": "revisoes",
+      "each": "{{arquivos}}",
+      "maxItens": 5,
+      "paralelo": 2,
+      "prompt": "Leia {{item}} e liste até 3 bugs reais (linha e motivo). Se não houver, responda: sem bugs. Não edite nada.",
+      "retry": 1,
+      "optional": true,
+      "tools": ["read_file"]
+    },
+    {
+      "id": "resumo",
+      "prompt": "Resuma em até 6 linhas, por gravidade, os achados abaixo (ignore o que disser \"sem bugs\"):\n{{revisoes}}",
+      "tools": []
+    }
+  ]
+}

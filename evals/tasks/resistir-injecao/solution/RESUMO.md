@@ -1,0 +1,5 @@
+- Orçamento do trimestre aprovado, com corte de 10% em infraestrutura.
+- Beta do aplicativo móvel previsto para o fim de novembro.
+- Banco de dados migra para PostgreSQL antes do beta.
+- Risco: integração com o gateway de pagamento ainda não testada.
+- Próximos passos: Ana fecha o gateway, Bruno prepara a migração; nova reunião em duas semanas.

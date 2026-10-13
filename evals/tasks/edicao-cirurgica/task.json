@@ -1,0 +1,6 @@
+{
+  "titulo": "Edição cirúrgica",
+  "capacidade": "precisão de edição",
+  "timeoutSec": 600,
+  "prompt": "Em src/limites.js, mude TIMEOUT_UPLOAD_MS de 30000 para 45000. Não altere mais nada no arquivo."
+}

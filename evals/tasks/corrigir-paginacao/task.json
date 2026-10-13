@@ -1,0 +1,6 @@
+{
+  "titulo": "Corrigir defeito de paginação",
+  "capacidade": "encontrar e corrigir defeito",
+  "timeoutSec": 600,
+  "prompt": "Em src/paginar.js, paginar(itens, 1, 10) deveria devolver os 10 primeiros itens (as páginas começam em 1), mas devolve os itens 11 a 20. Corrija a função. Além disso, página menor que 1 ou tamanho menor que 1 (ou não inteiros) devem lançar RangeError."
+}

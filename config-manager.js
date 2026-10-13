@@ -9,11 +9,18 @@ class ConfigManager {
     this.tmpPath = configPath + '.tmp';
   }
 
+  // O config guarda a apiKey (em texto puro, se não houver passphrase): só o
+  // dono lê. `mode` só vale na criação, por isso o chmod nos já existentes.
+  _write(filePath, data) {
+    fs.writeFileSync(filePath, data, { encoding: 'utf8', mode: 0o600 });
+    try { fs.chmodSync(filePath, 0o600); } catch (err) { /* Windows/FS sem permissões POSIX */ }
+  }
+
   save(config) {
     const data = JSON.stringify(config, null, 2);
-    fs.writeFileSync(this.tmpPath, data, 'utf8');
+    this._write(this.tmpPath, data);
     fs.renameSync(this.tmpPath, this.configPath);
-    fs.writeFileSync(this.backupPath, data, 'utf8');
+    this._write(this.backupPath, data);
     return config;
   }
 
@@ -32,9 +39,23 @@ class ConfigManager {
     return config !== null && typeof config === 'object' && !Array.isArray(config);
   }
 
+  // Instalações antigas gravaram o config com 0644 (legível por outros usuários).
+  _restringirPermissoes() {
+    if (process.platform === 'win32') return;
+    for (const p of [this.configPath, this.backupPath]) {
+      try { if (fs.statSync(p).mode & 0o077) fs.chmodSync(p, 0o600); } catch (err) { /* não existe */ }
+    }
+  }
+
   load() {
+    this._restringirPermissoes();
     const main = this._tryReadJSON(this.configPath);
     if (this._isValid(main)) return main;
+
+    // Primeira execução (nem principal nem backup existem) não é corrupção:
+    // não assusta o usuário com um aviso à toa.
+    const primeiraExecucao = !fs.existsSync(this.configPath) && !fs.existsSync(this.backupPath);
+    if (primeiraExecucao) return null;
 
     console.error('[config] Arquivo principal ausente ou corrompido. Tentando restaurar do backup...');
 
@@ -42,7 +63,7 @@ class ConfigManager {
     if (this._isValid(backup)) {
       try {
         const data = JSON.stringify(backup, null, 2);
-        fs.writeFileSync(this.tmpPath, data, 'utf8');
+        this._write(this.tmpPath, data);
         fs.renameSync(this.tmpPath, this.configPath);
         console.error('[config] Restaurado com sucesso a partir do backup.');
       } catch (err) {

@@ -1,0 +1,22 @@
+{
+  "name": "revisar-e-corrigir",
+  "description": "Revisa {{alvo}}; SÓ se achar bugs reais, propõe a correção (sem gravar nada) e roda as checagens. Se estiver limpo, só confirma.",
+  "steps": [
+    {
+      "id": "achados",
+      "prompt": "Leia {{alvo}} e liste bugs reais (caminho e linha). Se não houver nenhum, responda apenas: sem bugs. Não edite nada.",
+      "tools": ["read_file", "list_dir", "search_files"]
+    },
+    {
+      "id": "correcao",
+      "prompt": "Para estes bugs:\n{{achados}}\n\nEscreva o patch proposto (trechos - e +) para cada um. Não grave nada.",
+      "when": { "var": "achados", "contains": "linha" },
+      "tools": ["read_file"]
+    },
+    {
+      "id": "veredito",
+      "prompt": "Resuma em 3 linhas. Achados: {{achados}}\nPatch proposto: {{correcao|nenhum, estava limpo}}",
+      "tools": []
+    }
+  ]
+}

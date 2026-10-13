@@ -119,4 +119,4 @@ async function makeImage(prompt, outDir, fileName = 'imagem.png') {
   return { outPath, mimeType: image.mimeType };
 }
 
-module.exports = { makeSlides, makeDoc, makeImage };
+module.exports = { makeSlides, makeDoc, makeImage, mdToHtml, escapeHtml };

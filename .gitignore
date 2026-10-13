@@ -1,2 +1,22 @@
 node_modules/
 *.log
+.DS_Store
+
+# Configuração local do usuário (chave de API etc.) fica em ~/.gemini-code/,
+# não no repositório — isto aqui é só para saídas soltas de testes manuais
+# na própria pasta do projeto.
+#
+# IMPORTANTE (pra quem for revisar o projeto): "teste-design/" nunca é criada
+# nem referenciada em nenhum lugar do código-fonte (não é um outDir padrão de
+# `gemini-code design`, não é gerada por nenhum script/teste automatizado —
+# ver tests/). É só o nome que se usa aqui pra rodar `gemini-code design`
+# manualmente na pasta do projeto. Ela "sumir" do repo/zip é o gitignore
+# funcionando como esperado, não perda de trabalho nem regressão entre
+# versões.
+teste.txt
+teste-design/
+
+# Segredos de deploy: nunca versionar .env.
+.env
+.env.*
+!.env.example

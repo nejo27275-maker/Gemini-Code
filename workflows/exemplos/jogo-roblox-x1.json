@@ -1,0 +1,27 @@
+{
+  "name": "jogo-roblox-x1",
+  "description": "Teste X1: constrói um jogo no Roblox Studio (via MCP) a partir de {{ideia}}, joga/testa, se autoavalia e dá notas pela rubrica de docs/TESTE_X1_ROBLOX.md.",
+  "steps": [
+    {
+      "id": "plano",
+      "prompt": "Ideia do jogo: {{ideia}}\n\nFaça o PLANO antes de construir (sem ferramentas): 1) lista de mecânicas (máx. 6); 2) estrutura no Studio (Workspace, ServerScriptService, ReplicatedStorage, StarterGui) com o nome de cada Script/LocalScript e para que serve; 3) como o jogador vence/perde e como o progresso é salvo (ou diga que não salva); 4) o que será testado no playtest. Seja curto e concreto.",
+      "tools": []
+    },
+    {
+      "id": "construir",
+      "prompt": "Construa o jogo no Roblox Studio seguindo este plano, usando as ferramentas do Roblox Studio (MCP). Crie primeiro o mínimo jogável e depois o resto. Não invente nomes de ferramentas: use só as que existirem. Ao terminar, liste o que foi criado (scripts, modelos, UI).\n\nPLANO:\n{{plano}}",
+      "retry": 1
+    },
+    {
+      "id": "playtest",
+      "prompt": "Teste o jogo de verdade no Studio (playtest) e leia o console. Diga: o que funcionou, que erros apareceram (cole a mensagem) e o que não conseguiu testar. Se achar bug simples, corrija e teste de novo (no máximo 2 rodadas). Não afirme que algo funciona sem ter visto no playtest ou no console.\n\nO QUE FOI CONSTRUÍDO:\n{{construir}}",
+      "optional": true
+    },
+    {
+      "id": "nota",
+      "prompt": "Dê uma nota de 0 a 10 para cada critério, com UMA frase de justificativa honesta baseada só no que foi realmente testado (se não testou, a nota máxima é 5): 1) roda sem erro; 2) objetivo claro e dá para vencer/perder; 3) mecânicas pedidas presentes; 4) qualidade do código Luau (organização, cliente/servidor); 5) interface e feedback ao jogador; 6) visual do mapa; 7) diversão/ritmo; 8) autonomia (precisou de ajuda humana?). Termine com a média e uma lista curta do que ficou faltando.\n\nPLANO: {{plano}}\nCONSTRUÍDO: {{construir}}\nPLAYTEST: {{playtest|não houve playtest}}",
+      "tools": []
+    }
+  ],
+  "maxTokens": 150000
+}

@@ -10,10 +10,12 @@ const path = require('path');
 const { SKILLS_DIR } = require('../config');
 
 function parseFrontMatter(content) {
-  const match = content.match(/^---\n([\s\S]*?)\n---\n?/);
+  // v0.3.10: aceita CRLF (SKILL.md editado no Windows/sincronizado) e BOM; antes o front matter era ignorado.
+  content = content.replace(/^\uFEFF/, '');
+  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
   if (!match) return { meta: {}, body: content };
   const meta = {};
-  for (const line of match[1].split('\n')) {
+  for (const line of match[1].split(/\r?\n/)) {
     const idx = line.indexOf(':');
     if (idx === -1) continue;
     meta[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
@@ -59,6 +61,8 @@ const declarations = [
 
 async function execute(name, args) {
   if (name !== 'read_skill') throw new Error(`Ferramenta de skill desconhecida: ${name}`);
+  if (typeof args.path !== 'string' || !args.path) return 'Erro: read_skill precisa de "path" (caminho do SKILL.md).';
+  if (!fs.existsSync(args.path)) return `Erro: skill não encontrada: ${args.path}`;
   return readSkill(args.path);
 }
 

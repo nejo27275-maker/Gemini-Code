@@ -12,7 +12,7 @@
 // Palavras de saída: "parar", "sair", "encerrar" (ditas por voz) ou Ctrl+C.
 'use strict';
 
-const chalk = require('chalk');
+const chalk = require('../terminalColors');
 const voice = require('../voice/voice');
 const { runOnce } = require('../agent');
 
@@ -45,8 +45,17 @@ function dividirEmFrases(texto, tamanhoMax = 220) {
   return blocos.length ? blocos : [texto];
 }
 
-async function runLive({ modelName, vozAtiva = true } = {}) {
-  if (!voice.isTermuxApiAvailable()) {
+/**
+ * `deps`, se passado, sobrescreve `voice` (isTermuxApiAvailable/listen/speak)
+ * e `runOnce` — existe só para testar o loop de conversa sem precisar do
+ * Termux:API de verdade nem chamar a API do Gemini (ver
+ * tests/live.test.js). Em uso normal (CLI) ninguém passa `deps`.
+ */
+async function runLive({ modelName, vozAtiva = true, deps = {} } = {}) {
+  const voiceApi = deps.voice || voice;
+  const runOnceFn = deps.runOnce || runOnce;
+
+  if (!(await voiceApi.isTermuxApiAvailable())) {
     throw new Error(
       'O modo live precisa do Termux:API. Instale o app "Termux:API" e rode: pkg install termux-api'
     );
@@ -62,7 +71,7 @@ async function runLive({ modelName, vozAtiva = true } = {}) {
     console.log(chalk.cyan('🎤 ouvindo...'));
     let falaDoUsuario;
     try {
-      falaDoUsuario = voice.listen();
+      falaDoUsuario = await voiceApi.listen();
     } catch (err) {
       console.error(chalk.red(`Erro ao ouvir o microfone: ${err.message}`));
       break;
@@ -78,14 +87,14 @@ async function runLive({ modelName, vozAtiva = true } = {}) {
     if (pareceComandoDeSaida(falaDoUsuario)) {
       const despedida = 'Até mais!';
       console.log(chalk.green('gemini-code: ') + despedida);
-      if (vozAtiva) voice.speak(despedida);
+      if (vozAtiva) await voiceApi.speak(despedida);
       rodando = false;
       break;
     }
 
     let resposta;
     try {
-      const r = await runOnce(falaDoUsuario, { history, modelName });
+      const r = await runOnceFn(falaDoUsuario, { history, modelName });
       resposta = r.text;
       history = r.history;
     } catch (err) {
@@ -96,10 +105,10 @@ async function runLive({ modelName, vozAtiva = true } = {}) {
 
     if (vozAtiva) {
       for (const bloco of dividirEmFrases(resposta)) {
-        voice.speak(bloco);
+        await voiceApi.speak(bloco);
       }
     }
   }
 }
 
-module.exports = { runLive };
+module.exports = { runLive, pareceComandoDeSaida, dividirEmFrases };
