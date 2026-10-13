@@ -242,24 +242,30 @@ function salvarHistorico(history, nomeArg) {
 
 // v0.41.0: confiança no projeto (src/trust.js). Pergunta uma vez por pasta, só se o projeto traz
 // instruções para agentes (AGENTS.md, CLAUDE.md, .cursorrules, .gemini-code/commands e /subagentes...).
+// Devolve a linha lida quando ela não é resposta (ex.: `echo "pergunta" | gemini-code chat`): o chat a usa
+// como primeira mensagem — antes ela era engolida pela pergunta e o processo saía sem responder.
 async function perguntarConfiancaNoProjeto() {
   const trust = require('../src/trust');
-  if (loadConfig().confiancaProjeto === 'sempre' || trust.estado() !== null) return;
+  if (loadConfig().confiancaProjeto === 'sempre' || trust.estado() !== null) return null;
   const instrucoes = trust.instrucoesDoProjeto();
-  if (!instrucoes.length) return;
+  if (!instrucoes.length) return null;
   console.log(chalk.yellow('Este projeto traz instruções para agentes, que entram no prompt do modelo:'));
   for (const arq of instrucoes) console.log(chalk.yellow(`  ${path.relative(process.cwd(), arq) || arq}`));
   console.log(chalk.yellow('Instruções de um repositório de terceiros podem mandar o agente fazer coisas que você não pediu.'));
-  const r = String(await ask('Confiar nelas? [s]im / [n]ão — fica salvo para esta pasta: ')).trim().toLowerCase();
-  if (r === 's' || r === 'y') { trust.definir(process.cwd(), 'confiar'); console.log(chalk.dim('(confiança salva; desfaça com: gemini-code confianca esquecer)\n')); }
-  else if (r === 'n') { trust.definir(process.cwd(), 'negar'); console.log(chalk.dim('(instruções do projeto ignoradas; só o conhecimento global vale. Mude com: gemini-code confianca confiar)\n')); }
-  else { trust.negarNestaSessao(); console.log(chalk.dim('(sem resposta: ignorando as instruções do projeto só nesta execução)\n')); }
+  const linha = String(await ask('Confiar nelas? [s]im / [n]ão — fica salvo para esta pasta: '));
+  const r = linha.trim().toLowerCase();
+  if (r === 's' || r === 'y') { trust.definir(process.cwd(), 'confiar'); console.log(chalk.dim('(confiança salva; desfaça com: gemini-code confianca esquecer)\n')); return null; }
+  if (r === 'n') { trust.definir(process.cwd(), 'negar'); console.log(chalk.dim('(instruções do projeto ignoradas; só o conhecimento global vale. Mude com: gemini-code confianca confiar)\n')); return null; }
+  trust.negarNestaSessao();
+  if (!r) { console.log(chalk.dim('(sem resposta: ignorando as instruções do projeto só nesta execução)\n')); return null; }
+  console.log(chalk.dim('(não é s/n: ignorando as instruções do projeto só nesta execução; o texto segue como sua primeira mensagem)\n'));
+  return linha;
 }
 
 async function chatLoop() {
   console.log(chalk.bold(`gemini-code v${PACKAGE_JSON.version} — modo conversa. Ctrl+C para sair, /help para comandos.\n`));
   if (require('../src/solo').ativo()) console.log(chalk.green('[solo] code-ia sozinho: nenhuma outra IA (Gemini, llama.cpp, Ollama) é usada.\n'));
-  await perguntarConfiancaNoProjeto();
+  const primeiraMensagem = await perguntarConfiancaNoProjeto();
   // Item 8 da revisão: usa a MESMA interface de readline que a confirmação
   // de run_shell usa (src/ui/prompt.js), em vez de criar uma própria —
   // evita duas interfaces competindo pelo mesmo stdin.
@@ -277,7 +283,7 @@ async function chatLoop() {
   stepApproval.configurar({ ativo: loadConfig().confirmarEscrita === true, perguntar: (q) => (fechado ? Promise.resolve('n') : require('../src/ui/prompt').ask(q)) });
   rl.on('close', () => { fechado = true; });
 
-  const ask = () => fechado ? encerrarComLimpeza() : perguntarColando(rl, chalk.cyan(modoPlano ? 'você [plano]> ' : 'você> '), async (line) => {
+  const tratarLinha = async (line) => {
     const cmd = line.trim();
     if (!cmd) return ask();
 
@@ -611,8 +617,9 @@ async function chatLoop() {
     if (autoGit) { const f = snapshots.tirar({ rotulo: `depois: ${line}` }); if (f) console.log(chalk.dim(`(foto ${f.curto} salva — /snapshots lista, /snapshots restaurar N volta)`)); }
     if (rw) console.log(chalk.dim(`(${rw.arquivos} arquivo(s) gravado(s) neste turno — /rewind desfaz)\n`));
     ask();
-  });
-  ask();
+  };
+  const ask = () => fechado ? encerrarComLimpeza() : perguntarColando(rl, chalk.cyan(modoPlano ? 'você [plano]> ' : 'você> '), tratarLinha);
+  if (primeiraMensagem) tratarLinha(primeiraMensagem); else ask();
 }
 
 // Comandos que nunca precisam da apiKey (ajuda/versão, e "config" porque os

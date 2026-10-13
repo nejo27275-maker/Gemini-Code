@@ -93,6 +93,17 @@ test('chat real: pergunta uma vez; "n" salva negar; sem resposta não salva nada
   assert.equal(trust.estado(outro), null, 'não salva decisão sem resposta');
 });
 
+test('chat por pipe: a linha que não é s/n vira a primeira mensagem (não some)', () => {
+  // Revisão adversarial da v0.41.0: `echo "/tarefas" | gemini-code chat` num repositório com AGENTS.md engolia
+  // a linha na pergunta de confiança e saía com código 0 sem fazer nada.
+  const dir = projeto('pipe');
+  const r = chat(dir, '/tarefas\n');
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /o texto segue como sua primeira mensagem/);
+  assert.match(r.stdout, /lista de tarefas vazia/, 'a linha foi tratada como mensagem do chat');
+  assert.equal(trust.estado(dir), null, 'não salva decisão');
+});
+
 test('repositório só com .gemini-code/subagentes também passa pela pergunta de confiança', () => {
   const dir = fs.mkdtempSync(path.join(HOME_FALSO, 'so-subagente-'));
   const pasta = path.join(dir, '.gemini-code', 'subagentes');
