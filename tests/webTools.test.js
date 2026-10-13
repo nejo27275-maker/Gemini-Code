@@ -349,6 +349,22 @@ test('redirecionamento para destino que o anti-SSRF recusa é bloqueado e não �
   assert.equal(hits['/segredo'] || 0, antes, 'o destino recusado não pode ter sido acessado');
 });
 
+// Revisão adversarial da v0.41.0: a regra "negar" só era conferida na URL pedida (pelo agente), não nos saltos,
+// e comparada como texto cru (maiúsculas e porta padrão escapavam).
+test('regra negar do web_fetch vale em cada redirecionamento e na URL normalizada', async () => {
+  const comRegra = (negar) => () => ({ confirmWeb: false, webDominiosPermitidos: [], permissoes: { negar } });
+  const antes = hits['/html'] || 0;
+  const r = await montar({ loadConfig: comRegra([`web_fetch(${base}/html*)`]) }).execute('web_fetch', { url: `${base}/redir1` });
+  assert.equal(r, `Bloqueado pela regra de permissão "web_fetch(${base}/html*)" (config.json → permissoes.negar) no redirecionamento para ${base}/html.`);
+  assert.equal(hits['/html'] || 0, antes, 'o destino negado não foi buscado');
+  const perm = require('../src/permissions');
+  const cfg = { permissoes: { negar: ['web_fetch(https://exemplo.com/*)'] } };
+  for (const url of ['HTTPS://EXEMPLO.COM/x', 'https://exemplo.com:443/x', 'https://Exemplo.com/a/../x']) {
+    assert.equal(perm.negada('web_fetch', { url }, cfg), 'web_fetch(https://exemplo.com/*)', url);
+  }
+  assert.equal(perm.negada('web_fetch', { url: 'https://outro.com/x' }, cfg), null);
+});
+
 test('com o anti-SSRF real: site público que redireciona para 127.0.0.1 ou metadata da nuvem é barrado', async () => {
   delete process.env.GEMINI_CODE_WEB_ALLOW_PRIVATE;
   try {

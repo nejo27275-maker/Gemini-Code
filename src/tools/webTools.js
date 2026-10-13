@@ -276,6 +276,10 @@ function criarExecute({
 
     for (let saltos = 0; ; saltos++) {
       const host = atual.hostname;
+      // Regras "negar" do usuário valem para CADA salto: o agente só confere a URL pedida, e um
+      // redirecionamento levava a um destino negado (revisão adversarial da v0.41.0).
+      const regra = require('../permissions').negada('web_fetch', { url: atual.href }, cfg);
+      if (regra) return `Bloqueado pela regra de permissão "${regra}" (config.json → permissoes.negar)${saltos ? ` no redirecionamento para ${atual.href}` : ''}.`;
       // Pergunta ANTES de qualquer rede (nem DNS). Num redirecionamento para outro
       // host fora da lista, pergunta de novo: domínio liberado não libera para onde ele manda.
       if (confirmar && !dominioPermitido(host, permitidos) && !confirmados.has(chaveHost(host))) {

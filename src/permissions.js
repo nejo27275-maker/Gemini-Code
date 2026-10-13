@@ -30,10 +30,19 @@ const CAMPOS_CAMINHO = new Set(['read_file', 'write_file', 'edit_file', 'list_di
 /** Alvos de uma chamada (uma ou mais strings) contra os quais o PADRÃO é testado. */
 function alvos(nome, args = {}) {
   if (nome === 'run_shell') return [String(args.command || '')];
-  if (nome === 'web_fetch') return [String(args.url || '')];
+  if (nome === 'web_fetch') return urls(args.url);
   if (nome === 'edit_files' && Array.isArray(args.edits)) return args.edits.flatMap((e) => caminhos(e && e.path));
   if (CAMPOS_CAMINHO.has(nome)) return caminhos(args.path || '.');
   return [JSON.stringify(args)];
+}
+
+// URL como o modelo escreveu e normalizada (HTTPS://Exemplo.COM:443/x → https://exemplo.com/x): sem isso
+// variações de maiúsculas/porta padrão escapavam de web_fetch(https://exemplo.com/*).
+function urls(u) {
+  const bruta = String(u || '');
+  let normal = '';
+  try { normal = new URL(bruta.trim()).href; } catch { /* inválida: fica só a bruta */ }
+  return [...new Set([bruta, normal].filter(Boolean))];
 }
 
 // Caminho como o modelo escreveu, relativo ao cwd e absoluto: "*.env" pega os três jeitos.
