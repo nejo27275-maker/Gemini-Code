@@ -124,7 +124,13 @@ test('ponta a ponta: loop do agente com provider=openai lê arquivo e devolve o 
       : { status: 200, json: { choices: [{ message: { content: 'O arquivo diz segredo-do-teste-42.' } }] } };
   };
   const { runOnce } = require('../src/agent');
-  const r = await runOnce('o que diz nota.txt?', { deps: { buildSystemInstruction: () => 'sistema' } });
+  // O log "→ usando ferramenta" do agente no stdout fazia o parser do node --test falhar sob carga
+  // ("Unable to deserialize cloned data": 10 de 16 execuções paralelas; 0 de 16 sem o log). O log
+  // não é o que se testa aqui, então fica mudo só durante esta chamada.
+  const logOriginal = console.log;
+  console.log = () => {};
+  let r;
+  try { r = await runOnce('o que diz nota.txt?', { deps: { buildSystemInstruction: () => 'sistema' } }); } finally { console.log = logOriginal; }
   assert.equal(r.text, 'O arquivo diz segredo-do-teste-42.');
   const tool = pedidos[1].messages.find((m) => m.role === 'tool');
   assert.equal(tool.tool_call_id, 't1');
