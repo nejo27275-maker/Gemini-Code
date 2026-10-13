@@ -24,16 +24,22 @@ function real(dir) {
   try { return fs.realpathSync(path.resolve(dir)); } catch { return path.resolve(dir); }
 }
 
-/** 'confiar' | 'negar' | null para a pasta (ou a pasta-mãe mais próxima com decisão). */
-function estado(dir = process.cwd()) {
+/** { pasta, decisao } da decisão que vale aqui (a da própria pasta ou da pasta-mãe mais próxima), ou null. */
+function origemDaDecisao(dir = process.cwd()) {
   const { pastas } = ler();
   let atual = real(dir);
   for (;;) {
-    if (pastas[atual] === 'confiar' || pastas[atual] === 'negar') return pastas[atual];
+    if (pastas[atual] === 'confiar' || pastas[atual] === 'negar') return { pasta: atual, decisao: pastas[atual] };
     const pai = path.dirname(atual);
     if (pai === atual) return null;
     atual = pai;
   }
+}
+
+/** 'confiar' | 'negar' | null para a pasta (ou a pasta-mãe mais próxima com decisão). */
+function estado(dir = process.cwd()) {
+  const o = origemDaDecisao(dir);
+  return o ? o.decisao : null;
 }
 
 function definir(dir, decisao) {
@@ -72,4 +78,4 @@ function instrucoesDoProjeto(dir = process.cwd()) {
   return arquivos;
 }
 
-module.exports = { estado, definir, projetoLiberado, negarNestaSessao, instrucoesDoProjeto, ler };
+module.exports = { estado, origemDaDecisao, definir, projetoLiberado, negarNestaSessao, instrucoesDoProjeto, ler };

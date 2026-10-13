@@ -735,7 +735,12 @@ async function main() {
       const decisao = { confiar: 'confiar', negar: 'negar', esquecer: null }[sub];
       if (decisao === undefined) throw new Error('Uso: gemini-code confianca [status|confiar|negar|esquecer] [PASTA]');
       const alvo = trust.definir(pasta, decisao);
-      console.log(decisao ? `${alvo}: ${decisao}.` : `${alvo}: decisão apagada (o chat vai perguntar de novo).`);
+      if (decisao) { console.log(`${alvo}: ${decisao}.`); return; }
+      // A decisão de uma pasta-mãe continua valendo aqui: dizer qual, em vez de prometer que o chat vai perguntar.
+      const herdada = trust.origemDaDecisao(alvo);
+      console.log(herdada
+        ? `${alvo}: decisão própria apagada, mas continua valendo "${herdada.decisao}" de ${herdada.pasta} (para mudar: gemini-code confianca esquecer ${herdada.pasta}).`
+        : `${alvo}: decisão apagada (o chat vai perguntar de novo).`);
       return;
     }
 

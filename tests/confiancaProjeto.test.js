@@ -125,4 +125,13 @@ test('CLI: confianca status/negar/esquecer', () => {
   assert.match(cli('esquecer').stdout, /decisão apagada/);
   assert.equal(trust.estado(dir), null);
   assert.notEqual(cli('talvez').status, 0);
+  // Revisão adversarial da v0.41.0: numa subpasta, "esquecer" dizia que o chat ia perguntar, mas a decisão da
+  // pasta-mãe continuava valendo.
+  const sub = path.join(dir, 'sub');
+  fs.mkdirSync(sub);
+  assert.match(cli('negar').stdout, /: negar\./);
+  const r = cli('esquecer', sub);
+  assert.match(r.stdout, /decisão própria apagada, mas continua valendo "negar" de .*p5-/);
+  assert.doesNotMatch(r.stdout, /o chat vai perguntar/);
+  assert.equal(trust.estado(sub), 'negar');
 });
