@@ -85,8 +85,12 @@ const ABRE_BLOCO = /<!--|<(script|style|noscript|svg|head)(?=[\s/>])/gi;
  * óbvia (<script>[\s\S]*?</script>) varre até o fim do documento para CADA abertura
  * sem fechamento: uma página hostil com 2 MB de "<script>" travaria o agente.
  */
+// Minúsculas só em ASCII: toLowerCase() muda o TAMANHO de alguns caracteres ("İ" vira 2), e as posições
+// achadas em `baixo` são usadas para cortar `html` — o texto saía desalinhado e cortado.
+const minusculasAscii = (texto) => texto.replace(/[A-Z]+/g, (c) => c.toLowerCase());
+
 function removerBlocos(html) {
-  const baixo = html.toLowerCase();
+  const baixo = minusculasAscii(html);
   // A busca só anda para frente, então o último resultado de cada agulha ainda vale
   // enquanto estiver adiante (ou se já deu "não existe"): sem isso, mil <head> sem
   // fechamento varreriam o documento mil vezes.
@@ -129,7 +133,7 @@ function removerBlocos(html) {
 // colapsada e o recuo de um exemplo em Python/YAML sumia. Busca só para frente (indexOf): tempo linear.
 const MARCA_PRE = '\u0000pre';
 function separarPre(html) {
-  const baixo = html.toLowerCase();
+  const baixo = minusculasAscii(html);
   const blocos = [];
   let saida = '';
   let pos = 0;

@@ -566,3 +566,8 @@ test('sem charset no cabeçalho, vale o <meta charset>, o <meta http-equiv> ou o
   assert.match(corpoDe(await execute('web_fetch', { url: 'https://exemplo.com/xml' })), /<nota>Atenção<\/nota>/);
   assert.equal(corpoDe(await execute('web_fetch', { url: 'https://exemplo.com/cabecalho' })), 'ação', 'o cabeçalho vence o <meta>');
 });
+
+test('caractere que muda de tamanho em minúscula ("İ") não desalinha o texto', () => {
+  assert.equal(htmlParaTexto('İİİ<script>segredo()</script>texto visível'), 'İİİtexto visível');
+  assert.equal(htmlParaTexto('İİ<PRE>  recuo</PRE>depois'), 'İİ\n  recuo\ndepois');
+});
