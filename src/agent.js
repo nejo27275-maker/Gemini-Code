@@ -21,6 +21,7 @@ const loopGuard = require('./loopGuard');
 const outputCompact = require('./outputCompact');
 const { enxugarResultadosAntigos } = require('./compact');
 const permissions = require('./permissions');
+const { partesComImagens, tirarImagensDoHistorico } = require('./imagens');
 
 // Item 4 do roadmap "top 1" (set/2026): antes o agente só sabia em que
 // projeto estava se o usuário explicasse (nome, stack, scripts disponíveis)
@@ -191,7 +192,8 @@ function podarHistorico(convo) {
  * normal (CLI) ninguém passa `deps` e o comportamento é idêntico ao de antes.
  */
 async function runOnce(userMessage, opts = {}) {
-  const { history = [], modelName, extraSystemInstruction, allowedTools, onText, deps = {}, maxSteps = 60, logPrefix = '' } = opts;
+  // `imagens` (v0.41.0): [{ inlineData: {mimeType, data} }] de src/imagens.js, enviadas junto com a mensagem.
+  const { history = [], modelName, extraSystemInstruction, allowedTools, onText, deps = {}, maxSteps = 60, logPrefix = '', imagens = [] } = opts;
   const loadConfigFn = deps.loadConfig || loadConfig;
   const chatWithToolsFn = deps.chatWithTools || chatWithTools;
   const getAllDeclarationsFn = deps.getAllDeclarations || tools.getAllDeclarations;
@@ -207,7 +209,9 @@ async function runOnce(userMessage, opts = {}) {
   const declarations = await getAllDeclarationsFn(allowedToolsEfetivo);
   const systemInstruction = buildSystemInstructionFn(extraSystemInstruction);
 
-  const convo = podarHistorico([...history, { role: 'user', parts: [{ text: userMessage }] }]);
+  const convo = podarHistorico([...history, { role: 'user', parts: partesComImagens(userMessage, imagens) }]);
+  // Imagens valem para ESTE pedido; no histórico devolvido viram um marcador curto.
+  const fechar = (resultado) => (imagens.length ? { ...resultado, history: tirarImagensDoHistorico(resultado.history) } : resultado);
 
   // Limite alto (não removido de propósito): sem nenhum teto, se o modelo
   // entrar num loop chamando ferramenta sem nunca fechar com texto, o
@@ -238,7 +242,7 @@ async function runOnce(userMessage, opts = {}) {
     if (!calls || calls.length === 0) {
       const text = response.text();
       convo.push({ role: 'model', parts: [{ text }] });
-      return { text, history: convo };
+      return fechar({ text, history: convo });
     }
 
     // O modelo pediu para usar uma ou mais ferramentas.
@@ -324,7 +328,7 @@ async function runOnce(userMessage, opts = {}) {
     convo.push({ role: 'user', parts: responseParts });
     if (loopDetectado) {
       convo.push({ role: 'model', parts: [{ text: loopDetectado }] });
-      return { text: loopDetectado, history: convo };
+      return fechar({ text: loopDetectado, history: convo });
     }
   }
 
@@ -336,7 +340,7 @@ async function runOnce(userMessage, opts = {}) {
   // "assistente" fechando aquele turno, o que deixa o histórico inconsistente.
   const aviso = '(número máximo de passos de ferramenta atingido)';
   convo.push({ role: 'model', parts: [{ text: aviso }] });
-  return { text: aviso, history: convo };
+  return fechar({ text: aviso, history: convo });
 }
 
 module.exports = { runOnce, buildSystemInstruction, podarHistorico, cortarResultado };

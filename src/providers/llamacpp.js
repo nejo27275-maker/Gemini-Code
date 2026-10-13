@@ -38,7 +38,9 @@ function resultadoComoTexto(value) {
   return typeof result === 'string' ? result : JSON.stringify(result);
 }
 
-function converterHistorico(history, systemInstruction) {
+// v0.41.0: imagens (partes inlineData) viram image_url no provedor openai (`imagens: true`); no llama.cpp
+// local (modelo pequeno, em geral sem visão) viram um aviso em texto em vez de sumirem em silêncio.
+function converterHistorico(history, systemInstruction, { imagens = false } = {}) {
   const messages = [];
   const pendingIds = new Map();
   let generatedId = 0;
@@ -78,7 +80,18 @@ function converterHistorico(history, systemInstruction) {
       messages.push({ role: 'tool', tool_call_id: id, content: resultadoComoTexto(response.response) });
     }
     const text = parts.filter((part) => typeof part.text === 'string').map((part) => part.text).join('');
-    if (text) messages.push({ role: 'user', content: text });
+    const figuras = parts.filter((part) => part.inlineData && part.inlineData.data);
+    if (figuras.length && imagens) {
+      messages.push({
+        role: 'user',
+        content: [
+          ...figuras.map((p) => ({ type: 'image_url', image_url: { url: `data:${p.inlineData.mimeType};base64,${p.inlineData.data}` } })),
+          ...(text ? [{ type: 'text', text }] : []),
+        ],
+      });
+    } else if (figuras.length) {
+      messages.push({ role: 'user', content: `[${figuras.length} imagem(ns) omitida(s): o modelo local não recebe imagens]\n${text}`.trim() });
+    } else if (text) messages.push({ role: 'user', content: text });
   }
   return messages;
 }
@@ -143,7 +156,10 @@ function compactarTools(tools, limiteTokens) {
   return { tools: lista, removidas, tokens: tokens(lista) };
 }
 
-const tamMsg = (m) => (typeof m.content === 'string' ? m.content.length : 0) + (m.tool_calls ? JSON.stringify(m.tool_calls).length : 0);
+// Conteúdo em partes (imagem + texto): soma o texto e estima ~1 000 tokens (3 000 caracteres) por imagem.
+const tamConteudo = (c) => (typeof c === 'string' ? c.length
+  : Array.isArray(c) ? c.reduce((a, p) => a + (p.type === 'text' ? String(p.text || '').length : 3000), 0) : 0);
+const tamMsg = (m) => tamConteudo(m.content) + (m.tool_calls ? JSON.stringify(m.tool_calls).length : 0);
 
 /**
  * Poda por orçamento (em caracteres). Mantém o system (truncado se passar de `maxSistemaChars`) e o que é mais

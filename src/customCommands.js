@@ -9,7 +9,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const RESERVADOS = new Set(['help', 'clear', 'model', 'codeia', 'ensinar', 'ensinados', 'esquecer', 'local', 'cloud', 'auto', 'save', 'session', 'ciencia', 'agenda', 'projetos', 'compact', 'commands', 'todo', 'tarefas', 'rewind', 'snapshots', 'hooks', 'plano', 'aprovar', 'custo', 'passo', 'workflows']);
+const RESERVADOS = new Set(['help', 'imagem', 'foto', 'clear', 'model', 'codeia', 'ensinar', 'ensinados', 'esquecer', 'local', 'cloud', 'auto', 'save', 'session', 'ciencia', 'agenda', 'projetos', 'compact', 'commands', 'todo', 'tarefas', 'rewind', 'snapshots', 'hooks', 'plano', 'aprovar', 'custo', 'passo', 'workflows']);
 const TAM_MAX = 20 * 1024;
 
 function lerDir(dir) {

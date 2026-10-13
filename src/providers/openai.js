@@ -99,7 +99,7 @@ async function chatWithTools({ modelName, systemInstruction, history, tools, onT
   const toolsTokens = estimarTokens(JSON.stringify(declarations));
   // Só poda se a conversa passar do contexto do modelo (com folga para a resposta).
   const orcamentoChars = Math.max(20000, (ctxTokens(cfg) - maxResp - toolsTokens - 512) * CHARS_POR_TOKEN);
-  const mensagens = ajustarAoContexto(converterHistorico(history, systemInstruction || ''), orcamentoChars);
+  const mensagens = ajustarAoContexto(converterHistorico(history, systemInstruction || '', { imagens: true }), orcamentoChars);
 
   const stream = Boolean(onText) && cfg.enableStreaming !== false;
   const body = { model: modelo, messages: mensagens, max_tokens: maxResp, stream };

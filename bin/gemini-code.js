@@ -69,6 +69,7 @@ gemini-code v${PACKAGE_JSON.version} — agente de terminal com Gemini (estilo C
 Uso:
   gemini-code chat                          Modo conversa interativo com o agente
   gemini-code run [--profile coder|explore|plan|review|test] [--checkpoint] "instrução"  Executa com perfil e salva artefato
+  gemini-code run --json [--imagem foto.png] "instrução"   Saída JSON para scripts/CI; --imagem manda imagem (repetível)
   gemini-code profiles list|show NOME        Lista perfis e permissões reais do executor
   gemini-code sessions list|new|show|use|delete  Gerencia sessões persistentes
   gemini-code checkpoints create|list|restore    Checkpoints locais com restauração segura
@@ -185,6 +186,8 @@ Comandos disponíveis no chat:
   /projetos                  lista os projetos registrados (gemini-code projetos add "nome" fora do chat)
   /compact           resume a conversa antiga (sem custo) e mantém só as últimas mensagens inteiras
   /compact ia        o próprio modelo resume a conversa antiga (perde menos detalhe; custa 1 chamada)
+  /imagem ARQ [texto] manda uma imagem (png/jpg/webp/gif) junto com a pergunta
+  /foto [texto]      tira foto com a câmera do celular (Termux:API) e manda ao agente
   /tarefas           mostra a lista de tarefas que o agente está seguindo (todo_write)
   /rewind [N|lista]  desfaz o que o agente gravou no(s) último(s) N turno(s) (como Ctrl+Z; --force sobrescreve o que você mudou depois)
   /snapshots         fotos automáticas do projeto (git escondido, inclui o que o shell mudou); /snapshots restaurar N volta à foto N
@@ -522,6 +525,29 @@ async function chatLoop() {
       const custom = customCommands.resolver(cmd, customCommands.carregar({ home: require('../src/config').HOME_DIR }));
       if (custom) { textoEnviado = custom.texto; console.log(chalk.dim(`(comando /${custom.nome})`)); }
     }
+    // v0.41.0: /imagem CAMINHO [pergunta] e /foto [pergunta] (câmera do celular via Termux:API) mandam imagem ao agente.
+    let imagensDoTurno = [];
+    if (cmd.startsWith('/imagem ') || cmd === '/foto' || cmd.startsWith('/foto ')) {
+      try {
+        let arquivo;
+        let resto;
+        if (cmd.startsWith('/imagem ')) {
+          const m = cmd.slice('/imagem '.length).trim().match(/^(?:"([^"]+)"|(\S+))\s*([\s\S]*)$/);
+          arquivo = m && (m[1] || m[2]);
+          resto = m ? m[3] : '';
+        } else {
+          arquivo = path.join(require('os').tmpdir(), `gemini-code-foto-${Date.now()}.jpg`);
+          console.log(chalk.dim('(tirando foto com a câmera...)'));
+          await require('../src/voice/voice').takePhoto(arquivo);
+          resto = cmd.replace(/^\/foto\s*/, '');
+        }
+        imagensDoTurno = [require('../src/imagens').lerImagem(arquivo)];
+        textoEnviado = resto || 'Descreva esta imagem e aponte o que for relevante para o que estamos fazendo.';
+      } catch (err) {
+        console.error(chalk.red('Erro: ' + err.message));
+        return ask();
+      }
+    }
     // v0.15.0: contexto grande = cada chamada fica cara. Compacta sozinho (sem chamar modelo, sem custo).
     if (usage.contextoGrande(loadConfig().autoCompactTokens, { ctxLocal: require('../src/providers/llamacpp').ctxTamanho(loadConfig()) })) {
       const rc = compactar(history);
@@ -540,6 +566,7 @@ async function chatLoop() {
       const { text, history: newHistory } = await runOnce(textoEnviado, {
         history,
         modelName: modeloAtual,
+        imagens: imagensDoTurno,
         ...planMode.opcoes(modoPlano),
         onText: (pedaco) => {
           streamed = true;
@@ -618,7 +645,14 @@ function bootstrapCodeIa() {
   }
 }
 
+// v0.41.0: run --json — desde o início (inclusive a instalação do code-ia e o desbloqueio), tudo que não é
+// o JSON final vai para o stderr; o JSON sai pelo stdout original, numa linha só.
+const MODO_JSON = cmd === 'run' && rest.includes('--json');
+const escreverStdout = process.stdout.write.bind(process.stdout);
+function escreverJson(obj) { escreverStdout(JSON.stringify(obj) + '\n'); }
+
 async function main() {
+  if (MODO_JSON) process.stdout.write = (...a) => process.stderr.write(...a);
   require('../src/solo').instalarGuarda();
   await garantirDesbloqueio();
   const solo = require('../src/solo');
@@ -659,20 +693,28 @@ async function main() {
     case 'run': {
       const parsed = agentProfiles.parseRunArgs(rest);
       const { profile, createCheckpoint, instruction } = parsed;
-      if (!instruction) throw new Error('Informe uma instrução. Uso: gemini-code run [--profile coder|explore|plan|review|test] [--checkpoint] "instrução"');
-      let checkpoint = null;
-      if (createCheckpoint) {
-        checkpoint = checkpoints.createCheckpoint({ root: process.cwd(), reason: 'before-agent-run', label: `Antes de gemini-code run (${profile.name})` });
-        console.log(chalk.dim(`Checkpoint preventivo criado: ${checkpoint.id} (${checkpoint.fileCount} arquivos).\n`));
+      if (!instruction) throw new Error('Informe uma instrução. Uso: gemini-code run [--profile coder|explore|plan|review|test] [--checkpoint] [--imagem ARQ] [--json] "instrução"');
+      try {
+        const imagens = parsed.imagens.map((arq) => require('../src/imagens').lerImagem(arq));
+        let checkpoint = null;
+        if (createCheckpoint) {
+          checkpoint = checkpoints.createCheckpoint({ root: process.cwd(), reason: 'before-agent-run', label: `Antes de gemini-code run (${profile.name})` });
+          console.log(chalk.dim(`Checkpoint preventivo criado: ${checkpoint.id} (${checkpoint.fileCount} arquivos).\n`));
+        }
+        const { text } = await runOnce(instruction, {
+          allowedTools: profile.tools ? [...profile.tools] : undefined,
+          extraSystemInstruction: profile.instructions,
+          imagens,
+        });
+        if (!parsed.json) console.log(text);
+        const report = artifacts.createArtifact({ title: instruction.slice(0, 120), type: profile.artifactType, status: 'concluido', summary: text.slice(0, 1000), content: text, cwd: process.cwd(), metadata: { profile: profile.name, allowedTools: profile.tools ? [...profile.tools] : 'session-default', checkpointId: checkpoint && checkpoint.id } });
+        if (parsed.json) {
+          const u = usage.estado();
+          escreverJson({ ok: true, texto: text, perfil: profile.name, artefato: report.id, checkpoint: checkpoint && checkpoint.id, uso: { chamadasNuvem: u.chamadas, chamadasLocais: u.locais, tokensEntrada: u.prompt, tokensSaida: u.saida } });
+        } else console.log(chalk.dim(`\nArtefato salvo: ${report.id} (${report.fileName})`));
+      } finally {
+        toolsIndex.stopMcp();
       }
-      const { text } = await runOnce(instruction, {
-        allowedTools: profile.tools ? [...profile.tools] : undefined,
-        extraSystemInstruction: profile.instructions,
-      });
-      console.log(text);
-      const report = artifacts.createArtifact({ title: instruction.slice(0, 120), type: profile.artifactType, status: 'concluido', summary: text.slice(0, 1000), content: text, cwd: process.cwd(), metadata: { profile: profile.name, allowedTools: profile.tools ? [...profile.tools] : 'session-default', checkpointId: checkpoint && checkpoint.id } });
-      console.log(chalk.dim(`\nArtefato salvo: ${report.id} (${report.fileName})`));
-      toolsIndex.stopMcp();
       return;
     }
 
@@ -1438,6 +1480,7 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error(chalk.red('Erro fatal: ' + err.message));
+  if (MODO_JSON) escreverJson({ ok: false, erro: err.message });
+  else console.error(chalk.red('Erro fatal: ' + err.message));
   process.exit(1);
 });
