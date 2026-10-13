@@ -3,7 +3,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { CONFIG_PATH, MCP_PATH } = require('../config');
+const { PROTECTED_PATHS } = require('../config');
 const { backupBeforeWrite } = require('./backup');
 const rewind = require('../rewind');
 
@@ -11,14 +11,44 @@ const rewind = require('../rewind');
 // (model/fastModel/imageModel) sem o usuário pedir nem confirmar, voltando
 // pra modelos sem cota grátis / já descontinuados que já tinham sido
 // corrigidos antes. write_file não tinha nenhuma trava — qualquer arquivo
-// valia, incluindo a própria config do gemini-code. Agora esses dois
-// arquivos são protegidos: nem o modelo consegue escrever neles direto,
-// só via "gemini-code config set-*" (uma ação explícita do usuário).
-const PROTECTED_PATHS = [CONFIG_PATH, MCP_PATH];
+// valia, incluindo a própria config do gemini-code. Agora esses arquivos
+// são protegidos: nem o modelo consegue escrever neles direto, só via
+// "gemini-code config set-*" (uma ação explícita do usuário).
+//
+// v0.40.0: a lista (src/config.js) passou a incluir hooks.json — gravá-lo dava
+// ao modelo comandos rodando via `sh -c` a cada ferramenta, sem confirmação —
+// e os tokens. A comparação era por path.resolve, então um symlink de dentro
+// de um repositório clonado (ex.: docs/settings.json -> ~/.gemini-code/config.json)
+// passava direto; agora compara o caminho REAL (symlinks resolvidos, inclusive
+// quebrados, e pastas que são symlink) e o inode (hard link).
+const MAX_SYMLINKS = 40;
+
+function caminhoReal(p, saltos = 0) {
+  const abs = path.resolve(p);
+  try { return fs.realpathSync(abs); } catch { /* não existe ou é symlink quebrado */ }
+  const pai = path.dirname(abs);
+  if (pai === abs || saltos > MAX_SYMLINKS) return abs;
+  const paiReal = caminhoReal(pai, saltos + 1);
+  try {
+    // Symlink quebrado: gravar nele CRIA o alvo (ex.: um hooks.json que ainda não existe).
+    if (fs.lstatSync(abs).isSymbolicLink()) {
+      return caminhoReal(path.resolve(paiReal, fs.readlinkSync(abs)), saltos + 1);
+    }
+  } catch { /* não existe: segue pelo pai */ }
+  return path.join(paiReal, path.basename(abs));
+}
+
+function mesmoInode(a, b) {
+  try {
+    const sa = fs.statSync(a);
+    const sb = fs.statSync(b);
+    return sa.ino !== 0 && sa.dev === sb.dev && sa.ino === sb.ino;
+  } catch { return false; }
+}
 
 function isProtected(p) {
-  const resolved = path.resolve(p);
-  return PROTECTED_PATHS.some((prot) => resolved === path.resolve(prot));
+  const real = caminhoReal(p);
+  return PROTECTED_PATHS.some((prot) => real === caminhoReal(prot) || mesmoInode(real, prot));
 }
 
 // Achado num teste (set/2026, itens 1 e 2 da revisão): read_file não tinha
@@ -150,10 +180,11 @@ async function execute(name, args) {
       if (typeof args.content !== 'string') return 'Erro: write_file precisa de "content" (texto). Nada foi gravado.';
       if (isProtected(args.path)) {
         return (
-          'Bloqueado: este arquivo é a configuração do próprio gemini-code e não pode ' +
+          'Bloqueado: este arquivo (ou o destino deste link) é configuração protegida do próprio ' +
+          'gemini-code — config.json, mcp.json, hooks.json ou um token de acesso — e não pode ' +
           'ser sobrescrito por write_file. Para mudar model/fastModel/imageModel/etc, ' +
           'peça ao usuário para rodar "gemini-code config set-model NOME" (ou o ' +
-          'subcomando equivalente) — nunca edite esse arquivo diretamente.'
+          'subcomando equivalente); hooks e MCP só o próprio usuário edita.'
         );
       }
       fs.mkdirSync(path.dirname(path.resolve(args.path)), { recursive: true });
@@ -166,7 +197,7 @@ async function execute(name, args) {
     case 'edit_file': {
       if (typeof args.path !== 'string' || !args.path) return 'Erro: edit_file precisa de "path".';
       if (isProtected(args.path)) {
-        return 'Bloqueado: este arquivo é a configuração do próprio gemini-code e não pode ser editado diretamente.';
+        return 'Bloqueado: este arquivo (ou o destino deste link) é configuração protegida do próprio gemini-code (config, MCP, hooks ou token) e não pode ser editado diretamente.';
       }
       if (typeof args.old_text !== 'string' || args.old_text === '') {
         return 'Erro: old_text não pode ser vazio — informe o trecho exato a substituir.';

@@ -15,12 +15,12 @@
 'use strict';
 
 const fs = require('fs');
-const path = require('path');
 const { spawnSync } = require('child_process');
-const { HOME_DIR } = require('./config');
+// HOOKS_PATH está em PROTECTED_PATHS: o modelo não grava este arquivo (write_file/edit_file).
+const { HOOKS_PATH } = require('./config');
 
 const EVENTOS = ['PreToolUse', 'PostToolUse'];
-let arquivo = path.join(HOME_DIR, 'hooks.json');
+let arquivo = HOOKS_PATH;
 let cache = { mtime: -1, hooks: {} };
 
 function definirArquivo(p) { arquivo = p; cache = { mtime: -1, hooks: {} }; }

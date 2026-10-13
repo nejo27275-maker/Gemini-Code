@@ -14,6 +14,25 @@ const SKILLS_DIR = path.join(HOME_DIR, 'skills');
 const AGENTS_DIR = path.join(HOME_DIR, 'agents');
 const WORKFLOWS_DIR = path.join(HOME_DIR, 'workflows');
 const HISTORY_DIR = path.join(HOME_DIR, 'history');
+const HOOKS_PATH = path.join(HOME_DIR, 'hooks.json');
+const COWORK_TOKEN_PATH = path.join(HOME_DIR, 'cowork-token.txt');
+const ROUTINE_API_TOKEN_PATH = path.join(HOME_DIR, 'routine-api-token.txt');
+
+// Arquivos que o modelo nunca pode gravar sozinho (write_file/edit_file) e que
+// forçam confirmação no run_shell. Cada um, se reescrito, dá ao modelo mais
+// poder do que ele já tem: config.json desliga confirmShell; mcp.json e
+// hooks.json definem comandos que rodam sem confirmação; os tokens liberam o
+// agente para quem estiver na rede. O .bak é restaurado automaticamente se o
+// config.json sumir (ver config-manager.js).
+const PROTECTED_PATHS = Object.freeze([
+  CONFIG_PATH,
+  `${CONFIG_PATH}.bak`,
+  `${CONFIG_PATH}.tmp`,
+  MCP_PATH,
+  HOOKS_PATH,
+  COWORK_TOKEN_PATH,
+  ROUTINE_API_TOKEN_PATH,
+]);
 
 // Versão do formato do config.json. v2: config parou de gravar todos os padrões
 // em disco (ver migrarConfig). v3: 'gemini-2.5-flash' também virou padrão
@@ -131,7 +150,9 @@ function migrarConfig(onDisk) {
 const configManager = new ConfigManager(CONFIG_PATH);
 
 function ensureDirs() {
-  for (const dir of [HOME_DIR, SKILLS_DIR, AGENTS_DIR, WORKFLOWS_DIR, HISTORY_DIR]) {
+  // 0o700 só vale para pasta criada agora; guarda chave de API e tokens.
+  fs.mkdirSync(HOME_DIR, { recursive: true, mode: 0o700 });
+  for (const dir of [SKILLS_DIR, AGENTS_DIR, WORKFLOWS_DIR, HISTORY_DIR]) {
     fs.mkdirSync(dir, { recursive: true });
   }
 }
@@ -208,6 +229,10 @@ module.exports = {
   AGENTS_DIR,
   WORKFLOWS_DIR,
   HISTORY_DIR,
+  HOOKS_PATH,
+  COWORK_TOKEN_PATH,
+  ROUTINE_API_TOKEN_PATH,
+  PROTECTED_PATHS,
   DEFAULT_CONFIG,
   CONFIG_VERSION,
   migrarConfig,

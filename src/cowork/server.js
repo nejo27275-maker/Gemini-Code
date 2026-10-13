@@ -9,23 +9,30 @@
 'use strict';
 
 const fs = require('fs');
-const path = require('path');
 const crypto = require('crypto');
 const os = require('os');
-const { loadConfig, HOME_DIR } = require('../config');
+const { loadConfig, HOME_DIR, COWORK_TOKEN_PATH } = require('../config');
 const { runOnce } = require('../agent');
 
-const TOKEN_PATH = path.join(HOME_DIR, 'cowork-token.txt');
+const TOKEN_PATH = COWORK_TOKEN_PATH;
+// Tarefas são texto; sem limite, o ws aceita mensagens de até 100 MiB de
+// qualquer um na rede, antes mesmo da autenticação.
+const MAX_PAYLOAD_BYTES = 1024 * 1024;
 
 function getOrCreateToken() {
   // Corrigido: antes presumia que ~/.gemini-code já existia (só funcionava
   // porque startServer() sempre chama loadConfig() — que cria os
   // diretórios — antes de chamar isto aqui). Chamar getOrCreateToken()
   // isoladamente, fora dessa ordem, quebrava com ENOENT.
-  fs.mkdirSync(HOME_DIR, { recursive: true });
-  if (fs.existsSync(TOKEN_PATH)) return fs.readFileSync(TOKEN_PATH, 'utf8').trim();
+  fs.mkdirSync(HOME_DIR, { recursive: true, mode: 0o700 });
+  // v0.40.0: o token dá acesso ao agente inteiro (shell, arquivos); era gravado
+  // com 0644, legível por qualquer usuário da máquina. Agora só o dono lê.
+  if (fs.existsSync(TOKEN_PATH)) {
+    try { fs.chmodSync(TOKEN_PATH, 0o600); } catch { /* Windows */ }
+    return fs.readFileSync(TOKEN_PATH, 'utf8').trim();
+  }
   const token = crypto.randomBytes(16).toString('hex');
-  fs.writeFileSync(TOKEN_PATH, token);
+  fs.writeFileSync(TOKEN_PATH, token, { mode: 0o600 });
   return token;
 }
 
@@ -118,7 +125,7 @@ function startServer(port) {
   const cfg = loadConfig();
   const finalPort = port || cfg.coworkPort;
   const token = getOrCreateToken();
-  const wss = new WebSocket.Server({ port: finalPort });
+  const wss = new WebSocket.Server({ port: finalPort, maxPayload: MAX_PAYLOAD_BYTES });
 
   console.log(`\nGemini Cowork rodando na porta ${finalPort}.`);
   console.log(`Token de acesso (guarde, o celular vai pedir): ${token}`);
@@ -135,4 +142,4 @@ function startServer(port) {
   return wss;
 }
 
-module.exports = { startServer, getOrCreateToken, localIps, tokensBatem, handleMessage };
+module.exports = { startServer, getOrCreateToken, localIps, tokensBatem, handleMessage, MAX_PAYLOAD_BYTES };

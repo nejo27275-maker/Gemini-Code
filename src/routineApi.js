@@ -3,11 +3,10 @@
 
 const http = require('http');
 const fs = require('fs');
-const path = require('path');
 const crypto = require('crypto');
-const { HOME_DIR } = require('./config');
+const { HOME_DIR, ROUTINE_API_TOKEN_PATH } = require('./config');
 
-const TOKEN_PATH = path.join(HOME_DIR, 'routine-api-token.txt');
+const TOKEN_PATH = ROUTINE_API_TOKEN_PATH;
 const MAX_BODY_BYTES = 64 * 1024;
 
 function getOrCreateToken() {

@@ -19,7 +19,8 @@
 'use strict';
 
 const { exec } = require('child_process');
-const { loadConfig, CONFIG_PATH, MCP_PATH } = require('../config');
+const path = require('path');
+const { loadConfig, PROTECTED_PATHS } = require('../config');
 const { ask } = require('../ui/prompt');
 
 // Achado num teste (set/2026): com confirmShell:false, o agente rodou um
@@ -30,11 +31,12 @@ const { ask } = require('../ui/prompt');
 // sem confirmação nenhuma. Agora: qualquer comando que mencione o caminho
 // do config.json ou do mcp.json força confirmação MESMO com
 // confirmShell:false — essa é a única exceção ao auto-aceite.
-const PROTECTED_PATHS = [CONFIG_PATH, MCP_PATH];
-
+// v0.40.0: mesma lista do write_file (src/config.js), que inclui hooks.json e
+// os tokens. É heurística (texto do comando), não barreira: a barreira é
+// confirmShell, ligado por padrão.
 function touchesProtectedFile(command) {
   return PROTECTED_PATHS.some(
-    (p) => command.includes(p) || command.includes(require('path').basename(p))
+    (p) => command.includes(p) || command.includes(path.basename(p))
   );
 }
 
