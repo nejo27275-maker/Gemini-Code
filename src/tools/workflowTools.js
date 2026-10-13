@@ -336,7 +336,8 @@ function sanitizarWorkflow(w) {
   }) : [];
   return out;
 }
-const FERRAMENTAS_PERIGOSAS = new Set(['write_file', 'edit_file', 'run_shell']);
+// v0.41.0: + edit_files (grava) e web_fetch (rede: pode levar dados do projeto para fora).
+const FERRAMENTAS_PERIGOSAS = new Set(['write_file', 'edit_file', 'edit_files', 'run_shell', 'web_fetch']);
 function riscosDoWorkflow(w) {
   const r = [];
   for (const x of (w && w.steps) || []) {
@@ -344,7 +345,7 @@ function riscosDoWorkflow(w) {
     if (!Array.isArray(x.tools)) r.push(`passo "${x.id}": sem "tools" (herda TODAS as ferramentas do agente, inclusive gravar arquivo e rodar comando)`);
     else {
       const p = x.tools.filter((n) => FERRAMENTAS_PERIGOSAS.has(n));
-      if (p.length) r.push(`passo "${x.id}": pode usar ${p.join(', ')} (grava arquivo ou roda comando)`);
+      if (p.length) r.push(`passo "${x.id}": pode usar ${p.join(', ')} (grava arquivo, roda comando ou acessa a web)`);
     }
   }
   return r;

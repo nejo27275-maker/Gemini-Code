@@ -2,6 +2,10 @@
 'use strict';
 
 const fileTools = require('./fileTools');
+// v0.41.0: edição atômica em vários arquivos, busca por nome (glob) e leitura de páginas web.
+const multiEditTools = require('./multiEditTools');
+const globTools = require('./globTools');
+const webTools = require('./webTools');
 const shellTools = require('./shellTools');
 const searchTools = require('./searchTools');
 const checkTools = require('./checkTools');
@@ -29,6 +33,9 @@ async function getAllDeclarations(allowedNames) {
   const mcpDecls = needsMcp ? await mcpClient.declarationsForGemini() : [];
   const all = [
     ...fileTools.declarations,
+    ...multiEditTools.declarations,
+    ...globTools.declarations,
+    ...webTools.declarations,
     ...shellTools.declarations,
     ...searchTools.declarations,
     ...checkTools.declarations,
@@ -47,6 +54,9 @@ async function execute(name, args, allowedNames) {
     throw new Error(`Ferramenta "${name}" não está liberada para este agente.`);
   }
   if (fileTools.declarations.some((d) => d.name === name)) return fileTools.execute(name, args);
+  if (multiEditTools.declarations.some((d) => d.name === name)) return multiEditTools.execute(name, args);
+  if (globTools.declarations.some((d) => d.name === name)) return globTools.execute(name, args);
+  if (webTools.declarations.some((d) => d.name === name)) return webTools.execute(name, args);
   if (shellTools.declarations.some((d) => d.name === name)) return shellTools.execute(name, args);
   if (searchTools.declarations.some((d) => d.name === name)) return searchTools.execute(name, args);
   if (checkTools.declarations.some((d) => d.name === name)) return checkTools.execute(name, args);
