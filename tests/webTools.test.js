@@ -544,3 +544,25 @@ test('http -> https://www. do mesmo site não pergunta duas vezes', async () => 
   assert.equal(pedidos.length, 2);
   assert.equal(pedidos[0].opcoes.redirect, 'manual', 'o fetch não pode seguir redirecionamento sozinho');
 });
+
+// Revisão adversarial da v0.41.0: recuo de <pre> sumia e a página Latin-1 sem charset no cabeçalho virava "�".
+test('<pre> mantém o recuo do código (com entidades decodificadas uma vez só)', () => {
+  const html = '<p>Exemplo:</p><pre class="py"><code>def soma(a, b):\n    if a &lt; b:\n        return a + b\n    return &amp;lt;b</code></pre><p>  fim  </p>';
+  assert.equal(htmlParaTexto(html), 'Exemplo:\n\ndef soma(a, b):\n    if a < b:\n        return a + b\n    return &lt;b\n\nfim');
+  assert.equal(htmlParaTexto('<pre>sem fim\n   x'), 'sem fim\nx', '<pre> sem fechamento segue o caminho normal');
+});
+
+test('sem charset no cabeçalho, vale o <meta charset>, o <meta http-equiv> ou o <?xml encoding?>', async () => {
+  const latin1 = (s) => Buffer.from(s, 'latin1');
+  const { fn } = fetchFalso({
+    'https://exemplo.com/meta': { corpo: latin1('<html><head><meta charset="iso-8859-1"></head><body>Configura\xe7\xe3o</body></html>'), headers: { 'content-type': 'text/html' } },
+    'https://exemplo.com/equiv': { corpo: latin1('<meta http-equiv="Content-Type" content="text/html; charset=windows-1252"><p>Instala\xe7\xe3o r\xe1pida</p>'), headers: { 'content-type': 'text/html' } },
+    'https://exemplo.com/xml': { corpo: latin1('<?xml version="1.0" encoding="ISO-8859-1"?><nota>Aten\xe7\xe3o</nota>'), headers: { 'content-type': 'application/xml' } },
+    'https://exemplo.com/cabecalho': { corpo: Buffer.from('<meta charset="iso-8859-1"><p>ação</p>', 'utf8'), headers: { 'content-type': 'text/html; charset=utf-8' } },
+  });
+  const { execute } = montar({ fetchFn: fn, ensurePublicTarget: async () => {} });
+  assert.equal(corpoDe(await execute('web_fetch', { url: 'https://exemplo.com/meta' })), 'Configuração');
+  assert.equal(corpoDe(await execute('web_fetch', { url: 'https://exemplo.com/equiv' })), 'Instalação rápida');
+  assert.match(corpoDe(await execute('web_fetch', { url: 'https://exemplo.com/xml' })), /<nota>Atenção<\/nota>/);
+  assert.equal(corpoDe(await execute('web_fetch', { url: 'https://exemplo.com/cabecalho' })), 'ação', 'o cabeçalho vence o <meta>');
+});

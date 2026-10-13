@@ -125,11 +125,41 @@ function removerBlocos(html) {
   return saida + html.slice(pos);
 }
 
+// v0.41.0: o texto de <pre> (código de documentação) sai com o espaçamento original; antes cada linha era
+// colapsada e o recuo de um exemplo em Python/YAML sumia. Busca só para frente (indexOf): tempo linear.
+const MARCA_PRE = '\u0000pre';
+function separarPre(html) {
+  const baixo = html.toLowerCase();
+  const blocos = [];
+  let saida = '';
+  let pos = 0;
+  for (;;) {
+    const ini = baixo.indexOf('<pre', pos);
+    if (ini === -1 || !/[\s>]/.test(baixo[ini + 4] || '')) {
+      if (ini === -1) break;
+      saida += html.slice(pos, ini + 4);
+      pos = ini + 4;
+      continue;
+    }
+    const abre = baixo.indexOf('>', ini);
+    const fim = abre === -1 ? -1 : baixo.indexOf('</pre', abre);
+    if (fim === -1) break; // sem fechamento: o resto segue o caminho normal
+    const texto = decodificarEntidades(html.slice(abre + 1, fim).replace(/<br\s*\/?>/gi, '\n').replace(/<\/?[a-z!][^<>]*>/gi, ''))
+      .replace(/\r\n?/g, '\n').replace(/^\n+|\s+$/g, '');
+    saida += `${html.slice(pos, ini)}\n${MARCA_PRE}${blocos.length}\u0000\n`;
+    blocos.push(texto);
+    const fecha = baixo.indexOf('>', fim);
+    pos = fecha === -1 ? html.length : fecha + 1;
+  }
+  return { html: saida + html.slice(pos), blocos };
+}
+
 /** HTML -> texto legível, sem dependências (não precisa ser perfeito, precisa ser lido pelo modelo). */
 function htmlParaTexto(html) {
+  const { html: semPre, blocos } = separarPre(removerBlocos(html));
   // [^<>]* (e não [^>]*) mantém as regex lineares: "<a<a<a..." sem ">" não volta atrás.
   return decodificarEntidades(
-    removerBlocos(html)
+    semPre
       .replace(/<br\s*\/?>/gi, '\n')
       .replace(/<\/?(p|div|li|h[1-6]|tr)\b[^<>]*>/gi, '\n')
       .replace(/<\/t[dh]\s*>/gi, ' ') // células da mesma linha não podem grudar
@@ -139,13 +169,24 @@ function htmlParaTexto(html) {
     .map((linha) => linha.replace(/\s+/g, ' ').trim())
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
-    .trim();
+    .trim()
+    .replace(/\u0000pre(\d+)\u0000/g, (_, i) => blocos[Number(i)]);
 }
 
 function tipoDoConteudo(cabecalho) {
   const mime = (cabecalho || '').split(';')[0].trim().toLowerCase();
   const m = /charset\s*=\s*"?([^";\s]+)/i.exec(cabecalho || '');
-  return { mime, charset: m ? m[1] : 'utf-8' };
+  return { mime, charset: m ? m[1] : null };
+}
+
+// v0.41.0: sem charset no cabeçalho, vale o declarado no começo do documento (<meta charset>, <meta http-equiv>
+// ou <?xml encoding?>), como no navegador; antes página Latin-1 virava "�" em cada acento.
+function charsetDoCorpo(dados, mime) {
+  const cabeca = dados.subarray(0, 1024).toString('latin1');
+  const m = (ehHtml(mime) || !mime) && /<meta\b[^<>]*?charset\s*=\s*["']?\s*([\w.:-]+)/i.exec(cabeca);
+  if (m) return m[1];
+  const x = /^\s*<\?xml\b[^<>]*?encoding\s*=\s*["']([\w.:-]+)/i.exec(cabeca);
+  return x ? x[1] : 'utf-8';
 }
 
 const ehHtml = (mime) => mime === 'text/html' || mime === 'application/xhtml+xml';
@@ -194,7 +235,7 @@ async function trechoDoErro(resposta, controller, mime, charset) {
   if (mime && !ehTexto(mime) && !ehHtml(mime)) { await descartarCorpo(resposta); return ''; }
   const { dados } = await lerCorpo(resposta, controller, MAX_BYTES_TRECHO_ERRO);
   if (!mime && dados.subarray(0, 8000).includes(0)) return '';
-  const texto = decodificar(dados, charset);
+  const texto = decodificar(dados, charset || charsetDoCorpo(dados, mime));
   return (ehHtml(mime) ? htmlParaTexto(texto) : texto).replace(/\s+/g, ' ').trim().slice(0, 300);
 }
 
@@ -222,7 +263,7 @@ async function montarSaida(resposta, url, maxChars, controller) {
     return 'Erro: tipo de conteúdo não suportado (sem Content-Type e o corpo parece binário).';
   }
 
-  const bruto = decodificar(dados, charset);
+  const bruto = decodificar(dados, charset || charsetDoCorpo(dados, mime));
   let texto = ehHtml(mime) ? htmlParaTexto(bruto) : bruto.replace(/\r\n/g, '\n');
   if (!texto.trim()) texto = '(a página não tem texto)';
   if (texto.length > maxChars) {
