@@ -1,3 +1,45 @@
+## 0.41.0 — duas falhas de segurança corrigidas e as lacunas frente a Claude Code, Codex e Antigravity
+
+**Falhas corrigidas** (cada uma reproduzida antes no loop real do agente, com modelo simulado; os testes novos falham no código anterior):
+
+- **P1 — lista vazia de ferramentas liberava todas.** Na camada de ferramentas, `tools: []` significava "todas": um passo de workflow com `tools: []` rodado por `gemini-code agent run` recebia `write_file` e `run_shell`. Agora só a *ausência* de lista libera tudo; `[]` = nenhuma (também na sessão de convidado).
+- **P1 — o convidado virava dono.** `read_file`, `search_files` e `read_skill` liam `~/.gemini-code/cowork-token.txt` (com ele, o convidado conecta no cowork com o agente inteiro) e a API key do `config.json`. Nova lista `SECRET_PATHS` (config + `.bak`/`.tmp`, `mcp.json`, tokens): nenhuma ferramenta do modelo lê esses arquivos, nem por symlink ou hard link. E o convidado só lê dentro da pasta em que o gemini-code foi aberto (antes lia chaves SSH, outros projetos...).
+- **P1 — anti-SSRF furado por IPv6.** `privateAddress` (rotinas e `web_fetch`) comparava texto: `64:ff9b::7f00:1` (NAT64 → 127.0.0.1), `64:ff9b::a9fe:a9fe` (metadata da nuvem), `::7f00:1`, `2002:a00:1::1` (6to4) e `0:0:0:0:0:0:0:1` passavam. Agora o IPv6 é expandido em 8 blocos e o IPv4 embutido passa pela regra do IPv4.
+- **P2 — chaves vazavam.** Servidores MCP (muitas vezes de terceiros) herdavam `GEMINI_API_KEY` do ambiente; o `actions.log` guardava comandos com `Authorization: Bearer ...` em texto puro; a chave do Veo ia na URL (`?key=`).
+- **P2 — instruções de qualquer repositório entravam no prompt sem aviso** (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`... e `.gemini-code/commands` virando `/comandos`): injeção num repositório clonado. Agora o chat pergunta uma vez por pasta (`src/trust.js`; decisão em `~/.gemini-code/confianca.json`, protegido contra o modelo). Sem terminal, pasta não decidida continua carregando (como o `claude -p`); `gemini-code confianca negar PASTA` bloqueia.
+- **P2 — o chat retomava a conversa de outro projeto** (a sessão ativa era global). Agora é por pasta.
+
+**Lacunas fechadas** (levantadas por auditoria do código frente ao que os outros agentes documentam):
+
+- **Provedor `openai`**: qualquer API compatível com OpenAI com chave (OpenRouter por padrão, OpenAI, Groq, DeepSeek...) — os mesmos modelos fortes dos outros agentes. `config set-openai-key | set-openai-model | set-openai-url`, `@openai`, `openai:MODELO`, e `config set-hybrid-cloud openai` para usá-lo como lado nuvem do híbrido. O uso real conta no `/custo` e no limite de tokens. Chave também por `GEMINI_CODE_OPENAI_KEY`.
+- **Ferramentas novas**: `edit_files` (várias edições em vários arquivos, atômicas, com rollback), `glob_files` (`**/*.test.js`, respeita `.gitignore`) e `web_fetch` (pergunta antes; `webDominiosPermitidos` e `confirmWeb`; anti-SSRF em cada redirecionamento; 2 MB; saída marcada como dado externo). `/passo` e a análise de risco de workflows cobrem as novas.
+- **Comandos em segundo plano**: `run_shell { em_segundo_plano: true }` + `shell_status` (subir um servidor e testá-lo); até 5; todos encerrados quando o gemini-code sai.
+- **Regras de permissão** no `config.json`: `"permissoes": { "negar": ["run_shell(git push*)"], "permitir": ["run_shell(npm test*)"] }` e `config negar | permitir | regras | remover-regra`. `negar` vale em todo modo (inclusive subagentes e workflows); `permitir` só dispensa a confirmação de comando simples.
+- **Contexto em tarefas longas**: resultados antigos de ferramenta viram um aviso curto acima de `contextoMaxChars` (padrão 300 000 caracteres) — antes uma tarefa de muitas leituras reenviava tudo a cada passo. `/compact ia`: o próprio modelo resume a conversa.
+- **Hooks** `UserPromptSubmit`, `SessionStart` e `Stop` (código 2 no Stop obriga a continuar, até 3 vezes).
+- **Subagentes do usuário** em `.md` (`~/.gemini-code/subagentes/` ou do projeto, se confiável), com ferramentas e modelo próprios; nunca recebem mais ferramentas que o pai.
+- **MCP remoto** (Streamable HTTP): `"url"` e `"headers"` com `${VAR}` no `mcp.json`. Sem OAuth.
+- **Imagem como entrada**: `run --imagem ARQ`, `/imagem ARQ` e `/foto` no chat.
+- **`run --json`**: uma linha JSON no stdout (`{ok, texto, uso, ...}`) para CI e scripts; todo o resto vai para o stderr.
+- **Avaliação**: tarefa nova `refatorar-multiarquivo` (7 no total) e, em `docs/EVALS.md`, como comparar com o **mesmo modelo** pelo provedor `openai`, separando a qualidade do agente da do modelo.
+
+**Revisão adversarial antes de fechar a versão.** 4 revisores com lentes diferentes (permissões, rede e segredos, corretude, ferramentas novas), cada achado só valendo com reprodução executada e cada um entregue a um cético independente para tentar derrubá-lo. Os 10 achados de segurança foram confirmados pelos céticos (9 distintos: dois revisores acharam o mesmo `mcp.json.bak`). Mais 1 visto pelo revisor de rede fora do limite de achados dele, também reproduzido aqui. Os 12 de corretude e das ferramentas novas ficaram sem cético (limite de sessão); cada um deles eu reproduzi com um teste que falha no código anterior antes de corrigir. Todos corrigidos, um commit por achado:
+
+- **P1 — DNS rebinding no `web_fetch`** (e no `http-check` das rotinas): o anti-SSRF resolvia o nome, conferia o IP e o fetch resolvia de novo para conectar; um DNS com TTL 0 trocava o IP público por 127.0.0.1 ou 169.254.169.254. Agora a conexão usa um `lookup` que confere cada endereço na hora de conectar (`src/redeSegura.js`).
+- **P1 — `mcp.json.bak`** (cópia com os tokens que o `mcp add/remove` deixa) era lido por `read_file`, `search_files` e `read_skill`. Entrou em `SECRET_PATHS` e `PROTECTED_PATHS`, com permissão 0600.
+- **P1 — subagentes do projeto** (`.gemini-code/subagentes/`) entravam sem a pergunta de confiança.
+- **P2 — regras "negar" contornáveis:** `run_shell` com `&`, `$(...)`, crases, `(...)` e `{ ...; }`; `web_fetch` por redirecionamento ou por variação da URL (maiúsculas, `:443`); regras e hooks escritos para `edit_file` não valiam para o `edit_files`.
+- **P2 — MCP remoto:** um corpo que parava no meio travava o agente para sempre (o prazo acabava nos cabeçalhos); um 307/308 levava o token do cabeçalho para outro endereço (P3).
+- **P2 — chat por pipe:** `echo "pergunta" | gemini-code chat` num repositório com `AGENTS.md` perdia a pergunta na pergunta de confiança e saía sem responder.
+- **P2 — `/compact ia`:** o resumo do modelo era apagado na compactação seguinte (que o auto-compact disparava logo no turno seguinte, medindo a própria chamada do resumo); com contexto pequeno o modelo só via o fim das mensagens antigas e o resumo dele substituía todas. Agora o resumo anterior é levado adiante e o registro local vai junto.
+- **P2 — uma imagem contava o base64 inteiro** no orçamento de contexto e apagava resultados de ferramenta numa conversa curta.
+- **P2 — `glob_files` numa subpasta do repositório** ignorava o `.gitignore` do topo; também `.gitignore` com BOM e `[!-9]` (conferidos contra o git).
+- **P3:** `run_shell` em segundo plano com `cmd &` fugia do limite de 5 e ficava órfão (e terminal fechado, SIGHUP, não passava pela limpeza); `actions.log` deixava passar `password = "..."` nos argumentos; hooks Stop/UserPromptSubmit rodavam dentro de subagentes; a validação de workflow dizia que as ferramentas novas "não existem"; `confianca esquecer` numa subpasta prometia perguntar de novo; `<pre>` perdia o recuo; o charset do `<meta>` era ignorado; um "İ" antes de `<script>` desalinhava o texto.
+
+Testes: 700 (699 passando, 1 pulado por rodar como root), no Node 20 e no 22; eram 524 na v0.40.0.
+
+**Limites (importante):** nada aqui foi executado com Gemini, llama.cpp, uma API compatível com OpenAI de verdade, Claude Code, Codex, Antigravity ou Hermes Agent (sem chave nem rede neste ambiente): **não há resultado comparativo**, só as ferramentas para medir. Medido de verdade: code-ia solo 0/6 (v0.40.0). As regras de permissão e a heurística do `run_shell` são casamento de texto, não sandbox (ex.: `git -C . push` ainda escapa de `run_shell(git push*)`). MCP remoto sem OAuth. `glob_files` não entende classes POSIX (`[[:digit:]]`). O limite de 1 MiB do cowork não foi exercitado com `ws` real. ESLint não roda offline (lint só de sintaxe).
+
 ## 0.40.0 — segurança das ferramentas, execução sem terminal e avaliação reproduzível
 
 Base: o pacote v0.39.0 (MinhaIA) foi importado no repositório sem alterações; o `aplicar-correcao-gemini.sh` saiu (reescrevia `src/gemini.js` e `shellTools.js` inteiros com o código da v0.1 e quebraria o CLI; continua no histórico do git).

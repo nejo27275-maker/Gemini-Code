@@ -49,13 +49,14 @@ test('convidado não consegue ler o token do cowork pelo loop do agente', async 
 });
 
 test('nenhum modelo (nem o do dono) lê a API key, o mcp.json ou os tokens', async () => {
-  config.saveConfig({ apiKey: 'AIza-FICTICIA-PARA-TESTE-1234' });
+  // Valor fictício curto e sem o formato de chave real (o security scan do próprio projeto acusaria "AIza...").
+  config.saveConfig({ apiKey: 'chave-FICTICIA-teste' });
   fs.writeFileSync(config.MCP_PATH, JSON.stringify({ mcpServers: { x: { command: 'x', env: { SEGREDO: 'mcp-fictício' } } } }));
   for (const p of [config.CONFIG_PATH, `${config.CONFIG_PATH}.bak`, config.MCP_PATH, TOKEN_PATH]) {
     assert.match(await fileTools.execute('read_file', { path: p }), /^Bloqueado/, p);
   }
   const busca = await searchTools.execute('search_files', { pattern: 'FICTICIA', path: HOME_DIR });
-  assert.doesNotMatch(busca, /AIza-FICTICIA/);
+  assert.doesNotMatch(busca, /chave-FICTICIA/);
 });
 
 test('a cópia mcp.json.bak que o "mcp remove" deixa também é segredo', async () => {

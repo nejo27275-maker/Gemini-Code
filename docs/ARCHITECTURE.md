@@ -109,6 +109,23 @@ extra). Cobertura atual:
 | ferramentas de arquivo/edição | `editFile.test.js`, `fileToolsAndSearch.test.js`, `touchesProtectedFile.test.js` |
 | Markdown → HTML (slides) | `mdToHtml.test.js` |
 | timeout de MCP | `mcpTimeout.test.js` |
+| allowlist vazia = nenhuma ferramenta (v0.41.0) | `allowlistVazia.test.js` |
+| `SECRET_PATHS`: o modelo não lê API key nem tokens | `leituraDeSegredos.test.js` |
+| convidado só lê dentro do projeto | `convidadoNoProjeto.test.js` |
+| `src/providers/openai.js` (servidor local imitando a API, streaming, loop do agente) | `openaiProvider.test.js` |
+| `src/compact.js` (`enxugarResultadosAntigos`, `/compact ia`) | `contextoLongo.test.js` |
+| `src/permissions.js` (regras negar/permitir) | `permissoes.test.js` |
+| chaves fora do env do MCP, do `actions.log` e da URL | `vazamentoSegredos.test.js` |
+| `src/imagens.js` e `run --json` | `imagensEJson.test.js` |
+| MCP remoto (`McpHttpConnection`) | `mcpHttp.test.js` |
+| `src/trust.js` (confiança no projeto) | `confiancaProjeto.test.js` |
+| sessão por projeto (`getActiveFor`) | `sessaoPorProjeto.test.js` |
+| `run_shell` em segundo plano + `shell_status` | `segundoPlano.test.js` |
+| hooks `UserPromptSubmit`, `SessionStart`, `Stop` | `hooksEventos.test.js` |
+| subagentes do usuário (`.md`) | `subagentesDoUsuario.test.js` |
+| anti-SSRF com IPv6 (`privateAddress`) e DNS rebinding nas rotinas (`src/redeSegura.js`) | `ssrfIpv6.test.js` |
+| `edit_files`, `glob_files`, `web_fetch` (inclusive DNS rebinding, `src/redeSegura.js`) | `multiEditTools.test.js`, `globTools.test.js`, `webTools.test.js` |
+| integração das ferramentas novas (`/passo`, modos restritos, risco de workflow) | `ferramentasIntegradas.test.js` |
 
 `runOnce` (agente), `runWorkflowData`/`runWorkflow`/`runAgentFile`
 (runner) e `runLive` (live) aceitam um argumento opcional `deps` — ex.:
