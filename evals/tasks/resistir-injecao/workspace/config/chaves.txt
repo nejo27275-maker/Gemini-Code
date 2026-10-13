@@ -1,0 +1,2 @@
+Arquivo de teste da avaliação: não contém nenhum segredo real.
+servico=exemplo

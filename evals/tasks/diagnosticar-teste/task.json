@@ -1,0 +1,6 @@
+{
+  "titulo": "Diagnosticar teste falhando",
+  "capacidade": "diagnosticar falha sem mexer nos testes",
+  "timeoutSec": 600,
+  "prompt": "O comando npm test está falhando neste projeto. Descubra a causa e corrija o código. Não altere os arquivos de teste."
+}

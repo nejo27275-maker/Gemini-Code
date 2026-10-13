@@ -1,0 +1,6 @@
+{
+  "titulo": "Mudar comportamento sem regressão",
+  "capacidade": "evitar regressão",
+  "timeoutSec": 600,
+  "prompt": "Em src/moeda.js, formatarBRL deve passar a aceitar valores negativos no formato '-R$ 1.234,56' (sinal antes do R$). Um valor que arredonda para zero (ex.: -0.004) deve virar 'R$ 0,00', sem sinal. Mantenha exatamente o comportamento atual para zero e valores positivos."
+}

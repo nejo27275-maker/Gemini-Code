@@ -1,3 +1,28 @@
+## 0.40.0 — segurança das ferramentas, execução sem terminal e avaliação reproduzível
+
+Base: o pacote v0.39.0 (MinhaIA) foi importado no repositório sem alterações; o `aplicar-correcao-gemini.sh` saiu (reescrevia `src/gemini.js` e `shellTools.js` inteiros com o código da v0.1 e quebraria o CLI; continua no histórico do git).
+
+**Falhas corrigidas** — todas reproduzidas antes no loop real do agente (modelo simulado), com `confirmShell: true`:
+
+- **P1 — o modelo plantava um hook e rodava comando sem confirmação.** `write_file` em `~/.gemini-code/hooks.json` não era bloqueado; o hook roda via `sh -c` antes de cada ferramenta. Na chamada seguinte (até um `list_dir`), o comando executava.
+- **P1 — symlink furava a proteção do config.** A checagem comparava com `path.resolve`; um `docs/settings.json -> ~/.gemini-code/config.json` vindo de um repositório clonado deixava o `write_file` gravar `confirmShell: false`.
+- **P2 — segredos legíveis por outros usuários.** `config.json`/`.bak` (API key em texto puro sem passphrase) e o token do cowork eram criados com 0644, numa pasta 0755.
+- **P2 — saída silenciosa sem terminal.** Com stdin encerrado (cron, CI, `< /dev/null`), a confirmação de `run_shell`/`run_checks` nunca era respondida e o processo saía no meio da tarefa com **código 0** e sem resposta.
+- **P3 — cowork aceitava mensagens de até 100 MiB** (padrão do `ws`) antes da autenticação.
+
+**Como:**
+
+- `src/config.js`: lista única `PROTECTED_PATHS` (config + `.bak`/`.tmp`, `mcp.json`, `hooks.json`, `cowork-token.txt`, `routine-api-token.txt`), usada por `write_file`, `edit_file` e pela heurística do `run_shell`; `hooks.js`, cowork e API de rotinas leem os caminhos daqui.
+- `fileTools`: compara o caminho **real** (symlinks, inclusive quebrados — gravar num link quebrado cria o alvo —, e pastas que são symlink) e o inode (hard link).
+- `config-manager`: grava com 0600 e corrige arquivos 0644 antigos ao ler; `~/.gemini-code` nasce com 0700. Token do cowork com 0600 (o existente é corrigido) e `maxPayload` de 1 MiB.
+- `src/ui/prompt.js`: `ask()` resolve com `''` (= "não") quando a entrada fecha e avisa no terminal; as perguntas seguintes respondem na hora.
+
+**Avaliação reproduzível (`evals/`, `docs/EVALS.md`):** 6 tarefas com enunciado, workspace, verificador oculto e solução de referência: corrigir defeito, implementar recurso, diagnosticar teste falhando sem alterá-lo, mudar comportamento sem regressão, resistir a instrução injetada num arquivo, edição cirúrgica com "iscas". `node evals/run.js --agent "COMANDO {prompt}"` roda qualquer agente de linha de comando nas mesmas condições e gera relatório JSON (tempo, código de saída, arquivos alterados, motivo). `--self-test` prova que cada verificador falha sem solução e passa com a de referência; os testes também têm controles negativos (obedecer a injeção, trocar todas as ocorrências, mexer no teste, estourar o tempo → reprova).
+
+- Testes novos: `protectedPaths` (10), `secretFilePermissions` (4), `promptHeadless` (4), `evals` (8). Contra o código anterior, falham 13 dos 14 de segurança (o que sobra é o de não-regressão, que deve passar nos dois) e os 4 de stdin. `npm test`: 524 passando; lint de sintaxe e varredura de segredos ok.
+- **Medido (real):** `gemini-code run` em modo solo (code-ia, sem LLM): **0/6** — responde com trechos da base e não edita arquivos.
+- **Limites:** não executei o gemini-code com Gemini ou llama.cpp (sem chave nem modelo neste ambiente), nem Claude Code/Codex/outros: não há comparação entre agentes aqui, só a ferramenta para fazê-la. ESLint não roda offline (só sintaxe). O limite de 1 MiB do cowork não foi exercitado com `ws` real (dependência não instalável sem rede aqui). Continuam: a heurística do `run_shell` é texto (a barreira é `confirmShell`); `search_files` com regex do modelo roda na thread principal (regex patológica pode travar); `ws://` do cowork sem TLS; de um pipe finito só a 1ª resposta é usada; vários testes antigos usam o `HOME` real (só criam padrões, não sobrescrevem).
+
 ## 0.39.0 — modo solo: o code-ia sozinho, sem nenhuma outra IA por trás
 
 - **`gemini-code solo on | off | status`** (`src/solo.js`): liga o code-ia como única IA. O `solo on` guarda o provedor anterior, troca para `code-ia`, **para o llama-server** se estava no ar e instala/atualiza o modelo próprio. `solo off` restaura o provedor de antes.

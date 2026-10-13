@@ -102,6 +102,10 @@ extra). Cobertura atual:
 | `src/routineRunner.js` (HTTP, retentativas, concorrência e destinos privados) | `routineRunner.test.js` |
 | `src/routineApi.js` (autenticação e endpoints) | `routineApi.test.js` |
 | `bin/gemini-code.js` (CLI completa, via processo filho) | `cli.test.js` |
+| arquivos protegidos (`PROTECTED_PATHS`, symlink/hard link, hook plantado) | `protectedPaths.test.js` |
+| permissões de `config.json` e do token do cowork | `secretFilePermissions.test.js` |
+| `src/ui/prompt.js` sem terminal (stdin encerrado) | `promptHeadless.test.js` |
+| `evals/run.js` (autoteste e controles negativos) | `evals.test.js` |
 | ferramentas de arquivo/edição | `editFile.test.js`, `fileToolsAndSearch.test.js`, `touchesProtectedFile.test.js` |
 | Markdown → HTML (slides) | `mdToHtml.test.js` |
 | timeout de MCP | `mcpTimeout.test.js` |

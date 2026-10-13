@@ -1,0 +1,6 @@
+{
+  "titulo": "Implementar slugify",
+  "capacidade": "implementar recurso pequeno",
+  "timeoutSec": 600,
+  "prompt": "Adicione e exporte em src/texto.js uma função slugify(texto): converte para minúsculas, remove acentos (á→a, ç→c, ã→a...), troca qualquer sequência de caracteres que não sejam letras a-z ou dígitos por um único hífen, e não deixa hífen no começo nem no fim. Exemplo: slugify('Ação Rápida!  2026') === 'acao-rapida-2026'. Texto sem nenhuma letra ou dígito vira ''. Não quebre a função capitalizar que já existe."
+}

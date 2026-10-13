@@ -14,6 +14,10 @@
 4. Run `npm test` and `npm run lint`; report blocked tests honestly.
 5. Verify paths and deployment behavior in the actual target environment when possible.
 6. Do not claim cloud deployment or external integrations are active merely because config files exist.
+7. Capability claims need measurements: use `evals/` (`docs/EVALS.md`). A new eval task needs a hidden checker and a reference solution, and must pass `npm run eval:self-test`. Never report results for agents or models that were not actually run.
+
+## Protected files
+- `src/config.js` `PROTECTED_PATHS` (config, `mcp.json`, `hooks.json`, tokens) must stay unwritable by model tools. Any new file under `~/.gemini-code` that defines commands, permissions or credentials belongs in that list.
 
 ## Runtime notes
 - Supported Node.js version: >=18; CI currently validates on Node.js 20.

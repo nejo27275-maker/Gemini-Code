@@ -47,6 +47,13 @@ O modelo GGUF é o mesmo, mas os históricos e as memórias do CLI e do app aind
   **na mesma rede local** e manda tarefas para o agente rodar direto no PC
   (arquivos, comandos, tudo), com autenticação por token.
 
+## Segurança e avaliação (v0.40.0)
+
+- O agente **não consegue** gravar (`write_file`/`edit_file`) o `config.json`, `mcp.json`, `hooks.json` nem os tokens do cowork/rotinas — nem por symlink ou hard link vindo de um repositório clonado. Antes, gravar o `hooks.json` dava a ele comandos rodando sem confirmação. Via `run_shell`, mencionar esses arquivos força confirmação mesmo com `confirmShell: false`.
+- `config.json` (que guarda a API key) e o token do cowork ficam só legíveis pelo seu usuário (0600); arquivos antigos são corrigidos sozinhos.
+- Sem terminal (cron, CI, `< /dev/null`), uma confirmação pendente vira "não" e a tarefa termina com resposta — antes o processo saía no meio, com código 0.
+- **Avaliação reproduzível** (`evals/`, veja `docs/EVALS.md`): 6 tarefas com verificador oculto (corrigir defeito, implementar, diagnosticar sem mexer no teste, evitar regressão, resistir a instrução injetada, edição cirúrgica). Funciona com qualquer agente de linha de comando: `npm run eval -- --agent "gemini-code run {prompt}"`. `npm run eval:self-test` prova que cada verificador distingue certo de errado.
+
 ## Modo solo (v0.39.0) — o code-ia sozinho, sem nenhuma outra IA
 
 ```bash
@@ -100,7 +107,7 @@ gemini-code code-ia teach "como chamar o dono" "use !dono"   # no chat: /ensinar
 - **`/passo`:** aprovação passo a passo — prévia e `s/n/t` antes de cada gravação de arquivo (`confirmarEscrita: true` liga ao abrir o chat). Na dúvida, recusa.
 - **`/custo`:** tokens reais gastos na sessão. `maxTokensSessao` na config põe um teto; `autoCompactTokens` (60000) compacta o contexto sozinho, sem custo.
 - **`/plano` e `/aprovar`:** modo plano — o agente só lê e planeja (trava real por allowlist) até você aprovar. `/plano off` cancela.
-- **Hooks (`~/.gemini-code/hooks.json`):** comandos seus antes/depois das ferramentas; código de saída 2 em `PreToolUse` bloqueia (ex.: barrar `rm -rf`), em `PostToolUse` devolve a saída ao modelo (ex.: lint). Só o arquivo global vale. `/hooks` lista. Formato no CHANGELOG 0.13.0.
+- **Hooks (`~/.gemini-code/hooks.json`):** comandos seus antes/depois das ferramentas; código de saída 2 em `PreToolUse` bloqueia (ex.: barrar `rm -rf`), em `PostToolUse` devolve a saída ao modelo (ex.: lint). Só o arquivo global vale e só você o edita (o agente não pode gravá-lo). `/hooks` lista. Formato no CHANGELOG 0.13.0.
 - **`/snapshots`:** em repositório git, fotos automáticas a cada turno numa referência escondida (não toca sua branch); `/snapshots restaurar N` volta. Pega também o que o shell mudou. Desligue com `autoGit: false`.
 - **`/rewind`:** desfaz o que o agente gravou no último turno (como Ctrl+Z). `/rewind 3` volta 3 turnos, `/rewind lista` mostra os turnos, `--force` sobrescreve o que você mudou depois. Sem custo de IA e sem precisar de git; só cobre `write_file`/`edit_file`, não comandos de shell.
 - **Comandos seus:** crie `.gemini-code/commands/revisar.md` com, por exemplo, `Revise o arquivo $1 procurando bugs`, e use `/revisar src/app.js`. `/commands` lista.
@@ -227,6 +234,10 @@ gemini-code cowork connect 192.168.0.10 --token TOKEN_MOSTRADO_NO_PC
 
 Agora tudo que você digitar no celular roda como uma tarefa completa do
 agente **no PC** (arquivos, comandos, tudo o que o PC tiver acesso).
+
+O token fica em `~/.gemini-code/cowork-token.txt`, legível só pelo seu usuário.
+A conexão é `ws://` sem criptografia: quem estiver na mesma rede e capturar o
+tráfego vê o token. Use só em rede de confiança e nunca exponha a porta na internet.
 
 ### Voz
 
