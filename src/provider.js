@@ -10,7 +10,19 @@ const gemini = require('./gemini');
 const ollama = require('./providers/ollama');
 const llamacpp = require('./providers/llamacpp');
 const codeia = require('./providers/codeia');
+const openai = require('./providers/openai');
 const usage = require('./usage');
+
+// Provedores que rodam na máquina (não gastam cota; só o tamanho do prompt é guardado).
+const LOCAIS = new Set(['llamacpp', 'ollama', 'code-ia']);
+
+// v0.41.0: lado "nuvem" do modo híbrido: Gemini (padrão) ou uma API compatível com
+// OpenAI com chave (hybridCloud: 'openai'), para usar Claude/GPT/DeepSeek via OpenRouter etc.
+function nuvem(cfg) {
+  return cfg.hybridCloud === 'openai'
+    ? { provider: 'openai', model: cfg.openaiModel, temChave: Boolean(openai.chave(cfg)) }
+    : { provider: 'gemini', model: cfg.model, temChave: Boolean(cfg.apiKey) };
+}
 const solo = require('./solo');
 
 const PALAVRAS_PESADAS = /\b(refator\w*|arquitet\w*|debug\w*|depur\w*|otimiz\w*|analis\w*|analys\w*|migr\w*|segur\w*|vulnerab\w*|implement\w*|projet[eo]\w*|design|algoritm\w*|por ?que|explique em detalhe|revis[ea]\w*|performance|concorr\w*|race condition)\b/i;
@@ -49,7 +61,11 @@ function escolher({ cfg, modelName, history }) {
   if (solo.ativo(cfg)) return { provider: 'code-ia', model: 'code-ia', motivo: 'modo solo' };
   if (modelName === '@codeia' || modelName === 'code-ia' || modelName === 'codeia') return { provider: 'code-ia', model: 'code-ia', motivo: 'forçado (/codeia)' };
   if (modelName === '@local') return { provider: 'llamacpp', model: cfg.llamaCppModel || 'local-model', motivo: 'forçado (/local)' };
-  if (modelName === '@cloud') return { provider: 'gemini', model: cfg.model, motivo: 'forçado (/cloud)' };
+  if (modelName === '@cloud') { const n = nuvem(cfg); return { provider: n.provider, model: n.model, motivo: 'forçado (/cloud)' }; }
+  if (modelName === '@openai') return { provider: 'openai', model: cfg.openaiModel, motivo: 'forçado (@openai)' };
+  if (typeof modelName === 'string' && modelName.startsWith('openai:')) {
+    return { provider: 'openai', model: modelName.slice('openai:'.length) || cfg.openaiModel, motivo: 'modelo openai explícito' };
+  }
   if (typeof modelName === 'string' && modelName.startsWith('llamacpp:')) {
     return { provider: 'llamacpp', model: modelName.slice('llamacpp:'.length) || cfg.llamaCppModel || 'local-model', motivo: 'modelo local llama.cpp explícito' };
   }
@@ -60,12 +76,14 @@ function escolher({ cfg, modelName, history }) {
 
   const modo = cfg.provider || 'hybrid';
   if (modo === 'code-ia') return { provider: 'code-ia', model: 'code-ia', motivo: 'provider=code-ia' };
+  if (modo === 'openai') return { provider: 'openai', model: cfg.openaiModel, motivo: 'provider=openai' };
   if (modo === 'ollama') return { provider: 'ollama', model: cfg.ollamaModel, motivo: 'provider=ollama (compatibilidade)' };
   if (modo === 'llamacpp') return { provider: 'llamacpp', model: cfg.llamaCppModel || 'local-model', motivo: 'provider=llamacpp' };
   if (modo === 'hybrid') {
-    if (!cfg.apiKey) return { provider: 'llamacpp', model: cfg.llamaCppModel || 'local-model', motivo: 'sem API key: local via llama.cpp' };
+    const n = nuvem(cfg);
+    if (!n.temChave) return { provider: 'llamacpp', model: cfg.llamaCppModel || 'local-model', motivo: 'sem chave da nuvem: local via llama.cpp' };
     return pedidoPesado(history, cfg)
-      ? { provider: 'gemini', model: cfg.model, motivo: 'pedido pesado: nuvem' }
+      ? { provider: n.provider, model: n.model, motivo: 'pedido pesado: nuvem' }
       : { provider: 'llamacpp', model: cfg.llamaCppModel || 'local-model', motivo: 'pedido simples: local via llama.cpp' };
   }
   // Sem chave online, use um modelo generativo local em vez da base pré-indexada.
@@ -82,11 +100,12 @@ async function chamar(escolha, args) {
   if (solo.ativo() && escolha.provider !== 'code-ia') throw solo.erroSolo(`chamada ao provedor ${escolha.provider}`);
   const fn = escolha.provider === 'code-ia' ? codeia.chatWithTools
     : escolha.provider === 'ollama' ? ollama.chatWithTools
-      : escolha.provider === 'llamacpp' ? llamacpp.chatWithTools : gemini.chatWithTools;
+      : escolha.provider === 'llamacpp' ? llamacpp.chatWithTools
+        : escolha.provider === 'openai' ? openai.chatWithTools : gemini.chatWithTools;
   // v0.15.0: limite de tokens por sessão (só vale para a nuvem; local não gasta cota) e contagem de chamadas locais.
-  if (escolha.provider === 'gemini') usage.checarLimite(loadConfig().maxTokensSessao);
+  if (!LOCAIS.has(escolha.provider)) usage.checarLimite(loadConfig().maxTokensSessao);
   const r = await fn({ ...args, modelName: escolha.model });
-  if (escolha.provider !== 'gemini') usage.registrar({ local: true, promptTokens: r && r.promptTokens });
+  if (LOCAIS.has(escolha.provider)) usage.registrar({ local: true, promptTokens: r && r.promptTokens });
   return r;
 }
 
@@ -106,9 +125,10 @@ async function chatWithTools(args) {
     // ainda (senão o texto sairia duplicado).
     const hibrido = (cfg.provider || 'hybrid') === 'hybrid' && !args.modelName;
     if (solo.ativo(cfg) || !hibrido || emitiu || !erroRecuperavel(err)) throw err;
-    const outro = escolha.provider === 'gemini'
+    const n = nuvem(cfg);
+    const outro = !LOCAIS.has(escolha.provider)
       ? { provider: 'llamacpp', model: cfg.llamaCppModel || 'local-model' }
-      : cfg.apiKey ? { provider: 'gemini', model: cfg.model } : null;
+      : n.temChave ? { provider: n.provider, model: n.model } : null;
     if (!outro) throw err;
     console.error(`[router] ${escolha.provider} indisponível (${String(err.message).split('\n')[0]}). Usando ${outro.provider}:${outro.model}.`);
     return chamar(outro, chamadaArgs);

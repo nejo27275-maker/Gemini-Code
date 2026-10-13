@@ -251,12 +251,17 @@ function erroHttp(status, data, url) {
   return error;
 }
 
-/** Lê o SSE do llama-server juntando texto e tool_calls (que chegam em pedaços, por `index`). */
-async function lerStream(response, onText, reiniciarTimer) {
+/**
+ * Lê o SSE do llama-server juntando texto e tool_calls (que chegam em pedaços, por `index`).
+ * v0.41.0: também usado pelo provedor openai (src/providers/openai.js), que passa o próprio
+ * `criarErro` e recebe o `usage` do último pedaço quando a API manda.
+ */
+async function lerStream(response, onText, reiniciarTimer, criarErro = erroHttp) {
   const reader = response.body.getReader();
   const dec = new TextDecoder();
   let buf = '';
   let texto = '';
+  let usage = null;
   const calls = [];
   const tratar = (linha) => {
     const l = linha.trim();
@@ -265,7 +270,8 @@ async function lerStream(response, onText, reiniciarTimer) {
     if (!payload || payload === '[DONE]') return;
     let obj;
     try { obj = JSON.parse(payload); } catch { return; }
-    if (obj.error) { const e = erroHttp(obj.error.code || 500, { error: obj.error }, ''); throw e; }
+    if (obj.error) { const e = criarErro(obj.error.code || 500, { error: obj.error }, ''); throw e; }
+    if (obj.usage) usage = obj.usage;
     const delta = obj.choices?.[0]?.delta || {};
     if (typeof delta.content === 'string' && delta.content) { texto += delta.content; if (onText) onText(delta.content); }
     for (const tc of delta.tool_calls || []) {
@@ -286,7 +292,7 @@ async function lerStream(response, onText, reiniciarTimer) {
     linhas.forEach(tratar);
   }
   if (buf) tratar(buf);
-  return { texto, calls: calls.filter(Boolean) };
+  return { texto, calls: calls.filter(Boolean), usage };
 }
 
 async function pedir({ url, body, onText, timeoutMs, stream }) {
@@ -443,4 +449,5 @@ async function status() {
 module.exports = {
   chatWithTools, status, baseUrl, converterHistorico, converterTools, normalizarSchema,
   ctxTamanho, estimarTokens, compactarTools, compactarSistema, ajustarAoContexto, extrairChamadasEmTexto, esperarPronto,
+  lerStream, tamMsg,
 };

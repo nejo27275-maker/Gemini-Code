@@ -112,6 +112,19 @@ const DEFAULT_CONFIG = {
   ollamaKeepAlive: '10m',
   ollamaTemperature: 0.6,
   hybridComplexityChars: 600, // pedido maior que isso vai pra nuvem no modo hybrid
+  // --- v0.41.0: API compatível com OpenAI COM chave (OpenRouter, OpenAI, DeepSeek, Groq...) ---
+  // Para usar os mesmos modelos fortes dos outros agentes. provider 'openai' usa sempre; hybridCloud 'openai'
+  // usa no lugar do Gemini como lado nuvem do modo hybrid. A chave fica aqui (0600, ilegível pelo modelo) ou
+  // em GEMINI_CODE_OPENAI_KEY.
+  openaiBaseUrl: 'https://openrouter.ai/api/v1',
+  openaiModel: '',
+  openaiApiKey: '',
+  openaiCtx: 128000, // contexto do modelo escolhido (tokens); só acima disso o histórico é podado
+  openaiMaxTokens: 8192,
+  hybridCloud: 'gemini',
+  // --- v0.41.0: web_fetch ---
+  confirmWeb: true, // pergunta antes de cada acesso; domínios abaixo não perguntam
+  webDominiosPermitidos: [],
   // Orçamento (em caracteres) do conhecimento fixo injetado no prompt — ver src/knowledge.js
   knowledgeMaxChars: 10000,
 };

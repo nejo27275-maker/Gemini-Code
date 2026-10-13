@@ -108,7 +108,9 @@ No modo "chat", digite /help para ver os comandos de sessão (/clear, /model, /s
   gemini-code code-ia forget                  Esquece tudo que você ensinou
   gemini-code code-ia reinstall               Refaz o modelo do zero
   gemini-code llamacpp status                 Testa o servidor local sem Ollama
-  gemini-code config set-provider hybrid|llamacpp|gemini|ollama|code-ia   Escolhe IA online/local
+  gemini-code config set-provider hybrid|llamacpp|gemini|openai|ollama|code-ia   Escolhe IA online/local
+  gemini-code config set-openai-key CHAVE | set-openai-model NOME | set-openai-url URL   API compatível com OpenAI (OpenRouter, OpenAI...)
+  gemini-code config set-hybrid-cloud gemini|openai   Qual nuvem o modo hybrid usa
   gemini-code config set-llamacpp-url URL      URL do llama.cpp (padrão http://127.0.0.1:8080)
   gemini-code config set-llamacpp-model NOME   Nome usado pelo servidor (padrão local-model)
   gemini-code config set-llamacpp-path CAMINHO Arquivo GGUF local (override opcional)
@@ -771,13 +773,14 @@ async function main() {
         // Nunca imprime segredo em texto puro na tela, mesmo desbloqueado —
         // evita vazar em print/screenshot/log de terminal. Ver src/security.js.
         if (mostrar.apiKey) mostrar.apiKey = security.mascarar(mostrar.apiKey);
+        if (mostrar.openaiApiKey) mostrar.openaiApiKey = security.mascarar(mostrar.openaiApiKey);
         if (mostrar.apiKeyLocked) mostrar.apiKeyLocked = '(protegida por chave mestra — "gemini-code config unlock")';
         if (mostrar.apiKeyLockedGuest) mostrar.apiKeyLockedGuest = '(chave de convidado configurada, acesso limitado)';
         return console.log(JSON.stringify(mostrar, null, 2));
       }
       return console.log(
         'Uso: gemini-code config set-key SUA_CHAVE | set-model NOME | set-fast-model NOME | ' +
-        'set-fallback-model [NOME] | set-wait-quota SEGUNDOS | set-provider hybrid|llamacpp|gemini|ollama|code-ia | ' +
+        'set-fallback-model [NOME] | set-wait-quota SEGUNDOS | set-provider hybrid|llamacpp|gemini|openai|ollama|code-ia | set-openai-key CHAVE | set-openai-model NOME | set-openai-url URL | set-hybrid-cloud gemini|openai | ' +
         'set-llamacpp-url URL | set-llamacpp-model NOME | set-llamacpp-path CAMINHO | set-llamacpp-ctx TOKENS | set-llamacpp-autostart on|off | set-ollama-model NOME | ' +
         'set-ollama-url URL | set-passphrase | unlock | remove-passphrase | ' +
         'set-guest-passphrase | remove-guest-passphrase | show'
