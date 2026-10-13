@@ -60,7 +60,7 @@ const MAX_ITENS = 10;
 // v0.25.1: "paralelo" só é aceito em passos com ferramentas SOMENTE de leitura (ou sem ferramentas): vários itens
 // ao mesmo tempo não podem pedir confirmação no terminal nem gravar no mesmo arquivo.
 const MAX_PARALELO = 3;
-const FERRAMENTAS_LEITURA = ['read_file', 'list_dir', 'search_files'];
+const FERRAMENTAS_LEITURA = ['read_file', 'list_dir', 'search_files', 'glob_files']; // v0.41.0: glob_files só lista nomes
 
 function extrairItens(texto, max = MAX_ITENS) {
   const limite = Math.max(1, Math.min(MAX_ITENS, Number(max) || MAX_ITENS));

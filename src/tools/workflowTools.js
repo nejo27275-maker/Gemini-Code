@@ -179,7 +179,7 @@ function lerWorkflow(nome) {
     if (x.paralelo !== undefined) {
       const { MAX_PARALELO } = require('../agents/runner');
       if (!(Number.isInteger(x.paralelo) && x.paralelo >= 1 && x.paralelo <= MAX_PARALELO)) throw new Error(`o passo "${x.id}" tem "paralelo" inválido (1 a ${MAX_PARALELO})`);
-      if (x.paralelo > 1 && !paraleloSeguro(x)) throw new Error(`o passo "${x.id}" usa "paralelo" mas precisa de "each" e de "tools" só de leitura (read_file, list_dir, search_files) ou []`);
+      if (x.paralelo > 1 && !paraleloSeguro(x)) throw new Error(`o passo "${x.id}" usa "paralelo" mas precisa de "each" e de "tools" só de leitura (${require('../agents/runner').FERRAMENTAS_LEITURA.join(', ')}) ou []`);
     }
     for (const k of ['when', 'unless']) {
       const c = x[k];
@@ -276,7 +276,8 @@ async function execute(name, args = {}, opts = {}) {
 
 // v0.19.0: validação completa SEM rodar nada (e sem gastar IA): junta TODOS os problemas, não só o primeiro.
 const CAMPOS_PASSO = new Set(['id', 'prompt', 'retry', 'optional', 'model', 'tools', 'when', 'unless', 'keepHistory', 'each', 'maxItens', 'paralelo']);
-const FERRAMENTAS_CONHECIDAS = new Set(['edit_file', 'list_dir', 'read_file', 'run_checks', 'run_shell', 'search_files', 'todo_write', 'write_file']);
+// v0.41.0: + edit_files, glob_files, web_fetch e shell_status (antes eram avisadas como "não existe").
+const FERRAMENTAS_CONHECIDAS = new Set(['edit_file', 'edit_files', 'glob_files', 'list_dir', 'read_file', 'run_checks', 'run_shell', 'search_files', 'shell_status', 'todo_write', 'web_fetch', 'write_file']);
 function validarWorkflow(w) {
   const erros = []; const avisos = [];
   if (!w || typeof w !== 'object' || !Array.isArray(w.steps) || !w.steps.length) return { erros: ['o arquivo não tem "steps" (lista de passos)'], avisos };
@@ -301,7 +302,7 @@ function validarWorkflow(w) {
     if (x.paralelo !== undefined) {
       const { MAX_PARALELO } = require('../agents/runner');
       if (!(Number.isInteger(x.paralelo) && x.paralelo >= 1 && x.paralelo <= MAX_PARALELO)) erros.push(`passo ${nome}: "paralelo" precisa ser de 1 a ${MAX_PARALELO}`);
-      else if (x.paralelo > 1 && !paraleloSeguro(x)) erros.push(`passo ${nome}: "paralelo" exige "each" e "tools" só de leitura (read_file, list_dir, search_files) ou [] (itens em paralelo não podem gravar nem pedir confirmação)`);
+      else if (x.paralelo > 1 && !paraleloSeguro(x)) erros.push(`passo ${nome}: "paralelo" exige "each" e "tools" só de leitura (${require('../agents/runner').FERRAMENTAS_LEITURA.join(', ')}) ou [] (itens em paralelo não podem gravar nem pedir confirmação)`);
       else if (x.paralelo > 1) avisos.push(`passo ${nome}: "paralelo": ${x.paralelo} manda ${x.paralelo} chamadas ao mesmo tempo; se a API reclamar de limite, volte para 1`);
     }
     if (x.maxItens !== undefined && !(Number.isInteger(x.maxItens) && x.maxItens >= 1 && x.maxItens <= 10)) erros.push(`passo ${nome}: "maxItens" precisa ser de 1 a 10`);
