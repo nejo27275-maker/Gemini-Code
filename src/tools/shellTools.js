@@ -143,8 +143,10 @@ async function execute(name, args) {
 
   const protegido = touchesProtectedFile(args.command);
   const destrutivo = isDestructiveCommand(args.command);
+  // v0.41.0: "permitir" do config dispensa a confirmação só de comando simples (ver src/permissions.js).
+  const permitido = require('../permissions').shellPermitido(args.command, cfg);
 
-  if (cfg.confirmShell || protegido || destrutivo) {
+  if ((cfg.confirmShell && !permitido) || protegido || destrutivo) {
     const pergunta = protegido
       ? `\n[gemini-code] ATENÇÃO: esse comando mexe no arquivo de configuração do gemini-code.\n  ${args.command}\nConfirmar mesmo assim? (s/n) `
       : destrutivo

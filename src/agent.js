@@ -20,6 +20,7 @@ const stepApproval = require('./stepApproval');
 const loopGuard = require('./loopGuard');
 const outputCompact = require('./outputCompact');
 const { enxugarResultadosAntigos } = require('./compact');
+const permissions = require('./permissions');
 
 // Item 4 do roadmap "top 1" (set/2026): antes o agente só sabia em que
 // projeto estava se o usuário explicasse (nome, stack, scripts disponíveis)
@@ -253,10 +254,15 @@ async function runOnce(userMessage, opts = {}) {
       console.log(chalk.dim(`\n${logPrefix}→ usando ferramenta: ${call.name}(${JSON.stringify(call.args)})`));
       let result;
       let ap;
+      // v0.41.0: regras "negar" do config (src/permissions.js) valem antes de tudo.
+      const regraNegar = permissions.negada(call.name, call.args || {}, cfg);
       // v0.13.0: hooks do usuário (~/.gemini-code/hooks.json) — ver src/hooks.js.
-      const pre = hooks.executar('PreToolUse', { tool: call.name, args: call.args || {} });
+      const pre = regraNegar ? { avisos: [], bloqueado: false } : hooks.executar('PreToolUse', { tool: call.name, args: call.args || {} });
       pre.avisos.forEach((a) => console.log(chalk.yellow(`${logPrefix}[hook] ${a}`)));
-      if (pre.bloqueado) {
+      if (regraNegar) {
+        result = `Bloqueado pela regra de permissão "${regraNegar}" (config.json → permissoes.negar). Não tente contornar; peça ao usuário se precisar.`;
+        logAcao({ tool: call.name, args: call.args, erro: result });
+      } else if (pre.bloqueado) {
         result = `Bloqueado por hook do usuário: ${pre.mensagem}`;
         logAcao({ tool: call.name, args: call.args, erro: result });
       } else if (!(ap = await stepApproval.checar(call.name, call.args || {})).permitido) {

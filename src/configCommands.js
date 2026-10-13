@@ -37,6 +37,32 @@ function aplicar(sub, args, saveConfig) {
     saveConfig({ fallbackModel: a[0] || '' });
     return a[0] ? `Modelo reserva definido: ${a[0]}` : 'Modelo reserva desligado.';
   }
+  // v0.41.0: regras de permissão (src/permissions.js). Só o usuário muda: o config.json é protegido do modelo.
+  if (sub === 'permitir' || sub === 'negar' || sub === 'remover-regra' || sub === 'regras') {
+    const { loadConfig } = require('./config');
+    const atuais = loadConfig().permissoes || {};
+    const perm = { permitir: [...(atuais.permitir || [])], negar: [...(atuais.negar || [])] };
+    if (sub === 'regras') {
+      return [`negar: ${perm.negar.length ? perm.negar.join(' | ') : '(nenhuma)'}`,
+        `permitir: ${perm.permitir.length ? perm.permitir.join(' | ') : '(nenhuma)'}`].join('\n');
+    }
+    const regra = a.join(' ').trim();
+    if (!regra) return `Uso: gemini-code config ${sub} "FERRAMENTA(PADRÃO)"   ex.: config negar "run_shell(git push*)"`;
+    if (sub === 'remover-regra') {
+      const antes = perm.permitir.length + perm.negar.length;
+      perm.permitir = perm.permitir.filter((r) => r !== regra);
+      perm.negar = perm.negar.filter((r) => r !== regra);
+      if (perm.permitir.length + perm.negar.length === antes) return `Regra não encontrada: ${regra}`;
+      saveConfig({ permissoes: perm });
+      return `Regra removida: ${regra}`;
+    }
+    const erro = require('./permissions').validar(regra);
+    if (erro) return erro;
+    if (sub === 'permitir' && !/\(.+\)$/.test(regra)) return 'Em "permitir", informe o padrão do comando: config permitir "run_shell(npm test*)" (liberar o shell inteiro é o mesmo que desligar a confirmação).';
+    if (!perm[sub].includes(regra)) perm[sub].push(regra);
+    saveConfig({ permissoes: perm });
+    return sub === 'negar' ? `Regra de bloqueio adicionada: ${regra}` : `Regra de permissão adicionada: ${regra} (só comandos simples; destrutivos continuam pedindo confirmação)`;
+  }
   if (sub === 'set-openai-key') {
     if (!a[0] || /\s/.test(a[0])) return 'Uso: gemini-code config set-openai-key SUA_CHAVE (ou defina GEMINI_CODE_OPENAI_KEY)';
     saveConfig({ openaiApiKey: a[0] });

@@ -67,6 +67,9 @@ const DEFAULT_CONFIG = {
   fallbackModel: '',
   imageModel: 'gemini-2.5-flash-image',
   confirmShell: true,
+  // v0.41.0: regras FERRAMENTA(PADRÃO); "negar" bloqueia sempre, "permitir" dispensa a confirmação de
+  // comandos simples do run_shell. Ver src/permissions.js e "gemini-code config regras".
+  permissoes: { permitir: [], negar: [] },
   shellTimeoutMs: 120000,
   coworkPort: 8765,
   // Item 4 da revisão: streaming da resposta de texto (via SSE) em modos

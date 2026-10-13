@@ -111,6 +111,7 @@ No modo "chat", digite /help para ver os comandos de sessão (/clear, /model, /s
   gemini-code config set-provider hybrid|llamacpp|gemini|openai|ollama|code-ia   Escolhe IA online/local
   gemini-code config set-openai-key CHAVE | set-openai-model NOME | set-openai-url URL   API compatível com OpenAI (OpenRouter, OpenAI...)
   gemini-code config set-hybrid-cloud gemini|openai   Qual nuvem o modo hybrid usa
+  gemini-code config negar|permitir "FERRAMENTA(PADRÃO)" | regras | remover-regra REGRA   Regras de permissão
   gemini-code config set-llamacpp-url URL      URL do llama.cpp (padrão http://127.0.0.1:8080)
   gemini-code config set-llamacpp-model NOME   Nome usado pelo servidor (padrão local-model)
   gemini-code config set-llamacpp-path CAMINHO Arquivo GGUF local (override opcional)
