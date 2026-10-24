@@ -24,6 +24,7 @@ const fs = require('fs');
 const chalk = require('../terminalColors');
 const { runOnce } = require('../agent');
 const usage = require('../usage');
+const { paraTerminal } = require('../ui/textoSeguro');
 const { getShared: getSharedReadline, perguntarColando } = require('../ui/prompt');
 
 // v0.18.0: {{var}} ou {{var|valor padrão}} (o padrão vale quando a variável não existe ou está vazia).
@@ -213,7 +214,7 @@ async function runWorkflowData(workflow, deps = {}) {
       ctx[step.id] = junto;
       if (gastosPasso > 0) console.log(chalk.dim(`(${gastosPasso.toLocaleString('pt-BR')} tokens neste passo)`));
       results.push({ id: step.id, output: junto, itens: itens.length, ...(falhasItens ? { falhasItens } : {}), ...(gastosPasso > 0 ? { tokens: gastosPasso } : {}) });
-      console.log(junto);
+      console.log(paraTerminal(junto));
       continue;
     }
     const tokensAntes = usage.total();
@@ -245,7 +246,7 @@ async function runWorkflowData(workflow, deps = {}) {
       const msg = `[falhou: ${ultimoErro.message}]`;
       ctx[step.id] = msg;
       results.push({ id: step.id, output: msg, falhou: true, tentativas: usadas, ...(gastos > 0 ? { tokens: gastos } : {}) });
-      console.log(msg);
+      console.log(paraTerminal(msg));
       continue;
     }
     const { text, history: novoHistorico } = resposta;
@@ -253,7 +254,7 @@ async function runWorkflowData(workflow, deps = {}) {
     ctx[step.id] = text;
     if (gastos > 0) console.log(chalk.dim(`(${gastos.toLocaleString('pt-BR')} tokens neste passo)`));
     results.push({ id: step.id, output: text, ...(usadas > 1 ? { tentativas: usadas } : {}), ...(gastos > 0 ? { tokens: gastos } : {}) });
-    console.log(text);
+    console.log(paraTerminal(text));
   }
 
   return { name: workflow.name, results };
@@ -292,11 +293,11 @@ async function runPersonaChat(persona) {
         allowedTools: persona.allowedTools,
         onText: (pedaco) => {
           streamed = true;
-          process.stdout.write(pedaco);
+          process.stdout.write(paraTerminal(pedaco));
         },
       });
       history = newHistory;
-      if (!streamed) process.stdout.write(text);
+      if (!streamed) process.stdout.write(paraTerminal(text));
       console.log('\n');
     } catch (err) {
       console.error(chalk.red('Erro: ' + err.message));

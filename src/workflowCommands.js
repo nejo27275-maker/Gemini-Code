@@ -28,7 +28,7 @@ function lerArgs(texto) {
 
 // v0.26.0: instalar exemplos / criar esqueleto / ver, sem editar JSON na mão no celular.
 function listarExemplos(dir) {
-  let nomes = [];
+  let nomes;
   try { nomes = fs.readdirSync(dir).filter((n) => n.endsWith('.json')).map((n) => n.slice(0, -5)).sort(); } catch { return []; }
   const out = [];
   for (const n of nomes) {
@@ -90,7 +90,7 @@ function extrairJson(texto) {
   const t = String(texto || '');
   const a = t.indexOf('{'); const b = t.lastIndexOf('}');
   if (a < 0 || b <= a) throw new Error('o modelo não devolveu um JSON');
-  try { return JSON.parse(t.slice(a, b + 1)); } catch (e) { throw new Error(`o modelo devolveu um JSON inválido (${e.message})`); }
+  try { return JSON.parse(t.slice(a, b + 1)); } catch (e) { throw new Error(`o modelo devolveu um JSON inválido (${e.message})`, { cause: e }); }
 }
 
 async function tratar(cmd, { pasta = WORKFLOWS_DIR, exemplos = EXEMPLOS_DIR, rascunhos = path.join(path.dirname(pasta), 'workflow-rascunhos'), runOnceFn } = {}) {

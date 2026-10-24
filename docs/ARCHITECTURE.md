@@ -46,9 +46,13 @@ Cada arquivo expõe um conjunto de "tools" que o modelo pode chamar durante
 o loop do agente:
 
 - `fileTools.js` — ler, escrever e editar arquivos.
-- `adbTools.js` (v0.43.0) — controla aparelhos Android do usuário (TV, celular) por adb: comandos
-  montados como lista de argumentos (execFile, sem shell), ações que mudam o aparelho pedem
-  confirmação (como o `run_shell`). Comando `gemini-code adb` e guia `docs/TV_ADB.md`.
+- `adbTools.js` (v0.43.0) — controla aparelhos Android do usuário (TV, celular) por adb: execFile
+  com lista de argumentos nesta máquina e, para o shell do aparelho (que recebe os argumentos do
+  `adb shell` juntados sem escape), cada argumento entre aspas simples (`noAparelho`). Ações que
+  mudam o aparelho pedem confirmação; as sensíveis (e o shell livre) sempre. Comando `gemini-code adb`
+  e guia `docs/TV_ADB.md`.
+- `../ui/textoSeguro.js` (v0.43.2) — `paraExibir`: todo texto de modelo/arquivo/servidor mostrado numa
+  pergunta de confirmação passa por aqui (controles e direção bidirecional ficam visíveis).
 - `shellTools.js` — rodar comandos de shell, com confirmação do usuário via
   a readline compartilhada (`src/ui/prompt.js`).
 - `searchTools.js` — busca (web e/ou local, conforme configurado).
@@ -157,7 +161,8 @@ extra). Cobertura atual:
 | `edit_files`, `glob_files`, `web_fetch` (inclusive DNS rebinding, `src/redeSegura.js`) | `multiEditTools.test.js`, `globTools.test.js`, `webTools.test.js` |
 | integração das ferramentas novas (`/passo`, modos restritos, risco de workflow) | `ferramentasIntegradas.test.js` |
 | agentes pessoais: definição, conhecimento, memória, prompt, ferramentas no loop, pasta protegida, comandos e CLI de ponta a ponta (v0.42.0) | `agentesPessoais.test.js` |
-| ferramenta `adb` com um adb falso: comandos montados, confirmação, teclas, alvo, erros (v0.43.0) | `adbTools.test.js` |
+| ferramenta `adb` com um adb falso que junta os argumentos como o real e os roda num `sh` com comandos falsos do aparelho: injeção, confirmação, teclas, alvo, print, erros | `adbTools.test.js` |
+| texto das confirmações (`run_shell`, `/passo`, MCP, adb) sem controles de terminal; texto guardado dos aliados (v0.43.2) | `textoSeguro.test.js` |
 
 `runOnce` (agente), `runWorkflowData`/`runWorkflow`/`runAgentFile`
 (runner) e `runLive` (live) aceitam um argumento opcional `deps` — ex.:

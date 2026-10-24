@@ -23,6 +23,7 @@ const { lerJson, escreverJson } = require('./jsonStore');
 const { createSessionStore } = require('./sessions');
 const { palavras } = require('./code-ia/tokenizer');
 const { mascararSegredos } = require('./securityScan');
+const { semControlesInvisiveis } = require('./ui/textoSeguro');
 
 const VERSAO = 1;
 const NOME_OK = /^[a-z0-9][a-z0-9_-]{0,39}$/;
@@ -70,8 +71,10 @@ function validarNome(nome) {
 function textoLimpo(valor, max, campo) {
   if (valor == null) return '';
   if (typeof valor !== 'string') throw new Error(`"${campo}" precisa ser texto.`);
+  // Controles C0 e, desde a v0.43.2, também C1 e os de direção bidirecional (reordenam o texto exibido):
+  // instruções importadas de terceiros não podem esconder trechos de quem revisa.
   // eslint-disable-next-line no-control-regex
-  const t = valor.replace(/\r\n?/g, '\n').replace(/[\0-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '').trim();
+  const t = semControlesInvisiveis(valor.replace(/\r\n?/g, '\n').replace(/[\0-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '')).trim();
   if (t.length > max) throw new Error(`"${campo}" passa do limite de ${max} caracteres (tem ${t.length}).`);
   return t;
 }

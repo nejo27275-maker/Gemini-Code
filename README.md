@@ -65,7 +65,7 @@ gemini-code adb abrir com.google.android.youtube.tv
 gemini-code adb tecla baixo                # cima/baixo/ok/voltar/home/play/volume+...
 ```
 
-Só funciona nos aparelhos onde você ligou a depuração e confiou nesta máquina (a TV pede confirmação). Toda ação que muda o aparelho pede sua confirmação; leitura (listar, info, print, log) não. Os comandos vão ao `adb` como lista de argumentos, sem shell (sem injeção). Isso não "turbina" a TV: o que dá para fazer é fechar/limpar/desinstalar apps e ajustar configurações, sempre com a sua confirmação. Ferramenta em `src/tools/adbTools.js`; o gemini-code também roda *dentro* da TV via Termux (sideload), mas na prática controlar de fora é mais confortável.
+Só funciona nos aparelhos onde você ligou a depuração e confiou nesta máquina (a TV pede confirmação). Toda ação que muda o aparelho pede sua confirmação; leitura (listar, info, print, log) não; reiniciar, desinstalar, limpar dados, configurações `secure`/`global` e o `shell` livre perguntam sempre. Texto digitado, valores e nomes de app chegam literais ao aparelho (entre aspas para o shell da TV), então não viram comandos. Isso não "turbina" a TV: o que dá para fazer é fechar/limpar/desinstalar apps e ajustar configurações, sempre com a sua confirmação. Ferramenta em `src/tools/adbTools.js`; o gemini-code também roda *dentro* da TV via Termux (sideload), mas na prática controlar de fora é mais confortável.
 
 ## Novidades da v0.43.0 — blindagem contra ataques
 

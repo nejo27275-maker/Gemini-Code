@@ -9,6 +9,7 @@
 
 const chalk = require('../terminalColors');
 const personalAgents = require('../personalAgents');
+const { paraExibir } = require('../ui/textoSeguro');
 
 const NOMES = Object.freeze(['memory_save', 'memory_forget', 'knowledge_search']);
 const MAX_BUSCA = 4000;
@@ -79,7 +80,7 @@ async function execute(name, args = {}) {
   if (name === 'memory_save') {
     let fato;
     try { fato = personalAgents.normalizarFato(a.fact); } catch (e) { return `Erro: ${e.message}`; }
-    if (!(await confirmar(ctx, `\n[${agente.name}] Guardar na memória?\n  "${fato}"\n(s/n) `))) {
+    if (!(await confirmar(ctx, `\n[${agente.name}] Guardar na memória?\n  "${paraExibir(fato)}"\n(s/n) `))) {
       return 'O usuário NÃO autorizou guardar isso na memória. Não tente de novo a menos que ele peça.';
     }
     let r;
@@ -92,7 +93,7 @@ async function execute(name, args = {}) {
   const id = typeof a.id === 'string' ? a.id.trim() : '';
   const item = store.listarMemoria(agente.name).find((i) => i.id === id);
   if (!item) return `Erro: não há memória com id "${id}". Os ids estão entre colchetes na lista da memória.`;
-  if (!(await confirmar(ctx, `\n[${agente.name}] Apagar da memória?\n  "${item.texto}"\n(s/n) `))) {
+  if (!(await confirmar(ctx, `\n[${agente.name}] Apagar da memória?\n  "${paraExibir(item.texto)}"\n(s/n) `))) {
     return 'O usuário NÃO autorizou apagar isso da memória.';
   }
   store.esquecer(agente.name, id);

@@ -42,6 +42,8 @@ const todoTools = require('../src/tools/todoTools');
 const knowledgeModule = require('../src/knowledge');
 const personalAgents = require('../src/personalAgents');
 const aliadosCommands = require('../src/personalAgentCommands');
+// v0.43.2: a resposta do modelo vai ao terminal sem sequências de controle (OSC 52, ESC[2J...).
+const { paraTerminal } = require('../src/ui/textoSeguro');
 const { INSTRUCAO_MODO_CIENCIA } = require('../src/modoCiencia');
 
 const [, , cmd, ...rest] = process.argv;
@@ -241,7 +243,7 @@ Comandos disponíveis no chat:
 // Linhas { nivel, texto } dos módulos de comando (src/workflowCommands.js, src/personalAgentCommands.js).
 const CORES_NIVEL = { dim: chalk.dim, erro: chalk.red, aviso: chalk.yellow, ok: chalk.green, texto: (t) => t };
 function imprimirLinhas(linhas) {
-  for (const l of linhas) console.log((CORES_NIVEL[l.nivel] || chalk.dim)(l.texto));
+  for (const l of linhas) console.log((CORES_NIVEL[l.nivel] || chalk.dim)(paraTerminal(l.texto)));
 }
 
 // Lê flags simples do tipo "--dia 7 --mes 10" de uma string de comando,
@@ -277,7 +279,9 @@ async function perguntarConfiancaNoProjeto() {
   const instrucoes = trust.instrucoesDoProjeto();
   if (!instrucoes.length) return null;
   console.log(chalk.yellow('Este projeto traz instruções para agentes, que entram no prompt do modelo:'));
-  for (const arq of instrucoes) console.log(chalk.yellow(`  ${path.relative(process.cwd(), arq) || arq}`));
+  // Nomes de arquivo vêm do repositório (podem trazer ESC, \r...): exibidos sem o terminal interpretar.
+  const { paraExibir } = require('../src/ui/textoSeguro');
+  for (const arq of instrucoes) console.log(chalk.yellow(`  ${paraExibir(path.relative(process.cwd(), arq) || arq)}`));
   console.log(chalk.yellow('Instruções de um repositório de terceiros podem mandar o agente fazer coisas que você não pediu.'));
   const linha = String(await ask('Confiar nelas? [s]im / [n]ão — fica salvo para esta pasta: '));
   const r = linha.trim().toLowerCase();
@@ -584,9 +588,9 @@ async function chatLoop({ agente: nomeAgente } = {}) {
         let streamed = false;
         const { text } = await runOnce(pergunta, {
           extraSystemInstruction: INSTRUCAO_MODO_CIENCIA,
-          onText: (pedaco) => { streamed = true; process.stdout.write(pedaco); },
+          onText: (pedaco) => { streamed = true; process.stdout.write(paraTerminal(pedaco)); },
         });
-        if (!streamed) process.stdout.write(text);
+        if (!streamed) process.stdout.write(paraTerminal(text));
         console.log('\n');
       } catch (err) {
         console.error(chalk.red('Erro: ' + err.message));
@@ -658,7 +662,7 @@ async function chatLoop({ agente: nomeAgente } = {}) {
         ...(turno ? turno.opcoes : restricao),
         onText: (pedaco) => {
           streamed = true;
-          process.stdout.write(pedaco);
+          process.stdout.write(paraTerminal(pedaco));
         },
       });
       const { text, history: newHistory } = await (turno ? personalAgents.comAgente(turno.ctx, rodar) : rodar());
@@ -668,7 +672,7 @@ async function chatLoop({ agente: nomeAgente } = {}) {
       // Se nada foi impresso via streaming (ex.: resposta veio só como
       // functionCalls sem texto acompanhando, ou streaming desabilitado),
       // imprime o texto completo agora.
-      if (!streamed) process.stdout.write(text);
+      if (!streamed) process.stdout.write(paraTerminal(text));
       console.log('\n');
     } catch (err) {
       console.error(chalk.red('Erro: ' + err.message));
@@ -828,7 +832,7 @@ async function main() {
           extraSystemInstruction: profile.instructions,
           imagens,
         });
-        if (!parsed.json) console.log(text);
+        if (!parsed.json) console.log(paraTerminal(text));
         const report = artifacts.createArtifact({ title: instruction.slice(0, 120), type: profile.artifactType, status: 'concluido', summary: text.slice(0, 1000), content: text, cwd: process.cwd(), metadata: { profile: profile.name, allowedTools: profile.tools ? [...profile.tools] : 'session-default', checkpointId: checkpoint && checkpoint.id } });
         if (parsed.json) {
           const u = usage.estado();
@@ -1299,7 +1303,7 @@ async function main() {
         return;
       }
       const { text } = await runOnce(pergunta, { extraSystemInstruction: INSTRUCAO_MODO_CIENCIA });
-      console.log(text);
+      console.log(paraTerminal(text));
       toolsIndex.stopMcp();
       return;
     }
@@ -1606,7 +1610,7 @@ async function main() {
       const subagent = require('../src/subagent');
       if (!subagent.TIPOS[tipo]) return console.log(`Tipo desconhecido: "${tipo}". Use: ${Object.keys(subagent.TIPOS).join(', ')}.`);
       const out = await subagent.execute('delegate_task', { task: tarefa, type: tipo }, { allowedPai: security.restringirParaSessao(undefined) });
-      console.log('\n' + out);
+      console.log('\n' + paraTerminal(out));
       toolsIndex.stopMcp();
       return;
     }

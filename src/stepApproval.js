@@ -7,6 +7,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { paraExibir } = require('./ui/textoSeguro');
 
 // v0.41.0: edit_files (várias edições atômicas) também grava — sem estar aqui, furava o /passo.
 const FERRAMENTAS = new Set(['write_file', 'edit_file', 'edit_files']);
@@ -53,7 +54,7 @@ async function checar(nome, args) {
   if (!estado.ativo || !FERRAMENTAS.has(nome)) return { permitido: true };
   if (!estado.perguntar) return { permitido: false, motivo: 'Recusado: aprovação passo a passo ligada, mas não há terminal para perguntar.' };
   let r;
-  try { r = String(await estado.perguntar(`${previa(nome, args)}\nGravar? (s/n/t = sim e desligar o /passo) `)).trim().toLowerCase(); }
+  try { r = String(await estado.perguntar(`${paraExibir(previa(nome, args))}\nGravar? (s/n/t = sim e desligar o /passo) `)).trim().toLowerCase(); }
   catch { return { permitido: false, motivo: 'Recusado: não foi possível perguntar ao usuário.' }; }
   if (r === 's' || r === 'sim' || r === 'y') return { permitido: true };
   if (r === 't' || r === 'todos') { estado.ativo = false; return { permitido: true }; }

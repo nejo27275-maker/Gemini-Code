@@ -70,10 +70,17 @@ gemini-code adb shell "dumpsys battery"       # comando livre no aparelho (pede 
   não pede. Para liberar ações específicas sem perguntar, use regras, ex.:
   `gemini-code config permitir "adb"` ou bloqueie o que não quiser com
   `gemini-code config negar "adb"` (vale para o agente em qualquer modo).
-- Ações irreversíveis (reiniciar, desinstalar, limpar dados, `shell` destrutivo) avisam em destaque e
-  pedem confirmação **mesmo** com `adbConfirm:false`.
-- Os comandos são montados como lista de argumentos e passados ao `adb` **sem shell**, então não há
-  injeção por aspas, `;` ou `$()`.
+- Reiniciar, desinstalar, limpar dados, gravar em configurações `secure`/`global` e o `shell` livre
+  avisam em destaque e pedem confirmação **sempre** — mesmo com `adbConfirm:false` ou uma regra
+  "permitir". (Um comando livre não dá para classificar com segurança: `pm uninstall` e `reboot` não
+  parecem perigosos para uma heurística feita para comandos de PC.)
+- Nesta máquina o `adb` roda sem shell (lista de argumentos). **No aparelho**, o `adb shell` junta os
+  argumentos com espaço sem escapar e o shell da TV os interpreta; por isso cada argumento (texto
+  digitado, valor de configuração, nome de app) vai entre aspas simples e chega literal — `a;reboot`
+  é digitado, não executado. Só o `shell` livre é interpretado, de propósito, e por isso sempre pergunta.
+- O texto da pergunta de confirmação aparece sem o terminal interpretar caracteres de controle (um
+  `\r` ou uma sequência ESC não conseguem "apagar" parte do que você está aprovando).
+- O print (`tela`) só cria um `.png` novo e nunca dentro das pastas protegidas do gemini-code.
 
 ## Rodar o gemini-code DENTRO da TV
 

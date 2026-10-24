@@ -14,7 +14,7 @@ const TAM_MAX = 20 * 1024;
 
 function lerDir(dir) {
   const out = new Map();
-  let ents = [];
+  let ents;
   try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch { return out; }
   for (const e of ents) {
     if (!e.isFile() || path.extname(e.name).toLowerCase() !== '.md') continue;

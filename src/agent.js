@@ -22,6 +22,7 @@ const outputCompact = require('./outputCompact');
 const { enxugarResultadosAntigos } = require('./compact');
 const permissions = require('./permissions');
 const { partesComImagens, tirarImagensDoHistorico } = require('./imagens');
+const { paraTerminal } = require('./ui/textoSeguro');
 
 // Item 4 do roadmap "top 1" (set/2026): antes o agente só sabia em que
 // projeto estava se o usuário explicasse (nome, stack, scripts disponíveis)
@@ -280,7 +281,7 @@ async function runOnce(userMessage, opts = {}) {
 
     // Executa UMA chamada e devolve o functionResponse correspondente.
     const executarChamada = async (call) => {
-      console.log(chalk.dim(`\n${logPrefix}→ usando ferramenta: ${call.name}(${JSON.stringify(call.args)})`));
+      console.log(chalk.dim(`\n${logPrefix}→ usando ferramenta: ${paraTerminal(call.name)}(${paraTerminal(JSON.stringify(call.args))})`));
       let result;
       let ap;
       // v0.41.0: regras "negar" do config (src/permissions.js) valem antes de tudo.

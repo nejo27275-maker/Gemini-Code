@@ -5,14 +5,19 @@
 // configurações e depurar. NÃO é para invadir aparelho de terceiros: o adb só conecta onde o dono já
 // autorizou a depuração USB/por rede (o aparelho mostra um aviso e pede para confiar na chave).
 //
-// Segurança, igual ao run_shell:
-//   - comandos montados como LISTA de argumentos (execFile, sem shell): nada de injeção por aspas/;/$().
-//   - toda ação que MUDA o aparelho (conectar, instalar, abrir/fechar app, digitar, tecla, config, shell,
-//     reiniciar) pede confirmação no terminal, a menos que adbConfirm:false ou uma regra "permitir" cubra.
-//   - ações só de leitura (listar aparelhos, info, apps, estado, tela, logcat) não pedem confirmação.
-//   - ações irreversíveis (reiniciar, desinstalar, limpar dados, "adb shell" destrutivo) avisam em
-//     destaque e pedem confirmação mesmo com adbConfirm:false.
-//   - a regra "negar" do config (src/permissions.js) continua valendo antes de tudo (vem do loop do agente).
+// Segurança:
+//   - nesta máquina, o adb roda com execFile e uma LISTA de argumentos: nenhum shell local interpreta nada.
+//   - NO APARELHO: `adb shell a b c` junta os argumentos com espaço SEM escapar (como o ssh) e o shell da TV
+//     os interpreta. v0.43.2: cada argumento vai entre aspas simples (noAparelho) — antes "digitar" com o
+//     texto "a;reboot" reiniciava a TV, e um "valor" de config podia rodar qualquer comando lá.
+//   - toda ação que MUDA o aparelho pede confirmação no terminal, a menos que adbConfirm:false ou uma regra
+//     "permitir" cubra; as só de leitura (dispositivos, info, apps, estado, tela, logcat) não pedem.
+//   - reiniciar, desinstalar, limpar dados, gravar em settings secure/global e o shell LIVRE confirmam
+//     SEMPRE (um comando livre não dá para classificar com segurança: "pm uninstall" e "reboot" passavam
+//     pela heurística, que é de comandos de PC).
+//   - "tela" só cria um .png NOVO, fora das pastas e arquivos protegidos do gemini-code.
+//   - o texto das confirmações é exibido sem o terminal interpretar controles (src/ui/textoSeguro.js).
+//   - a regra "negar" do config (src/permissions.js) vale antes de tudo (vem do loop do agente).
 'use strict';
 
 const { execFile } = require('child_process');
@@ -20,15 +25,17 @@ const fs = require('fs');
 const path = require('path');
 const { loadConfig } = require('../config');
 const { ask } = require('../ui/prompt');
+const { paraExibir } = require('../ui/textoSeguro');
 const permissions = require('../permissions');
-const { isDestructiveCommand } = require('./shellTools');
 
 const TIMEOUT_MS = 60000;
 const MAX_BUFFER = 16 * 1024 * 1024; // screencap/logcat podem ser grandes
 // Alvo = serial USB (ex.: "ABCD1234"), "ip" ou "ip:porta", "emulator-5554", ou nome mDNS. Nunca começa com
-// "-" (não pode virar uma flag do adb) nem tem espaço/metacaractere (defesa extra; execFile já não usa shell).
+// "-" (não pode virar uma flag do adb) nem tem espaço/metacaractere.
 const ALVO_OK = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,100}$/;
 const PACOTE_OK = /^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$/; // com.exemplo.app
+const CHAVE_OK = /^[A-Za-z0-9_.]{1,100}$/;
+const MAX_TEXTO = 1000;
 
 // Teclas amigáveis -> KEYCODE do Android (o essencial para navegar numa TV pelo "controle virtual").
 const TECLAS = Object.freeze({
@@ -41,10 +48,11 @@ const TECLAS = Object.freeze({
 });
 const ESPACOS_CONFIG = new Set(['system', 'secure', 'global']);
 
-// Ações que só LEEM (não pedem confirmação).
+// Ações que só LEEM o aparelho (não pedem confirmação). "tela" grava nesta máquina, mas só um .png NOVO,
+// fora das áreas protegidas (destinoDoPrint) — como criar um arquivo novo, que também não pergunta.
 const SO_LEITURA = new Set(['dispositivos', 'info', 'apps', 'estado', 'tela', 'logcat']);
-// Ações irreversíveis/sensíveis: confirmam sempre, com aviso em destaque.
-const SENSIVEIS = new Set(['reiniciar', 'desinstalar', 'limpar']);
+// Confirmam SEMPRE, mesmo com adbConfirm:false ou regra "permitir".
+const SENSIVEIS = new Set(['reiniciar', 'desinstalar', 'limpar', 'shell']);
 
 const declarations = [
   {
@@ -66,13 +74,13 @@ const declarations = [
         },
         alvo: { type: 'string', description: 'Aparelho: serial USB, "ip" ou "ip:porta" (padrão adbSerial do config; conectar/tcpip usam o ip).' },
         app: { type: 'string', description: 'Pacote do app (ex.: com.netflix.ninja) para abrir_app/fechar_app/desinstalar/limpar.' },
-        arquivo: { type: 'string', description: 'instalar: caminho do .apk; tela: onde salvar o .png (padrão: ./tela-<hora>.png).' },
+        arquivo: { type: 'string', description: 'instalar: caminho do .apk; tela: .png NOVO onde salvar (padrão: ./tela-<hora>.png).' },
         tecla: { type: 'string', description: `tecla: ${Object.keys(TECLAS).join(', ')}, ou um KEYCODE_* / número.` },
         texto: { type: 'string', description: 'digitar: texto a enviar ao campo em foco no aparelho.' },
         espaco: { type: 'string', enum: ['system', 'secure', 'global'], description: 'config: área de settings.' },
         chave: { type: 'string', description: 'config: nome da configuração (sem valor = ler; com valor = gravar).' },
         valor: { type: 'string', description: 'config: valor a gravar (se ausente, apenas lê a chave).' },
-        comando: { type: 'string', description: 'shell: comando a rodar no aparelho (adb shell). Pede confirmação, como o run_shell.' },
+        comando: { type: 'string', description: 'shell: comando livre no aparelho (adb shell). Sempre pede confirmação.' },
         porta: { type: 'integer', description: 'conectar/tcpip: porta do adb por rede (padrão adbPorta, normalmente 5555).' },
         linhas: { type: 'integer', description: 'logcat: quantas linhas finais trazer (padrão 200, máx. 2000).' },
       },
@@ -81,18 +89,53 @@ const declarations = [
   },
 ];
 
+// ---------------------------------------------------------------------------
+// Validação e montagem dos argumentos
+// ---------------------------------------------------------------------------
+
 function validarAlvo(alvo) {
   const v = String(alvo || '').trim();
   if (!v) return '';
-  if (!ALVO_OK.test(v)) throw new Error(`alvo inválido: "${alvo}". Use serial, ip ou ip:porta (sem espaços nem "-" no começo).`);
+  if (!ALVO_OK.test(v)) throw new Error(`alvo inválido: "${paraExibir(alvo)}". Use serial, ip ou ip:porta (sem espaços nem "-" no começo).`);
   return v;
+}
+
+function validarPorta(porta) {
+  const n = Number(porta);
+  if (!Number.isInteger(n) || n < 1 || n > 65535) throw new Error(`porta inválida: "${paraExibir(porta)}" (use um número de 1 a 65535).`);
+  return n;
 }
 
 function hostPorta(alvo, portaPadrao) {
   const v = validarAlvo(alvo);
   if (!v) throw new Error('informe o "alvo" (ip do aparelho) para conectar.');
-  return v.includes(':') ? v : `${v}:${portaPadrao}`;
+  const m = /^(.*):(\d+)$/.exec(v);
+  return m ? `${m[1]}:${validarPorta(m[2])}` : `${v}:${validarPorta(portaPadrao)}`;
 }
+
+/** Aspas simples para o shell POSIX do aparelho (mksh/toybox): o argumento chega literal, sem expansão. */
+const aspas = (arg) => `'${String(arg).replace(/'/g, "'\\''")}'`;
+
+/** argv de `adb shell` com cada parte entre aspas — o shell do aparelho não interpreta ; $() | & etc. */
+const noAparelho = (...partes) => ['shell', partes.map(aspas).join(' ')];
+
+/** Argumentos base com o alvo (-s) quando houver. */
+function comAlvo(alvo, resto) {
+  return alvo ? ['-s', alvo, ...resto] : resto;
+}
+
+/** Destino do print: .png novo, fora dos arquivos e pastas protegidos. @returns {string} caminho absoluto */
+function destinoDoPrint(arquivo) {
+  const { isProtected, isSecret } = require('./protectedPaths');
+  const destino = path.resolve(String(arquivo || `tela-${new Date().toISOString().replace(/[:.]/g, '-')}.png`));
+  if (path.extname(destino).toLowerCase() !== '.png') throw new Error('o print precisa ser salvo num arquivo .png.');
+  if (isProtected(destino) || isSecret(destino)) throw new Error('esse caminho é protegido do gemini-code; escolha outro lugar para o print.');
+  return destino;
+}
+
+// ---------------------------------------------------------------------------
+// Execução
+// ---------------------------------------------------------------------------
 
 function rodarAdb(adbPath, argv, { binaria = false } = {}) {
   return new Promise((resolve) => {
@@ -111,20 +154,23 @@ function rodarAdb(adbPath, argv, { binaria = false } = {}) {
   });
 }
 
-/** Argumentos base com o alvo (-s) quando houver. */
-function comAlvo(alvo, resto) {
-  return alvo ? ['-s', alvo, ...resto] : resto;
-}
-
 function textoSaida(r, vazio = '(sem saída)') {
   if (r.erro) return r.erro;
   const s = `${r.stdout || ''}${r.stderr ? `\n[stderr]\n${r.stderr}` : ''}`.trim();
   return s || vazio;
 }
 
-// Descreve, em uma linha, o que a ação vai fazer (para a confirmação e o aviso).
+/** Ação sensível para ESTA chamada (confirma sempre). */
+function ehSensivel(acao, args) {
+  if (SENSIVEIS.has(acao)) return true;
+  // Gravar em secure/global mexe em segurança e rede do aparelho (verificação de apps, adb, proxy...).
+  return acao === 'config' && args.valor !== undefined && String(args.espaco || '').trim() !== 'system';
+}
+
+/** Uma linha dizendo o que a ação vai fazer (para a confirmação). Exibida com paraExibir. */
 function descreverAcao(acao, args, alvo) {
   const onde = alvo ? ` em ${alvo}` : '';
+  const texto = String(args.texto ?? '');
   switch (acao) {
     case 'conectar': return `conectar por rede a ${args.alvo}`;
     case 'desconectar': return `desconectar ${args.alvo || '(todos)'}`;
@@ -135,8 +181,8 @@ function descreverAcao(acao, args, alvo) {
     case 'desinstalar': return `DESINSTALAR o app ${args.app}${onde}`;
     case 'limpar': return `APAGAR os dados do app ${args.app}${onde}`;
     case 'tecla': return `enviar a tecla ${args.tecla}${onde}`;
-    case 'digitar': return `digitar "${String(args.texto || '').slice(0, 60)}"${onde}`;
-    case 'config': return `${args.valor !== undefined ? 'gravar' : 'ler'} ${args.espaco}/${args.chave}${args.valor !== undefined ? ` = ${args.valor}` : ''}${onde}`;
+    case 'digitar': return `digitar${onde}: "${texto.length > 300 ? `${texto.slice(0, 300)}…" (+${texto.length - 300} caracteres)` : `${texto}"`}`;
+    case 'config': return `${args.valor !== undefined ? 'GRAVAR' : 'ler'} ${args.espaco}/${args.chave}${args.valor !== undefined ? ` = ${args.valor}` : ''}${onde}`;
     case 'reiniciar': return `REINICIAR o aparelho${onde}`;
     case 'shell': return `rodar no aparelho${onde}: ${args.comando}`;
     default: return `${acao}${onde}`;
@@ -147,24 +193,24 @@ function descreverAcao(acao, args, alvo) {
 // normal (chat/CLI) ninguém passa deps e o comportamento é o mesmo.
 async function execute(name, args = {}, deps = {}) {
   if (name !== 'adb') throw new Error(`Ferramenta adb desconhecida: ${name}`);
+  const a = args && typeof args === 'object' ? args : {};
   const perguntar = deps.ask || ask;
   const cfg = loadConfig();
   const adbPath = cfg.adbPath || 'adb';
-  const acao = String(args.acao || '').trim();
+  const acao = String(a.acao || '').trim();
   if (!acao) return 'Erro: adb precisa de "acao".';
+  if (!declarations[0].parameters.properties.acao.enum.includes(acao)) return `Erro: ação de adb desconhecida: "${paraExibir(acao)}".`;
 
   let alvo;
-  try { alvo = validarAlvo(args.alvo || (acao === 'conectar' || acao === 'desconectar' ? '' : cfg.adbSerial)); }
+  try { alvo = validarAlvo(a.alvo || (acao === 'conectar' || acao === 'desconectar' ? '' : cfg.adbSerial)); }
   catch (e) { return `Erro: ${e.message}`; }
 
-  // Confirmação para tudo que muda o aparelho (SO_LEITURA é liberado). Ações sensíveis confirmam
-  // mesmo com adbConfirm:false; as demais respeitam adbConfirm e uma regra "permitir".
   if (!SO_LEITURA.has(acao)) {
-    const sensivel = SENSIVEIS.has(acao) || (acao === 'shell' && isDestructiveCommand(String(args.comando || '')));
-    const liberado = !sensivel && (cfg.adbConfirm === false || permissions.permitido('adb', args, cfg));
+    const sensivel = ehSensivel(acao, a);
+    const liberado = !sensivel && (cfg.adbConfirm === false || permissions.permitido('adb', a, cfg));
     if (!liberado) {
-      const aviso = sensivel ? '\n[gemini-code] ATENÇÃO: ação irreversível no aparelho.' : '';
-      const resp = String(await perguntar(`${aviso}\n[gemini-code/adb] ${descreverAcao(acao, args, alvo)}\nConfirmar? (s/n) `)).toLowerCase();
+      const aviso = sensivel ? '\n[gemini-code] ATENÇÃO: ação sensível no aparelho.' : '';
+      const resp = String(await perguntar(`${aviso}\n[gemini-code/adb] ${paraExibir(descreverAcao(acao, a, alvo))}\nConfirmar? (s/n) `)).trim().toLowerCase();
       if (resp !== 's' && resp !== 'y') return 'Ação de adb cancelada pelo usuário.';
     }
   }
@@ -175,101 +221,102 @@ async function execute(name, args = {}, deps = {}) {
         const r = await rodarAdb(adbPath, ['devices', '-l']);
         return textoSaida(r, 'Nenhum aparelho. Ligue a depuração USB/por rede e confie nesta máquina; por Wi-Fi use acao:"conectar".');
       }
-      case 'conectar': {
-        const r = await rodarAdb(adbPath, ['connect', hostPorta(args.alvo, args.porta || cfg.adbPorta)]);
-        return textoSaida(r);
-      }
+      case 'conectar':
+        return textoSaida(await rodarAdb(adbPath, ['connect', hostPorta(a.alvo, a.porta || cfg.adbPorta)]));
       case 'desconectar':
-        return textoSaida(await rodarAdb(adbPath, args.alvo ? ['disconnect', validarAlvo(args.alvo)] : ['disconnect']));
+        return textoSaida(await rodarAdb(adbPath, a.alvo ? ['disconnect', validarAlvo(a.alvo)] : ['disconnect']));
       case 'tcpip':
-        return textoSaida(await rodarAdb(adbPath, comAlvo(alvo, ['tcpip', String(args.porta || cfg.adbPorta)])), 'ok (agora use acao:"conectar" com o ip do aparelho).');
+        return textoSaida(await rodarAdb(adbPath, comAlvo(alvo, ['tcpip', String(validarPorta(a.porta || cfg.adbPorta))])), 'ok (agora use acao:"conectar" com o ip do aparelho).');
       case 'info': {
-        const r = await rodarAdb(adbPath, comAlvo(alvo, ['shell', 'getprop']));
+        const r = await rodarAdb(adbPath, comAlvo(alvo, noAparelho('getprop')));
         if (r.erro) return r.erro;
-        const prop = (k) => (r.stdout.match(new RegExp(`\\[${k}\\]:\\s*\\[(.*?)\\]`)) || [])[1] || '?';
+        const prop = (k) => (r.stdout.match(new RegExp(`\\[${k.replace(/\./g, '\\.')}\\]:\\s*\\[(.*?)\\]`)) || [])[1] || '?';
         return `marca: ${prop('ro.product.brand')}\nmodelo: ${prop('ro.product.model')}\nAndroid: ${prop('ro.build.version.release')} (API ${prop('ro.build.version.sdk')})\ntipo: ${prop('ro.build.characteristics')}`;
       }
       case 'apps': {
-        const r = await rodarAdb(adbPath, comAlvo(alvo, ['shell', 'pm', 'list', 'packages', '-3']));
+        const r = await rodarAdb(adbPath, comAlvo(alvo, noAparelho('pm', 'list', 'packages', '-3')));
         if (r.erro) return r.erro;
         const lista = r.stdout.split(/\r?\n/).map((l) => l.replace(/^package:/, '').trim()).filter(Boolean).sort();
         return lista.length ? `Apps instalados pelo usuário (${lista.length}):\n${lista.join('\n')}` : 'Nenhum app de usuário listado.';
       }
       case 'estado': {
-        const r = await rodarAdb(adbPath, comAlvo(alvo, ['shell', 'dumpsys', 'activity', 'activities']));
+        const r = await rodarAdb(adbPath, comAlvo(alvo, noAparelho('dumpsys', 'activity', 'activities')));
         if (r.erro) return r.erro;
         const foco = (r.stdout.match(/mResumedActivity.*?\{[^}]*\s(\S+\/\S+)/) || r.stdout.match(/mfocusedApp=.*?\s(\S+\/\S+)/) || [])[1];
         return foco ? `App em foco agora: ${foco}` : 'Não consegui identificar o app em foco (o aparelho pode estar na tela inicial).';
       }
       case 'tela': {
+        const destino = destinoDoPrint(a.arquivo);
         const r = await rodarAdb(adbPath, comAlvo(alvo, ['exec-out', 'screencap', '-p']), { binaria: true });
         if (r.erro) return r.erro;
         if (!r.stdout || !r.stdout.length) return 'Erro: o aparelho não devolveu imagem (alguns apps bloqueiam captura de tela).';
-        const destino = path.resolve(String(args.arquivo || `tela-${new Date().toISOString().replace(/[:.]/g, '-')}.png`));
-        fs.writeFileSync(destino, r.stdout);
+        try { fs.writeFileSync(destino, r.stdout, { flag: 'wx' }); } // wx: nunca sobrescreve um arquivo existente
+        catch (e) { return e.code === 'EEXIST' ? `Erro: ${destino} já existe; escolha outro nome para o print.` : `Erro ao salvar o print: ${e.message}`; }
         return `Print salvo: ${destino} (${Math.round(r.stdout.length / 1024)} KB)`;
       }
       case 'logcat': {
-        const n = Math.min(2000, Math.max(1, Math.floor(Number(args.linhas)) || 200));
-        const r = await rodarAdb(adbPath, comAlvo(alvo, ['logcat', '-d', '-t', String(n)]));
-        return textoSaida(r, '(log vazio)');
+        const n = Math.min(2000, Math.max(1, Math.floor(Number(a.linhas)) || 200));
+        return textoSaida(await rodarAdb(adbPath, comAlvo(alvo, ['logcat', '-d', '-t', String(n)])), '(log vazio)');
       }
       case 'abrir_app': {
-        if (!PACOTE_OK.test(String(args.app || ''))) return 'Erro: informe "app" (ex.: com.netflix.ninja). Veja os instalados com acao:"apps".';
-        const r = await rodarAdb(adbPath, comAlvo(alvo, ['shell', 'monkey', '-p', args.app, '-c', 'android.intent.category.LAUNCHER', '1']));
-        return r.erro ? r.erro : `App ${args.app} iniciado.`;
+        if (!PACOTE_OK.test(String(a.app || ''))) return 'Erro: informe "app" (ex.: com.netflix.ninja). Veja os instalados com acao:"apps".';
+        const r = await rodarAdb(adbPath, comAlvo(alvo, noAparelho('monkey', '-p', a.app, '-c', 'android.intent.category.LAUNCHER', '1')));
+        if (r.erro) return r.erro;
+        // O monkey sai com 0 mesmo quando o app não existe: o motivo vem no texto.
+        if (/No activities found|monkey aborted|Error:/i.test(`${r.stdout}\n${r.stderr}`)) return `Erro: não consegui abrir ${a.app} (app não instalado ou sem tela inicial). Veja os instalados com acao:"apps".`;
+        return `App ${a.app} iniciado.`;
       }
       case 'fechar_app':
-        if (!PACOTE_OK.test(String(args.app || ''))) return 'Erro: informe "app".';
-        return textoSaida(await rodarAdb(adbPath, comAlvo(alvo, ['shell', 'am', 'force-stop', args.app])), `App ${args.app} fechado.`);
+        if (!PACOTE_OK.test(String(a.app || ''))) return 'Erro: informe "app".';
+        return textoSaida(await rodarAdb(adbPath, comAlvo(alvo, noAparelho('am', 'force-stop', a.app))), `App ${a.app} fechado.`);
       case 'instalar': {
-        const apk = path.resolve(String(args.arquivo || ''));
-        if (!args.arquivo || !fs.existsSync(apk)) return `Erro: .apk não encontrado: ${args.arquivo}`;
-        const r = await rodarAdb(adbPath, comAlvo(alvo, ['install', '-r', apk]));
-        return textoSaida(r);
+        const apk = path.resolve(String(a.arquivo || ''));
+        if (!a.arquivo || path.extname(apk).toLowerCase() !== '.apk') return 'Erro: informe "arquivo" com um .apk.';
+        if (!fs.existsSync(apk)) return `Erro: .apk não encontrado: ${apk}`;
+        return textoSaida(await rodarAdb(adbPath, comAlvo(alvo, ['install', '-r', apk])));
       }
       case 'desinstalar':
-        if (!PACOTE_OK.test(String(args.app || ''))) return 'Erro: informe "app".';
-        return textoSaida(await rodarAdb(adbPath, comAlvo(alvo, ['uninstall', args.app])));
+        if (!PACOTE_OK.test(String(a.app || ''))) return 'Erro: informe "app".';
+        return textoSaida(await rodarAdb(adbPath, comAlvo(alvo, ['uninstall', a.app])));
       case 'limpar':
-        if (!PACOTE_OK.test(String(args.app || ''))) return 'Erro: informe "app".';
-        return textoSaida(await rodarAdb(adbPath, comAlvo(alvo, ['shell', 'pm', 'clear', args.app])));
+        if (!PACOTE_OK.test(String(a.app || ''))) return 'Erro: informe "app".';
+        return textoSaida(await rodarAdb(adbPath, comAlvo(alvo, noAparelho('pm', 'clear', a.app))));
       case 'tecla': {
-        const bruta = String(args.tecla || '').trim();
+        const bruta = String(a.tecla || '').trim();
         const key = TECLAS[bruta.toLowerCase()] || (/^(KEYCODE_[A-Z0-9_]+|\d{1,4})$/.test(bruta) ? bruta : null);
-        if (!key) return `Erro: tecla "${args.tecla}" desconhecida. Use uma de: ${Object.keys(TECLAS).join(', ')}, ou um KEYCODE_*/número.`;
-        return textoSaida(await rodarAdb(adbPath, comAlvo(alvo, ['shell', 'input', 'keyevent', key])), `Tecla ${bruta} enviada.`);
+        if (!key) return `Erro: tecla "${paraExibir(bruta)}" desconhecida. Use uma de: ${Object.keys(TECLAS).join(', ')}, ou um KEYCODE_*/número.`;
+        return textoSaida(await rodarAdb(adbPath, comAlvo(alvo, noAparelho('input', 'keyevent', key))), `Tecla ${bruta} enviada.`);
       }
       case 'digitar': {
-        const texto = String(args.texto ?? '');
+        const texto = String(a.texto ?? '');
         if (!texto) return 'Erro: informe "texto".';
-        // input text não aceita espaço cru; o Android usa %s. Vai como UM argumento (sem shell).
-        return textoSaida(await rodarAdb(adbPath, comAlvo(alvo, ['shell', 'input', 'text', texto.replace(/ /g, '%s')])), 'Texto enviado.');
+        if (texto.length > MAX_TEXTO) return `Erro: texto longo demais (máx. ${MAX_TEXTO} caracteres).`;
+        // "input text" troca %s por espaço e não aceita espaço cru. As aspas protegem do shell do aparelho.
+        return textoSaida(await rodarAdb(adbPath, comAlvo(alvo, noAparelho('input', 'text', texto.replace(/ /g, '%s')))), 'Texto enviado.');
       }
       case 'config': {
-        const espaco = String(args.espaco || '').trim();
+        const espaco = String(a.espaco || '').trim();
         if (!ESPACOS_CONFIG.has(espaco)) return 'Erro: "espaco" deve ser system, secure ou global.';
-        if (!args.chave) return 'Erro: informe "chave".';
-        const chave = String(args.chave).trim();
-        if (!/^[A-Za-z0-9_.]+$/.test(chave)) return 'Erro: "chave" inválida.';
-        if (args.valor === undefined) return textoSaida(await rodarAdb(adbPath, comAlvo(alvo, ['shell', 'settings', 'get', espaco, chave])));
-        const r = await rodarAdb(adbPath, comAlvo(alvo, ['shell', 'settings', 'put', espaco, chave, String(args.valor)]));
-        return r.erro ? r.erro : `settings ${espaco}/${chave} = ${args.valor}`;
+        const chave = String(a.chave || '').trim();
+        if (!CHAVE_OK.test(chave)) return 'Erro: informe uma "chave" válida (letras, números, _ e .).';
+        if (a.valor === undefined) return textoSaida(await rodarAdb(adbPath, comAlvo(alvo, noAparelho('settings', 'get', espaco, chave))));
+        const r = await rodarAdb(adbPath, comAlvo(alvo, noAparelho('settings', 'put', espaco, chave, String(a.valor))));
+        return r.erro ? r.erro : `settings ${espaco}/${chave} = ${a.valor}`;
       }
       case 'reiniciar':
         return textoSaida(await rodarAdb(adbPath, comAlvo(alvo, ['reboot'])), 'Reiniciando o aparelho...');
       case 'shell': {
-        const comando = String(args.comando || '').trim();
+        const comando = String(a.comando || '').trim();
         if (!comando) return 'Erro: informe "comando" para o shell do aparelho.';
-        // Vai como um único argumento para `adb shell`, que o repassa ao shell DO APARELHO (não ao desta máquina).
+        // Comando LIVRE: o shell do aparelho interpreta de propósito (por isso confirma sempre).
         return textoSaida(await rodarAdb(adbPath, comAlvo(alvo, ['shell', comando])));
       }
       default:
-        return `Erro: ação de adb desconhecida: "${acao}".`;
+        return `Erro: ação de adb desconhecida: "${paraExibir(acao)}".`;
     }
   } catch (e) {
     return `Erro: ${e.message}`;
   }
 }
 
-module.exports = { declarations, execute, TECLAS, validarAlvo, hostPorta, descreverAcao, SO_LEITURA, SENSIVEIS };
+module.exports = { declarations, execute, TECLAS, validarAlvo, validarPorta, hostPorta, descreverAcao, noAparelho, SO_LEITURA, SENSIVEIS };

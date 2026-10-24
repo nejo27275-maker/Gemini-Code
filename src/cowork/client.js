@@ -7,6 +7,7 @@
 
 const readline = require('readline');
 const canalSeguro = require('./canalSeguro');
+const { paraTerminal } = require('../ui/textoSeguro');
 
 const MAX_PAYLOAD_BYTES = 16 * 1024 * 1024; // respostas do PC podem ser longas, mas não 100 MiB (padrão do ws)
 
@@ -57,10 +58,10 @@ function handleServerMessage(raw, actions) {
   } else if (msg.type === 'status') {
     log(`[PC] ${msg.status}...`);
   } else if (msg.type === 'result') {
-    log(`\n[PC responde]\n${msg.text}\n`);
+    log(`\n[PC responde]\n${paraTerminal(msg.text)}\n`);
     onPromptAgain && onPromptAgain();
   } else if (msg.type === 'error') {
-    errorLog(`[erro] ${msg.error}`);
+    errorLog(`[erro] ${paraTerminal(msg.error)}`);
     onPromptAgain && onPromptAgain();
   }
 }

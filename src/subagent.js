@@ -94,11 +94,11 @@ const PROIBIDAS = new Set(['delegate_task', 'run_workflow']);
 
 function lerSubagentesDe(dir, origem) {
   const out = {};
-  let nomes = [];
+  let nomes;
   try { nomes = fs.readdirSync(dir).filter((n) => n.endsWith('.md')); } catch { return out; }
   for (const arq of nomes) {
     let texto;
-    try { texto = fs.readFileSync(path.join(dir, arq), 'utf8').replace(/^﻿/, ''); } catch { continue; }
+    try { texto = fs.readFileSync(path.join(dir, arq), 'utf8').replace(/^\uFEFF/, ''); } catch { continue; }
     const m = texto.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
     if (!m) continue;
     const meta = {};

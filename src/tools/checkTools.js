@@ -17,6 +17,7 @@ const path = require('path');
 const { exec } = require('child_process');
 const { loadConfig } = require('../config');
 const { ask } = require('../ui/prompt');
+const { paraExibir } = require('../ui/textoSeguro');
 
 const TIMEOUT_MS = 120000;
 const MAX_BUFFER = 1024 * 1024 * 10;
@@ -105,7 +106,7 @@ async function confirmarSeNecessario(comandos) {
   let confirmShell = true;
   try { confirmShell = loadConfig().confirmShell !== false; } catch { /* config ilegível: fica no seguro */ }
   if (!confirmShell) return true;
-  const lista = comandos.map((c) => `  ${c.cmd}`).join('\n');
+  const lista = comandos.map((c) => `  ${paraExibir(c.cmd)}`).join('\n');
   const resposta = (await ask(`\n[gemini-code] run_checks vai executar:\n${lista}\nPermitir nesta sessão? (s/n) `)).toLowerCase();
   if (resposta === 's' || resposta === 'y') {
     sessao.confirmado = true;

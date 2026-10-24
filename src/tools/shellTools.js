@@ -22,6 +22,7 @@ const { exec, spawn } = require('child_process');
 const path = require('path');
 const { loadConfig, PROTECTED_PATHS, PROTECTED_DIRS } = require('../config');
 const { ask } = require('../ui/prompt');
+const { paraExibir } = require('../ui/textoSeguro');
 
 // Achado num teste (set/2026): com confirmShell:false, o agente rodou um
 // "node -e ...fs.writeFileSync(configPath...)" via run_shell e reescreveu
@@ -263,11 +264,15 @@ async function execute(name, args) {
   const permitido = require('../permissions').shellPermitido(args.command, cfg);
 
   if ((cfg.confirmShell && !permitido) || protegido || destrutivo) {
+    // v0.43.2: o comando aparece SEM ser interpretado pelo terminal (src/ui/textoSeguro.js) — antes um
+    // "\r" + "ESC[2K" no meio dele apagava a parte perigosa da tela e o usuário confirmava outra coisa.
+    const linhas = args.command.split('\n').length;
+    const exibido = `${linhas > 1 ? `(comando de ${linhas} linhas)\n  ` : ''}${paraExibir(args.command)}`;
     const pergunta = protegido
-      ? `\n[gemini-code] ATENÇÃO: esse comando mexe no arquivo de configuração do gemini-code.\n  ${args.command}\nConfirmar mesmo assim? (s/n) `
+      ? `\n[gemini-code] ATENÇÃO: esse comando mexe no arquivo de configuração do gemini-code.\n  ${exibido}\nConfirmar mesmo assim? (s/n) `
       : destrutivo
-      ? `\n[gemini-code] ATENÇÃO: esse comando parece destrutivo/irreversível.\n  ${args.command}\nConfirmar mesmo assim? (s/n) `
-      : `\n[gemini-code] Rodar comando?\n  ${args.command}\n(s/n) `;
+      ? `\n[gemini-code] ATENÇÃO: esse comando parece destrutivo/irreversível.\n  ${exibido}\nConfirmar mesmo assim? (s/n) `
+      : `\n[gemini-code] Rodar comando?\n  ${exibido}\n(s/n) `;
     const answer = (await ask(pergunta)).toLowerCase();
     if (answer !== 's' && answer !== 'y') {
       return 'Comando cancelado pelo usuário.';

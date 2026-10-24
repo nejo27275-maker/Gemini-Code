@@ -7,6 +7,7 @@
 
 const { spawn } = require('child_process');
 const { loadMcpServers } = require('../config');
+const { paraExibir } = require('../ui/textoSeguro');
 
 // v0.41.0: o servidor MCP (muitas vezes de terceiros) herdava o process.env inteiro, inclusive
 // as chaves do PRÓPRIO gemini-code. Estas saem; o que o servidor precisar vai no "env" dele no
@@ -225,7 +226,7 @@ class McpHttpConnection {
     try {
       return await fn(ctrl);
     } catch (err) {
-      if (ctrl.signal.aborted) throw new Error(`Tempo esgotado (${timeoutMs}ms) esperando resposta de "${this.name}".`);
+      if (ctrl.signal.aborted) throw new Error(`Tempo esgotado (${timeoutMs}ms) esperando resposta de "${this.name}".`, { cause: err });
       throw err;
     } finally {
       clearTimeout(timer);
@@ -241,7 +242,7 @@ class McpHttpConnection {
       return res;
     } catch (err) {
       if (ctrl.signal.aborted) throw err;
-      throw new Error(`Não consegui falar com o servidor MCP "${this.name}" (${err.cause?.code || err.message}).`);
+      throw new Error(`Não consegui falar com o servidor MCP "${this.name}" (${err.cause?.code || err.message}).`, { cause: err });
     }
   }
 
@@ -359,7 +360,7 @@ async function execute(fullName, args) {
   const toolName = fullName.slice(`mcp__${serverName}__`.length);
   if (precisaConfirmar(conns[serverName].cfg, toolName)) {
     const resumo = JSON.stringify(args || {}).slice(0, 600);
-    const resp = String(await perguntar(`\n[gemini-code] O servidor "${serverName}" vai executar "${toolName}":\n  ${resumo}\nConfirmar? (s/n) `) || '').trim().toLowerCase();
+    const resp = String(await perguntar(`\n[gemini-code] O servidor "${paraExibir(serverName)}" vai executar "${paraExibir(toolName)}":\n  ${paraExibir(resumo)}\nConfirmar? (s/n) `) || '').trim().toLowerCase();
     if (resp !== 's' && resp !== 'y') return 'Chamada cancelada pelo usuário.';
   }
   const res = await conns[serverName].callTool(toolName, args);

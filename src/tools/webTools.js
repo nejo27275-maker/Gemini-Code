@@ -10,6 +10,7 @@
 const { ask: askReal } = require('../ui/prompt');
 const { loadConfig: loadConfigReal } = require('../config');
 const { ensurePublicTarget: ensurePublicTargetReal } = require('../routineRunner');
+const { paraExibir } = require('../ui/textoSeguro');
 
 const MAX_CHARS_PADRAO = 20000;
 const MAX_CHARS_LIMITE = 100000;
@@ -174,6 +175,7 @@ function htmlParaTexto(html) {
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
+    // eslint-disable-next-line no-control-regex -- \u0000 é o marcador interno dos blocos <pre>
     .replace(/\u0000pre(\d+)\u0000/g, (_, i) => blocos[Number(i)]);
 }
 
@@ -311,7 +313,7 @@ function criarExecute({
     if (maxChars === null) return `Erro: max_chars inválido (${entrada.max_chars}); use um inteiro entre 1 e ${MAX_CHARS_LIMITE}.`;
 
     // Config ilegível não pode desligar a confirmação: padrão seguro é perguntar.
-    let cfg = {};
+    let cfg;
     try { cfg = loadConfig() || {}; } catch { cfg = {}; }
     const confirmar = cfg.confirmWeb !== false;
     const permitidos = Array.isArray(cfg.webDominiosPermitidos) ? cfg.webDominiosPermitidos : [];
@@ -329,8 +331,8 @@ function criarExecute({
       // host fora da lista, pergunta de novo: domínio liberado não libera para onde ele manda.
       if (confirmar && !dominioPermitido(host, permitidos) && !confirmados.has(chaveHost(host))) {
         const pergunta = saltos === 0
-          ? `\n[gemini-code] Acessar ${atual.href}? (s/n) `
-          : `\n[gemini-code] A página redirecionou para outro site. Acessar ${atual.href}? (s/n) `;
+          ? `\n[gemini-code] Acessar ${paraExibir(atual.href)}? (s/n) `
+          : `\n[gemini-code] A página redirecionou para outro site. Acessar ${paraExibir(atual.href)}? (s/n) `;
         let resposta = '';
         try { resposta = String((await ask(pergunta)) || '').trim().toLowerCase(); } catch { /* sem resposta = não */ }
         if (resposta !== 's' && resposta !== 'y') return 'Acesso cancelado pelo usuário.';
