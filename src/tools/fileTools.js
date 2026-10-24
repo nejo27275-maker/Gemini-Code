@@ -156,10 +156,11 @@ async function execute(name, args) {
       if (isProtected(args.path)) {
         return (
           'Bloqueado: este arquivo (ou o destino deste link) é configuração protegida do próprio ' +
-          'gemini-code — config.json, mcp.json, hooks.json ou um token de acesso — e não pode ' +
-          'ser sobrescrito por write_file. Para mudar model/fastModel/imageModel/etc, ' +
-          'peça ao usuário para rodar "gemini-code config set-model NOME" (ou o ' +
-          'subcomando equivalente); hooks e MCP só o próprio usuário edita.'
+          'gemini-code — config.json, mcp.json, hooks.json, um token de acesso ou um agente pessoal ' +
+          '(~/.gemini-code/gpts) — e não pode ser sobrescrito por write_file. Para mudar ' +
+          'model/fastModel/imageModel/etc, peça ao usuário para rodar "gemini-code config set-model NOME" ' +
+          '(ou o subcomando equivalente); hooks, MCP e agentes pessoais (gemini-code gpts editar) só o ' +
+          'próprio usuário edita. Para guardar algo na memória de um agente pessoal, use memory_save.'
         );
       }
       fs.mkdirSync(path.dirname(path.resolve(args.path)), { recursive: true });
@@ -172,7 +173,7 @@ async function execute(name, args) {
     case 'edit_file': {
       if (typeof args.path !== 'string' || !args.path) return 'Erro: edit_file precisa de "path".';
       if (isProtected(args.path)) {
-        return 'Bloqueado: este arquivo (ou o destino deste link) é configuração protegida do próprio gemini-code (config, MCP, hooks ou token) e não pode ser editado diretamente.';
+        return 'Bloqueado: este arquivo (ou o destino deste link) é configuração protegida do próprio gemini-code (config, MCP, hooks, token ou agente pessoal) e não pode ser editado diretamente.';
       }
       if (typeof args.old_text !== 'string' || args.old_text === '') {
         return 'Erro: old_text não pode ser vazio — informe o trecho exato a substituir.';

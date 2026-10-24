@@ -18,6 +18,7 @@ const HOOKS_PATH = path.join(HOME_DIR, 'hooks.json');
 const COWORK_TOKEN_PATH = path.join(HOME_DIR, 'cowork-token.txt');
 const ROUTINE_API_TOKEN_PATH = path.join(HOME_DIR, 'routine-api-token.txt');
 const TRUST_PATH = path.join(HOME_DIR, 'confianca.json'); // v0.41.0: src/trust.js
+const GPTS_DIR = path.join(HOME_DIR, 'gpts'); // v0.42.0: agentes pessoais (src/personalAgents.js)
 
 // Arquivos que o modelo nunca pode gravar sozinho (write_file/edit_file) e que
 // forçam confirmação no run_shell. Cada um, se reescrito, dá ao modelo mais
@@ -39,6 +40,12 @@ const PROTECTED_PATHS = Object.freeze([
   ROUTINE_API_TOKEN_PATH,
   TRUST_PATH,
 ]);
+
+// v0.42.0: pastas inteiras que o modelo não grava. Cada agente pessoal (gpts/<nome>/) guarda as
+// instruções e as ferramentas que ele recebe, a memória que entra no prompt de toda conversa com ele
+// e o histórico. Se o modelo pudesse gravar ali, plantaria instruções ou se daria ferramentas para as
+// próximas sessões; a memória só muda pela ferramenta memory_save (que pergunta ao usuário por padrão).
+const PROTECTED_DIRS = Object.freeze([GPTS_DIR]);
 
 // v0.41.0: destes o modelo nem LÊ (read_file, search_files, read_skill): guardam a API
 // key em texto puro, segredos de servidores MCP ou tokens que dão o agente inteiro pela
@@ -144,6 +151,8 @@ const DEFAULT_CONFIG = {
   webDominiosPermitidos: [],
   // Orçamento (em caracteres) do conhecimento fixo injetado no prompt — ver src/knowledge.js
   knowledgeMaxChars: 10000,
+  // v0.42.0: orçamento por mensagem dos trechos da base de conhecimento de um agente pessoal (src/personalAgents.js)
+  gptsConhecimentoMaxChars: 8000,
 };
 
 // Padrões antigos de `model` que versões anteriores gravaram em disco.
@@ -275,7 +284,9 @@ module.exports = {
   COWORK_TOKEN_PATH,
   ROUTINE_API_TOKEN_PATH,
   TRUST_PATH,
+  GPTS_DIR,
   PROTECTED_PATHS,
+  PROTECTED_DIRS,
   SECRET_PATHS,
   DEFAULT_CONFIG,
   CONFIG_VERSION,

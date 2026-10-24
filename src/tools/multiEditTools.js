@@ -172,7 +172,7 @@ async function execute(name, args) {
       // Segredo primeiro: editar exige LER o arquivo, e esses nem leitura podem ter.
       if (isSecret(p)) return `${MSG_SEGREDO} Recusado na ${rotulo(i)}; nada foi gravado.`;
       if (isProtected(p)) {
-        return `Bloqueado: ${rotulo(i)}: este arquivo (ou o destino deste link) é configuração protegida do próprio gemini-code (config, MCP, hooks ou token) e não pode ser editado diretamente. Nada foi gravado.`;
+        return `Bloqueado: ${rotulo(i)}: este arquivo (ou o destino deste link) é configuração protegida do próprio gemini-code (config, MCP, hooks, token ou agente pessoal) e não pode ser editado diretamente. Nada foi gravado.`;
       }
       const r = carregar(p);
       if (r.erro) return `Erro: ${rotulo(i)}: ${r.erro} Nada foi gravado.`;

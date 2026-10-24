@@ -19,14 +19,15 @@ function cleanName(name) {
   return value || `Sessão ${new Date().toLocaleString('pt-BR')}`;
 }
 
-function createSessionStore({ dataPath = SESSIONS_PATH, clock = () => new Date() } = {}) {
+// `mode` (v0.42.0): permissão do arquivo (os agentes pessoais gravam as conversas com 0o600).
+function createSessionStore({ dataPath = SESSIONS_PATH, clock = () => new Date(), mode } = {}) {
   function read() {
     return lerJson(dataPath,
       (data) => data && data.version === 1 && Array.isArray(data.sessions)
         && (data.activeId === null || typeof data.activeId === 'string'),
       () => ({ version: 1, activeId: null, sessions: [] }));
   }
-  function write(data) { escreverJson(dataPath, data); }
+  function write(data) { escreverJson(dataPath, data, { mode }); }
   function safeSummary(session) {
     return {
       id: session.id, name: session.name, cwd: session.cwd,

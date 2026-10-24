@@ -40,6 +40,8 @@ const { compactar } = require('../src/compact');
 const customCommands = require('../src/customCommands');
 const todoTools = require('../src/tools/todoTools');
 const knowledgeModule = require('../src/knowledge');
+const personalAgents = require('../src/personalAgents');
+const gptsCommands = require('../src/personalAgentCommands');
 const { INSTRUCAO_MODO_CIENCIA } = require('../src/modoCiencia');
 
 const [, , cmd, ...rest] = process.argv;
@@ -130,6 +132,14 @@ No modo "chat", digite /help para ver os comandos de sessão (/clear, /model, /s
   gemini-code config set-fallback-model NOME  Modelo reserva se o principal ficar indisponível (503)
 
   gemini-code skills list                     Lista as skills instaladas
+
+  gemini-code gpts listar                      Agentes pessoais (como os GPTs): instruções, memória, conhecimento
+  gemini-code gpts criar NOME --ia "o que ele faz"   A IA configura; você revisa e confirma
+  gemini-code gpts criar NOME --instrucoes "Você é..." [--iniciador T] [--ferramentas P] [--memoria M]
+  gemini-code gpts chat NOME | run NOME "msg"  Conversa com ele (ou uma pergunta só)
+  gemini-code gpts conhecimento NOME add ARQ   Anexa arquivos de texto à base dele
+  gemini-code gpts memoria NOME | ver | editar | remover | exportar | importar   (gpts ajuda: tudo)
+
   gemini-code agent run caminho/arquivo.json   Roda um workflow de vários passos OU
                                                 abre chat com uma persona pronta
                                                 (ex.: agents/exemplos/revisor-de-codigo.json)
@@ -160,7 +170,7 @@ No modo "chat", digite /help para ver os comandos de sessão (/clear, /model, /s
   gemini-code backups arquivo                  Lista os backups automáticos de um arquivo (mais recente = 1)
   gemini-code backups restore arquivo [N]      Restaura o backup N (padrão 1); o conteúdo atual também vira backup
 
-Pastas de configuração: ~/.gemini-code (config.json, mcp.json, skills/, agents/, workflows/)
+Pastas de configuração: ~/.gemini-code (config.json, mcp.json, skills/, agents/, workflows/, gpts/)
 `);
 }
 
@@ -214,8 +224,18 @@ Comandos disponíveis no chat:
   /workflows retomar <nome>                 continua um workflow que falhou no meio, sem refazer os passos que deram certo
   /workflows limpar historico|<nome>        apaga o histórico, ou descarta a execução interrompida de um workflow
   /commands          lista seus comandos de barra (.md em .gemini-code/commands ou ~/.gemini-code/commands)
+  /gpts              lista seus agentes pessoais (crie com: gemini-code gpts criar NOME --ia "...")
+  /gpt NOME          a conversa passa a ser com esse agente pessoal (instruções, memória e conhecimento dele); /gpt off volta
+  @NOME mensagem     manda só esta mensagem para o agente pessoal NOME
+  /memoria [esquecer ID]   o que o agente pessoal ativo guardou sobre você
   Ctrl+C             sai
 `;
+
+// Linhas { nivel, texto } dos módulos de comando (src/workflowCommands.js, src/personalAgentCommands.js).
+const CORES_NIVEL = { dim: chalk.dim, erro: chalk.red, aviso: chalk.yellow, ok: chalk.green, texto: (t) => t };
+function imprimirLinhas(linhas) {
+  for (const l of linhas) console.log((CORES_NIVEL[l.nivel] || chalk.dim)(l.texto));
+}
 
 // Lê flags simples do tipo "--dia 7 --mes 10" de uma string de comando,
 // devolvendo { texto: 'resto sem as flags', dia, mes, ano, data }.
@@ -262,7 +282,13 @@ async function perguntarConfiancaNoProjeto() {
   return linha;
 }
 
-async function chatLoop() {
+// v0.42.0: `gpts chat NOME` abre este mesmo chat com o agente pessoal já ativo e com as conversas DELE
+// (~/.gemini-code/gpts/NOME/sessoes.json, valem em qualquer pasta). No chat comum, /gpt NOME liga um
+// agente pessoal na conversa atual e @NOME manda só uma mensagem para ele (src/personalAgentCommands.js).
+async function chatLoop({ agente: nomeAgente } = {}) {
+  const gptsStore = personalAgents.defaultStore;
+  let agenteAtivo = nomeAgente ? gptsStore.obter(nomeAgente) : null;
+  const sessoes = agenteAtivo ? gptsStore.sessoes(agenteAtivo.name) : sessions;
   console.log(chalk.bold(`gemini-code v${PACKAGE_JSON.version} — modo conversa. Ctrl+C para sair, /help para comandos.\n`));
   if (require('../src/solo').ativo()) console.log(chalk.green('[solo] code-ia sozinho: nenhuma outra IA (Gemini, llama.cpp, Ollama) é usada.\n'));
   const primeiraMensagem = await perguntarConfiancaNoProjeto();
@@ -271,11 +297,14 @@ async function chatLoop() {
   // evita duas interfaces competindo pelo mesmo stdin.
   const rl = getSharedReadline();
   // v0.41.0: sessão da pasta atual (src/sessions.js getActiveFor), não a última de qualquer projeto.
-  let sessaoAtual = sessions.getActiveFor(process.cwd()) || sessions.create(`Sessão de ${path.basename(process.cwd()) || 'raiz'}`);
+  let sessaoAtual = agenteAtivo
+    ? sessoes.getActive() || sessoes.create(`Conversa com ${agenteAtivo.name}`)
+    : sessoes.getActiveFor(process.cwd()) || sessoes.create(`Sessão de ${path.basename(process.cwd()) || 'raiz'}`);
   let history = Array.isArray(sessaoAtual.history) ? sessaoAtual.history : [];
   let modeloAtual = sessaoAtual.modelName || undefined; // undefined = usa o padrão do config
   if (history.length) console.log(chalk.dim(`Sessão retomada: ${sessaoAtual.name} (${sessaoAtual.id}) — ${history.length} mensagens no histórico. Use /session new para começar outra.\n`));
   else console.log(chalk.dim(`Sessão persistente: ${sessaoAtual.name} (${sessaoAtual.id}). O histórico será salvo automaticamente.\n`));
+  if (agenteAtivo) { imprimirLinhas(gptsCommands.boasVindas(agenteAtivo, gptsStore)); console.log(''); }
   // stdin fechado (Ctrl+D ou entrada redirecionada): encerra limpo em vez de
   // estourar ERR_USE_AFTER_CLOSE na próxima pergunta.
   let fechado = false;
@@ -301,7 +330,7 @@ async function chatLoop() {
       else {
         history = r.history;
         usage.contextoCompactado();
-        sessaoAtual = sessions.save(sessaoAtual.id, { history, modelName: modeloAtual });
+        sessaoAtual = sessoes.save(sessaoAtual.id, { history, modelName: modeloAtual });
         const como = comIa && !r.comModelo ? ' (o modelo não respondeu; usei o resumo local)' : comIa ? ' feito pelo modelo' : '';
         console.log(chalk.dim(`(compactei ${r.removidas} mensagens antigas num resumo${como}; sessão salva)\n`));
       }
@@ -372,12 +401,21 @@ async function chatLoop() {
     }
     if (cmd === '/workflows' || cmd.startsWith('/workflows ')) {
       // v0.25.0: a lógica dos comandos /workflows mora em src/workflowCommands.js (testável sem abrir o terminal)
-      const cor = { dim: chalk.dim, erro: chalk.red, aviso: chalk.yellow, ok: chalk.green };
       const linhas = await require('../src/workflowCommands').tratar(cmd, { pasta: WORKFLOWS_DIR });
       console.log('');
-      for (const l of linhas) console.log((cor[l.nivel] || chalk.dim)(l.texto));
+      imprimirLinhas(linhas);
       console.log('');
       return ask();
+    }
+    {
+      // v0.42.0: /gpts, /gpt NOME|off e /memoria (agentes pessoais)
+      const g = gptsCommands.chat(cmd, { agente: agenteAtivo, store: gptsStore });
+      if (g) {
+        imprimirLinhas(g.linhas);
+        if (g.agente !== undefined) agenteAtivo = g.agente;
+        console.log('');
+        return ask();
+      }
     }
     if (cmd === '/commands') {
       const todos = [...customCommands.carregar({ home: require('../src/config').HOME_DIR }).values()];
@@ -388,7 +426,7 @@ async function chatLoop() {
     }
     if (cmd === '/clear') {
       history = [];
-      sessions.save(sessaoAtual.id, { history, modelName: modeloAtual });
+      sessoes.save(sessaoAtual.id, { history, modelName: modeloAtual });
       console.log(chalk.dim('(histórico limpo e sessão salva)\n'));
       return ask();
     }
@@ -403,7 +441,7 @@ async function chatLoop() {
         try { require('../src/code-ia/install').ensureInstalled({ log: (m) => console.log(chalk.dim(m)) }); }
         catch (err) { console.error(chalk.yellow(`[code-ia] ${err.message}`)); }
       }
-      sessions.save(sessaoAtual.id, { history, modelName: modeloAtual });
+      sessoes.save(sessaoAtual.id, { history, modelName: modeloAtual });
       console.log(chalk.dim(
         cmd === '/codeia' ? 'Agora: code-ia (modelo próprio, local)\n'
           : cmd === '/local' ? `Agora: modelo local llama.cpp (${cfg.llamaCppModel || 'local-model'})\n`
@@ -441,7 +479,7 @@ async function chatLoop() {
         console.log(chalk.dim(`Modelo atual: ${modeloAtual || loadConfig().model} (uso: /model NOME)\n`));
       } else {
         modeloAtual = novoModelo;
-        sessions.save(sessaoAtual.id, { history, modelName: modeloAtual });
+        sessoes.save(sessaoAtual.id, { history, modelName: modeloAtual });
         console.log(chalk.dim(`Modelo trocado para: ${novoModelo}\n`));
       }
       return ask();
@@ -450,7 +488,7 @@ async function chatLoop() {
       const nomeArg = cmd.slice('/save'.length).trim() || undefined;
       try {
         const arquivo = salvarHistorico(history, nomeArg);
-        sessions.save(sessaoAtual.id, { history, modelName: modeloAtual, ...(nomeArg ? { name: nomeArg } : {}) });
+        sessoes.save(sessaoAtual.id, { history, modelName: modeloAtual, ...(nomeArg ? { name: nomeArg } : {}) });
         console.log(chalk.dim(`Histórico salvo em: ${arquivo}\nSessão persistente atualizada: ${sessaoAtual.id}\n`));
       } catch (err) {
         console.error(chalk.red('Erro ao salvar: ' + err.message));
@@ -462,26 +500,26 @@ async function chatLoop() {
       const [sub, ...args] = cmd.slice('/session'.length).trim().split(/\s+/).filter(Boolean);
       try {
         if (sub === 'list' || !sub) {
-          const lista = sessions.list({ limit: 30 });
+          const lista = sessoes.list({ limit: 30 });
           console.log(lista.length ? lista.map((s) => `${s.id === sessaoAtual.id ? '* ' : '  '}${s.id} | ${s.name} | ${s.messageCount} mensagens | ${s.updatedAt}`).join('\n') + '\n' : 'Nenhuma sessão salva.\n');
         } else if (sub === 'new') {
-          sessaoAtual = sessions.create(args.join(' ') || undefined, { modelName: modeloAtual });
+          sessaoAtual = sessoes.create(args.join(' ') || undefined, { modelName: modeloAtual });
           history = [];
           console.log(chalk.dim(`Nova sessão: ${sessaoAtual.name} (${sessaoAtual.id})\n`));
         } else if (sub === 'use' || sub === 'load' || sub === 'resume') {
-          const existente = sessions.get(args[0]);
+          const existente = sessoes.get(args[0]);
           if (!existente) throw new Error('Sessão não encontrada. Use /session list.');
-          sessaoAtual = sessions.setActive(existente.id);
+          sessaoAtual = sessoes.setActive(existente.id);
           history = sessaoAtual.history;
           modeloAtual = sessaoAtual.modelName || undefined;
           console.log(chalk.dim(`Sessão retomada: ${sessaoAtual.name} (${sessaoAtual.id}), ${history.length} mensagens.\n`));
         } else if (sub === 'rename') {
           const nome = args.join(' ');
           if (!nome) throw new Error('Uso: /session rename NOVO_NOME');
-          sessaoAtual = sessions.save(sessaoAtual.id, { name: nome });
+          sessaoAtual = sessoes.save(sessaoAtual.id, { name: nome });
           console.log(chalk.dim(`Sessão renomeada: ${sessaoAtual.name}\n`));
         } else if (sub === 'show') {
-          console.log(JSON.stringify({ ...sessions.get(sessaoAtual.id), history: `[${history.length} mensagens]` }, null, 2));
+          console.log(JSON.stringify({ ...sessoes.get(sessaoAtual.id), history: `[${history.length} mensagens]` }, null, 2));
         } else {
           console.log('Uso: /session list | new [nome] | use ID | rename NOME | show\n');
         }
@@ -554,6 +592,15 @@ async function chatLoop() {
       const custom = customCommands.resolver(cmd, customCommands.carregar({ home: require('../src/config').HOME_DIR }));
       if (custom) { textoEnviado = custom.texto; console.log(chalk.dim(`(comando /${custom.nome})`)); }
     }
+    // v0.42.0: "@nome mensagem" vai só esta vez para um agente pessoal; numa conversa vazia com um agente,
+    // um número escolhe um dos iniciadores dele.
+    let agenteDoTurno = agenteAtivo;
+    if (!textoDoPlano) {
+      const men = gptsCommands.mencao(line, gptsStore);
+      const ini = men ? null : gptsCommands.iniciadorEscolhido(agenteAtivo, line, history.length === 0);
+      if (men) { agenteDoTurno = men.agente; textoEnviado = men.mensagem; console.log(chalk.dim(`(só esta mensagem vai para o agente pessoal ${men.agente.name})`)); }
+      else if (ini) { textoEnviado = ini; console.log(chalk.dim(`(${ini})`)); }
+    }
     // v0.41.0: /imagem CAMINHO [pergunta] e /foto [pergunta] (câmera do celular via Termux:API) mandam imagem ao agente.
     let imagensDoTurno = [];
     if (cmd.startsWith('/imagem ') || cmd === '/foto' || cmd.startsWith('/foto ')) {
@@ -583,7 +630,7 @@ async function chatLoop() {
       if (rc.compactou) {
         history = rc.history;
         usage.contextoCompactado();
-        sessaoAtual = sessions.save(sessaoAtual.id, { history, modelName: modeloAtual });
+        sessaoAtual = sessoes.save(sessaoAtual.id, { history, modelName: modeloAtual });
         console.log(chalk.dim(`(contexto grande: compactei ${rc.removidas} mensagens antigas sozinho para gastar menos)`));
       }
     }
@@ -591,21 +638,26 @@ async function chatLoop() {
     const autoGit = loadConfig().autoGit !== false;
     if (autoGit) snapshots.tirar({ rotulo: `antes: ${line}` });
     try {
-      process.stdout.write(chalk.green('\ngemini-code> '));
+      // Com agente pessoal: instruções, memória, trechos do conhecimento, ferramentas e modelo dele; o modo
+      // plano só restringe (interseção das ferramentas). O modelo do agente, se definido, vale sobre o /model.
+      const restricao = planMode.opcoes(modoPlano);
+      const turno = agenteDoTurno ? personalAgents.prepararTurno(gptsStore, agenteDoTurno, textoEnviado, { restricao }) : null;
+      process.stdout.write(chalk.green(`\n${agenteDoTurno ? agenteDoTurno.name : 'gemini-code'}> `));
       let streamed = false;
-      const { text, history: newHistory } = await runOnce(textoEnviado, {
+      const rodar = () => runOnce(textoEnviado, {
         history,
         modelName: modeloAtual,
         imagens: imagensDoTurno,
-        ...planMode.opcoes(modoPlano),
+        ...(turno ? turno.opcoes : restricao),
         onText: (pedaco) => {
           streamed = true;
           process.stdout.write(pedaco);
         },
       });
+      const { text, history: newHistory } = await (turno ? personalAgents.comAgente(turno.ctx, rodar) : rodar());
       history = newHistory;
-      sessaoAtual = sessions.save(sessaoAtual.id, { history, modelName: modeloAtual });
-      try { artifacts.createArtifact({ title: line.slice(0, 120), type: 'turno-chat', status: 'concluido', summary: text.slice(0, 1000), content: text, taskId: sessaoAtual.id, cwd: process.cwd(), metadata: { sessionId: sessaoAtual.id } }); } catch { /* relatório é best-effort e não pode travar o chat */ }
+      sessaoAtual = sessoes.save(sessaoAtual.id, { history, modelName: modeloAtual });
+      try { artifacts.createArtifact({ title: line.slice(0, 120), type: 'turno-chat', status: 'concluido', summary: text.slice(0, 1000), content: text, taskId: sessaoAtual.id, cwd: process.cwd(), metadata: { sessionId: sessaoAtual.id, ...(agenteDoTurno ? { agentePessoal: agenteDoTurno.name } : {}) } }); } catch { /* relatório é best-effort e não pode travar o chat */ }
       // Se nada foi impresso via streaming (ex.: resposta veio só como
       // functionCalls sem texto acompanhando, ou streaming desabilitado),
       // imprime o texto completo agora.
@@ -620,7 +672,8 @@ async function chatLoop() {
     if (rw) console.log(chalk.dim(`(${rw.arquivos} arquivo(s) gravado(s) neste turno — /rewind desfaz)\n`));
     ask();
   };
-  const ask = () => fechado ? encerrarComLimpeza() : perguntarColando(rl, chalk.cyan(modoPlano ? 'você [plano]> ' : 'você> '), tratarLinha);
+  const rotulo = () => [agenteAtivo && agenteAtivo.name, modoPlano && 'plano'].filter(Boolean).join(' · ');
+  const ask = () => fechado ? encerrarComLimpeza() : perguntarColando(rl, chalk.cyan(rotulo() ? `você [${rotulo()}]> ` : 'você> '), tratarLinha);
   if (primeiraMensagem) tratarLinha(primeiraMensagem); else ask();
 }
 
@@ -632,8 +685,15 @@ async function chatLoop() {
 // à toa.
 const COMANDOS_SEM_DESBLOQUEIO = new Set([undefined, 'help', '--help', 'version', '--version', '-v', 'config', 'confianca', 'trust', 'agenda', 'projetos', 'backups', 'routines', 'sessions', 'checkpoints', 'artifacts', 'context', 'doctor', 'solo', 'security', 'profiles', 'agents', 'code-ia', 'codeia']);
 
+// v0.42.0: de "gpts", só conversar (chat/run) e criar com --ia chamam o modelo.
+function gptsUsaModelo() {
+  const sub = String(rest[0] || '').toLowerCase();
+  return ['chat', 'conversar', 'run', 'perguntar', 'ask'].includes(sub) || rest.includes('--ia') || rest.includes('--ai') || rest.some((a) => /^--(ia|ai)=/.test(a));
+}
+
 async function garantirDesbloqueio() {
   if (COMANDOS_SEM_DESBLOQUEIO.has(cmd)) return;
+  if (COMANDOS_GPTS.has(cmd) && !gptsUsaModelo()) return;
   const cfg = loadConfig();
   if (!security.isLocked(cfg) || security.getSessionApiKey()) return;
 
@@ -666,8 +726,9 @@ function bloquearSeConvidado(mensagem) {
 // Quando o provedor code-ia é selecionado, prepara o modelo pequeno de conhecimento.
 // O padrão é o LLM geral local via llama.cpp; o modelo GGUF é baixado pelo usuário.
 const COMANDOS_COM_MODELO = new Set(['chat', 'run', 'sub', 'agent', 'live', 'voice', 'ciencia']);
+const COMANDOS_GPTS = new Set(['gpts', 'gpt', 'pessoais', 'meus-agentes']);
 function bootstrapCodeIa() {
-  if (!COMANDOS_COM_MODELO.has(cmd)) return;
+  if (!COMANDOS_COM_MODELO.has(cmd) && !(COMANDOS_GPTS.has(cmd) && gptsUsaModelo())) return;
   if (loadConfig().provider !== 'code-ia' && !require('../src/solo').ativo()) return;
   try {
     require('../src/code-ia/install').ensureInstalled({ log: (m) => console.log(chalk.dim(m)) });
@@ -786,6 +847,22 @@ async function main() {
         return;
       }
       throw new Error('Uso: gemini-code profiles list | profiles show NOME');
+    }
+
+    case 'gpts':
+    case 'gpt':
+    case 'pessoais':
+    case 'meus-agentes': {
+      // v0.42.0: agentes pessoais (src/personalAgentCommands.js)
+      const r = await gptsCommands.cli(rest, { mostrar: imprimirLinhas });
+      imprimirLinhas(r.linhas);
+      if (r.abrirChat) return chatLoop({ agente: r.abrirChat });
+      if (r.codigo) process.exitCode = r.codigo;
+      if (['run', 'perguntar', 'ask'].includes(String(rest[0] || '').toLowerCase())) toolsIndex.stopMcp();
+      // Uma pergunta feita no caminho (assistente, confirmação, s/n de ferramenta) deixa a readline segurando o
+      // terminal: sem fechar, o processo só saía com Ctrl+C.
+      require('../src/ui/prompt').closeShared();
+      return;
     }
 
     case 'mcp': {

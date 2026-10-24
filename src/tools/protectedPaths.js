@@ -8,7 +8,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { PROTECTED_PATHS, SECRET_PATHS } = require('../config');
+const { PROTECTED_PATHS, PROTECTED_DIRS, SECRET_PATHS } = require('../config');
 
 const MAX_SYMLINKS = 40;
 
@@ -39,8 +39,43 @@ function bateCom(lista, p) {
   return lista.some((prot) => real === caminhoReal(prot) || mesmoInode(real, prot));
 }
 
-/** O modelo não pode GRAVAR (config, mcp.json, hooks.json, tokens). */
-const isProtected = (p) => bateCom(PROTECTED_PATHS, p);
+const MAX_ENTRADAS_VARRIDAS = 5000;
+
+/** Inodes dos arquivos dentro das pastas protegidas (para achar hard link). Varredura limitada. */
+function inodesDasPastas(pastas) {
+  const inodes = new Set();
+  const pendentes = [...pastas];
+  let vistas = 0;
+  while (pendentes.length && vistas < MAX_ENTRADAS_VARRIDAS) {
+    const dir = pendentes.pop();
+    let entradas = [];
+    try { entradas = fs.readdirSync(dir, { withFileTypes: true }); } catch { continue; }
+    for (const e of entradas) {
+      if (++vistas > MAX_ENTRADAS_VARRIDAS) break;
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) pendentes.push(p);
+      else if (e.isFile()) { try { const s = fs.statSync(p); if (s.ino) inodes.add(`${s.dev}:${s.ino}`); } catch { /* sumiu */ } }
+    }
+  }
+  return inodes;
+}
+
+/**
+ * v0.42.0: dentro de uma pasta protegida (agentes pessoais). Caminho real dentro dela, ou hard link
+ * para um arquivo de lá — só procurado quando o alvo tem mais de um link, que é raro.
+ */
+function dentroDePastaProtegida(p, pastas = PROTECTED_DIRS) {
+  const real = caminhoReal(p);
+  const reais = pastas.map((d) => caminhoReal(d));
+  if (reais.some((d) => real === d || real.startsWith(d + path.sep))) return true;
+  try {
+    const s = fs.statSync(real);
+    return s.isFile() && s.nlink > 1 && s.ino !== 0 && inodesDasPastas(reais).has(`${s.dev}:${s.ino}`);
+  } catch { return false; }
+}
+
+/** O modelo não pode GRAVAR (config, mcp.json, hooks.json, tokens, agentes pessoais). */
+const isProtected = (p) => bateCom(PROTECTED_PATHS, p) || dentroDePastaProtegida(p);
 /** O modelo não pode nem LER (API key, segredos de MCP, tokens). */
 const isSecret = (p) => bateCom(SECRET_PATHS, p);
 
@@ -78,4 +113,4 @@ const MSG_SEGREDO =
   '(API key, segredos de MCP ou token de acesso) e não pode ser lido por ferramentas do modelo. ' +
   'Para ver a configuração, peça ao usuário para rodar "gemini-code config show" (mostra mascarado).';
 
-module.exports = { caminhoReal, mesmoInode, isProtected, isSecret, verificadorDeSegredos, foraDoProjetoParaConvidado, MSG_SEGREDO };
+module.exports = { caminhoReal, mesmoInode, isProtected, isSecret, dentroDePastaProtegida, verificadorDeSegredos, foraDoProjetoParaConvidado, MSG_SEGREDO };

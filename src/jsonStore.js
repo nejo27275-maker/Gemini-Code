@@ -29,10 +29,13 @@ function lerJson(caminho, valido, vazio) {
   return vazio();
 }
 
-function escreverJson(caminho, dados) {
+// `mode` (v0.42.0): permissão do arquivo gravado — 0o600 para dados pessoais (memória e conversas dos
+// agentes pessoais). O chmod no temporário cobre um .tmp antigo que sobrou com outra permissão.
+function escreverJson(caminho, dados, { mode } = {}) {
   fs.mkdirSync(path.dirname(caminho), { recursive: true });
   const tmp = `${caminho}.tmp-${process.pid}`;
   fs.writeFileSync(tmp, JSON.stringify(dados, null, 2), 'utf8');
+  if (mode) fs.chmodSync(tmp, mode);
   fs.renameSync(tmp, caminho);
 }
 

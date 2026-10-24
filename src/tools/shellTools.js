@@ -20,7 +20,7 @@
 
 const { exec, spawn } = require('child_process');
 const path = require('path');
-const { loadConfig, PROTECTED_PATHS } = require('../config');
+const { loadConfig, PROTECTED_PATHS, PROTECTED_DIRS } = require('../config');
 const { ask } = require('../ui/prompt');
 
 // Achado num teste (set/2026): com confirmShell:false, o agente rodou um
@@ -34,9 +34,12 @@ const { ask } = require('../ui/prompt');
 // v0.40.0: mesma lista do write_file (src/config.js), que inclui hooks.json e
 // os tokens. É heurística (texto do comando), não barreira: a barreira é
 // confirmShell, ligado por padrão.
+// v0.42.0: pastas protegidas (agentes pessoais) pelo caminho completo ou pelo trecho ".gemini-code/gpts".
 function touchesProtectedFile(command) {
   return PROTECTED_PATHS.some(
     (p) => command.includes(p) || command.includes(path.basename(p))
+  ) || PROTECTED_DIRS.some(
+    (d) => command.includes(d) || command.includes(path.join(path.basename(path.dirname(d)), path.basename(d)))
   );
 }
 

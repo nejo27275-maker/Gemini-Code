@@ -14,6 +14,8 @@ const subagent = require('../subagent');
 const skillLoader = require('../skills/loader');
 const todoTools = require('./todoTools');
 const workflowTools = require('./workflowTools');
+// v0.42.0: memória e base de conhecimento dos agentes pessoais (só aparecem numa conversa com um deles).
+const personalTools = require('./personalTools');
 
 // v0.41.0: lista VAZIA significa "nenhuma ferramenta"; só a AUSÊNCIA de lista
 // (undefined/null) libera todas. Antes `[]` liberava tudo: um passo de workflow
@@ -43,6 +45,7 @@ async function getAllDeclarations(allowedNames) {
     ...workflowTools.declarations,
     ...skillLoader.declarations,
     ...subagent.declarations,
+    ...personalTools.declarations,
     ...mcpDecls,
   ];
   if (semRestricao(allowedNames)) return all;
@@ -64,8 +67,17 @@ async function execute(name, args, allowedNames) {
   if (workflowTools.declarations.some((d) => d.name === name)) return workflowTools.execute(name, args, { allowedPai: allowedNames });
   if (skillLoader.declarations.some((d) => d.name === name)) return skillLoader.execute(name, args);
   if (subagent.declarations.some((d) => d.name === name)) return subagent.execute(name, args, { allowedPai: allowedNames });
+  if (personalTools.NOMES.includes(name)) return personalTools.execute(name, args);
   if (name.startsWith('mcp__')) return mcpClient.execute(name, args);
   throw new Error(`Ferramenta desconhecida: ${name}`);
 }
 
-module.exports = { getAllDeclarations, execute, stopMcp: mcpClient.stopAll };
+/** Nomes de todas as ferramentas nativas (sem MCP), estejam ou não disponíveis agora. */
+function nomesNativos() {
+  return [
+    fileTools, multiEditTools, globTools, webTools, shellTools, searchTools,
+    checkTools, todoTools, workflowTools, skillLoader, subagent,
+  ].flatMap((m) => m.declarations.map((d) => d.name)).concat(personalTools.NOMES);
+}
+
+module.exports = { getAllDeclarations, execute, nomesNativos, stopMcp: mcpClient.stopAll };
