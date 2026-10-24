@@ -82,6 +82,25 @@ o loop do agente:
     conversa entre passos.
   - **Persona** (`agents/exemplos/`): configuração de um agente (modelo,
     instrução extra, ferramentas permitidas) que abre um chat interativo.
+    `gemini-code gpts importar` transforma uma persona em agente pessoal.
+
+## Agentes pessoais (v0.42.0)
+
+- **`src/personalAgents.js`** — armazenamento em `~/.gemini-code/gpts/<nome>/` (`agente.json`,
+  `conhecimento/`, `memoria.json`, `sessoes.json`), validação da definição, base de conhecimento
+  (trechos de ~1200 caracteres indexados com BM25 e o tokenizador de `src/code-ia/tokenizer.js`,
+  com cache por assinatura dos arquivos), memória e `prepararTurno`, que monta as opções de
+  `runOnce` de cada mensagem (instrução com papel + memória + trechos relevantes, allowlist com as
+  ferramentas do agente, modelo) e o contexto para `comAgente` (um `AsyncLocalStorage`).
+- **`src/tools/personalTools.js`** — `memory_save`, `memory_forget` e `knowledge_search`. As
+  declarações dependem do contexto: fora de uma conversa com agente pessoal a lista é vazia.
+- **`src/personalAgentCommands.js`** — `gemini-code gpts ...` (`cli`) e `/gpts`, `/gpt`,
+  `/memoria`, `@nome` no chat (`chat`, `mencao`), devolvendo linhas `{ nivel, texto }` como
+  `src/workflowCommands.js`. O `chatLoop` do `bin/` recebe `{ agente }` para o `gpts chat`, que usa
+  as sessões do próprio agente em vez das da pasta.
+- A pasta `gpts/` está em `PROTECTED_DIRS` (`src/config.js`): `isProtected` em
+  `src/tools/protectedPaths.js` recusa qualquer caminho real dentro dela e hard links para arquivos
+  de lá.
 
 ## Testes
 
@@ -126,6 +145,7 @@ extra). Cobertura atual:
 | anti-SSRF com IPv6 (`privateAddress`) e DNS rebinding nas rotinas (`src/redeSegura.js`) | `ssrfIpv6.test.js` |
 | `edit_files`, `glob_files`, `web_fetch` (inclusive DNS rebinding, `src/redeSegura.js`) | `multiEditTools.test.js`, `globTools.test.js`, `webTools.test.js` |
 | integração das ferramentas novas (`/passo`, modos restritos, risco de workflow) | `ferramentasIntegradas.test.js` |
+| agentes pessoais: definição, conhecimento, memória, prompt, ferramentas no loop, pasta protegida, comandos e CLI de ponta a ponta (v0.42.0) | `agentesPessoais.test.js` |
 
 `runOnce` (agente), `runWorkflowData`/`runWorkflow`/`runAgentFile`
 (runner) e `runLive` (live) aceitam um argumento opcional `deps` — ex.:

@@ -46,6 +46,43 @@ O modelo GGUF é o mesmo, mas os históricos e as memórias do CLI e do app aind
 - **Gemini Cowork** (`gemini-code cowork ...`): o celular conecta no PC
   **na mesma rede local** e manda tarefas para o agente rodar direto no PC
   (arquivos, comandos, tudo), com autenticação por token.
+- **Agentes pessoais** (`gemini-code gpts ...`): seus próprios agentes, como os
+  GPTs do ChatGPT — instruções, sugestões de conversa, base de conhecimento,
+  memória, ferramentas e modelo próprios.
+
+## Novidades da v0.42.0 — agentes pessoais (como os GPTs do ChatGPT)
+
+Crie quantos agentes quiser, cada um com o seu papel. Exemplo:
+
+```bash
+# A IA escreve a configuração a partir da sua descrição; você lê e confirma
+gemini-code gpts criar chef --ia "um chef vegano que monta cardápios da semana com o que eu tenho em casa"
+
+# Ou escreva você mesmo
+gemini-code gpts criar tutor --instrucoes "Você é um tutor paciente de matemática..." \
+  --iniciador "Me explique frações" --iniciador "Corrija meu exercício" --ferramentas conversa
+
+gemini-code gpts conhecimento chef add receitas.md minhas-anotacoes/   # base de conhecimento (arquivos de texto)
+gemini-code gpts chat chef                                             # conversa (digite 1, 2... para usar uma sugestão)
+gemini-code gpts run chef "o que eu janto hoje?"                       # uma pergunta só
+```
+
+| Recurso | Como funciona |
+|---|---|
+| **Instruções** | O papel do agente (até 8000 caracteres). `--instrucoes`, `--instrucoes-arquivo` ou `--ia`. |
+| **Iniciadores** | Até 6 sugestões de primeira mensagem, mostradas ao abrir a conversa; digite o número para mandar. |
+| **Base de conhecimento** | Arquivos de texto (`.md`, `.txt`, `.csv`, código...; até 100 arquivos e 5 MB por agente). A cada mensagem, os trechos mais relevantes (busca BM25) entram no prompt sozinhos — funciona até com modelo local pequeno; o agente também pode buscar com `knowledge_search`. PDF, imagem e docx não são lidos (converta para texto). Arquivo com cara de chave/token é recusado (`--forcar` aceita). |
+| **Memória** | Fatos sobre você que o agente guarda com `memory_save` e lembra em toda conversa. Padrão `confirmar`: cada gravação ou exclusão pergunta `s/n`. `--memoria auto` grava sozinho e avisa; `off` desliga. Nunca guarda o que parece senha/chave. Veja e apague com `gemini-code gpts memoria chef` ou `/memoria` no chat. |
+| **Ferramentas** | `conversa` (nenhuma), `leitura` (lê arquivos), `pesquisa` (leitura + páginas web; padrão), `completo` (todas as da sessão, com as confirmações de sempre) ou uma lista (`--ferramentas read_file,web_fetch`). |
+| **Modelo** | `--modelo` só para ele (`@local`, `openai:MODELO`, um Gemini...); se definido, vale no lugar do `/model`. |
+| **Conversas** | Cada agente guarda as conversas dele (valem em qualquer pasta); `/session` funciona dentro do `gpts chat`. |
+| **Compartilhar** | `gpts exportar chef` gera `chef.gpt.json` (instruções + conhecimento; a memória só com `--com-memoria`). `gpts importar ARQUIVO` mostra instruções e ferramentas pedidas e só grava depois do seu `s` (ou `--sim`). Também importa as personas antigas de `agents/*.json`. |
+
+**No chat comum:** `/gpts` lista, `/gpt chef` passa a conversa para o chef (`/gpt off` volta), `@chef mensagem` pergunta só uma vez, `/memoria` mostra o que o agente ativo guardou. No modo `/plano`, o agente pessoal só lê (as ferramentas são a interseção das duas listas).
+
+**Segurança:** os agentes ficam em `~/.gemini-code/gpts/` (pasta 0700, memória e conversas 0600), que entrou nas pastas protegidas: o modelo **não grava ali** com `write_file`/`edit_file`/`edit_files` — nem por symlink ou hard link — e `run_shell` mencionando a pasta pede confirmação. Assim uma página ou um repositório malicioso não consegue reescrever as instruções de um agente, dar ferramentas a ele nem plantar "memórias"; a memória só muda pela ferramenta `memory_save`, com a sua confirmação no modo padrão. No prompt, a memória e o conhecimento vão marcados como dados, não ordens. Na sessão de convidado as ferramentas de memória não existem.
+
+**Limites (honestos):** a busca é por palavras (BM25 com o tokenizador do code-ia, PT/EN), não por significado — sinônimos que o tokenizador não conhece não casam. Nada aqui foi medido com um modelo de verdade; os testes usam um modelo simulado (inclusive de ponta a ponta, com o CLI real e um servidor local imitando a API da OpenAI). A memória no modo `auto` confia no modelo para não guardar o que veio de uma página web — por isso o padrão é `confirmar`.
 
 ## Novidades da v0.41.0
 
@@ -205,6 +242,10 @@ gemini-code agent run workflows/exemplos/design-e-publicar.json
 # Abrir chat com uma persona pronta (modelo, instrução e ferramentas já configurados)
 gemini-code agent run agents/exemplos/revisor-de-codigo.json
 
+# Ou transformar a persona num agente pessoal (com memória, conhecimento e conversas salvas)
+gemini-code gpts importar agents/exemplos/revisor-de-codigo.json
+gemini-code gpts importar agents/exemplos/assistente-pessoal.gpt.json
+
 # Ver as skills instaladas
 gemini-code skills list
 ```
@@ -336,6 +377,8 @@ gemini-code/
   src/skills/loader.js      carregador de skills
   src/agents/runner.js      executor de workflows
   src/workflowCommands.js   comandos /workflows do chat (testáveis)
+  src/personalAgents.js     agentes pessoais: definição, conhecimento, memória, prompt
+  src/personalAgentCommands.js  comandos gpts e /gpt (testáveis)
   src/cowork/               servidor/cliente celular<->PC
   src/voice/voice.js        integração com Termux:API
   skills/                   suas skills (SKILL.md)

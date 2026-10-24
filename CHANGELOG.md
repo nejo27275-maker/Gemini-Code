@@ -1,3 +1,32 @@
+## 0.42.0 — agentes pessoais (como os GPTs do ChatGPT)
+
+Base: a v0.41.0, que estava no branch `claude/rlr-omni-evolution-fqrsux` e ainda não tinha entrado no `main`, foi incorporada sem alterações.
+
+**Novo: `gemini-code gpts`** (`src/personalAgents.js`, `src/personalAgentCommands.js`, `src/tools/personalTools.js`). Cada agente pessoal tem:
+
+- **instruções** próprias (até 8000 caracteres), **descrição** e até 6 **iniciadores** (sugestões de primeira mensagem; ao abrir a conversa, digitar o número manda a sugestão — só numa conversa vazia, para "2" no meio da conversa continuar sendo resposta);
+- **base de conhecimento**: arquivos de texto (até 100 e 5 MB por agente). A cada mensagem, os trechos mais relevantes entram no prompt sozinhos (BM25 sobre trechos de ~1200 caracteres, com o tokenizador PT/EN do code-ia; base pequena vai inteira; orçamento `gptsConhecimentoMaxChars`, padrão 8000) — sem depender do modelo lembrar de buscar, o que modelos locais pequenos fazem mal; `knowledge_search` existe para ir além. Binário (PDF, imagem, docx), arquivo acima de 1 MB, ocultos de uma pasta, segredos do gemini-code e texto com cara de chave/token são recusados (`--forcar` aceita só o último caso);
+- **memória** persistente: `memory_save` / `memory_forget`. Padrão `confirmar` (cada mudança pergunta s/n; sem terminal, é "não"), `auto` (grava e avisa) ou `off`. Recusa o que parece segredo; até 200 itens; no prompt vai marcada como dado, não ordem;
+- **ferramentas**: presets `conversa`, `leitura`, `pesquisa` (padrão: leitura + `web_fetch`, que pergunta antes) e `completo`, ou uma lista; nome desconhecido é erro ao criar (ferramenta que deixou de existir numa versão nova só sai da lista ao carregar);
+- **modelo** próprio (`@local`, `openai:X`, Gemini...), que vale sobre o `/model`;
+- **conversas** próprias, em qualquer pasta (`gpts chat NOME`, com `/session`). A definição é relida a cada mensagem: um `gpts editar` com o chat aberto vale na hora.
+
+Comandos: `listar`, `criar` (por opções, por perguntas num terminal, ou `--ia "descrição"`: o modelo escreve descrição, instruções, iniciadores e o menor preset de ferramentas; você vê a prévia e confirma), `ver`, `editar`, `remover --sim`, `chat`, `run`, `conhecimento add|listar|remover`, `memoria listar|esquecer|limpar --sim`, `exportar` (pacote JSON com conhecimento; memória só com `--com-memoria`) e `importar` (mostra instruções e ferramentas pedidas e só grava depois do `s` ou `--sim`; aceita as personas antigas de `agents/*.json`). Exemplo novo: `agents/exemplos/assistente-pessoal.gpt.json`.
+
+No chat comum: `/gpts`, `/gpt NOME` (a conversa passa a ser com ele; `/gpt off` volta), `@NOME mensagem` (só uma mensagem) e `/memoria`. No `/plano`, as ferramentas são a interseção das duas listas (o agente pessoal também só lê).
+
+**Segurança:**
+
+- `~/.gemini-code/gpts/` entrou em `PROTECTED_DIRS` (nova lista em `src/config.js`, usada por `isProtected`): `write_file`, `edit_file` e `edit_files` recusam qualquer caminho dentro dela, inclusive por symlink e hard link, e `run_shell` mencionando a pasta pede confirmação mesmo com `confirmShell: false`. Sem isso, uma página lida com `web_fetch` ou um repositório malicioso poderia reescrever as instruções de um agente, dar `completo` a ele ou plantar "memórias" que entram em toda conversa futura.
+- Pasta 0700; memória, conversas, definição e conhecimento 0600 (`escreverJson` e o armazenamento de sessões ganharam `mode`).
+- As ferramentas de memória só existem numa conversa com um agente pessoal (contexto por `AsyncLocalStorage`) e nunca na sessão de convidado.
+
+**Corrigido no caminho (afeta todos os modos):** a instrução extra (persona, perfil `run --profile`, modo plano, modo ciência, agente pessoal) ia no FIM do prompt do sistema, e o provedor local corta o prompt pelo fim para caber em contextos pequenos — era o papel do agente que sumia primeiro, não o conhecimento fixo. Agora o extra vem antes do conhecimento fixo; o teste que exigia "termina com o extra" passou a exigir essa ordem e o corte local preservando o extra.
+
+Testes: 726 (725 passando, 1 pulado por rodar como root; eram 700), no Node 22, mais lint de sintaxe e varredura de segredos limpos. 26 novos em `tests/agentesPessoais.test.js` — inclusive três de ponta a ponta com o CLI real e o provedor `openai` apontando para um servidor local que imita a API (`gpts run` guardando memória e lembrando na conversa seguinte; `gpts chat` com iniciador e conversa salva no agente; `@chef` no chat comum) — e o assistente interativo conferido num pseudoterminal (`script`): o processo agora sai sozinho no fim (antes ficava preso esperando o teclado) e instruções coladas com várias linhas não se perdem.
+
+**Limites:** a busca é por palavras, não por significado. Nada foi rodado com um modelo de verdade (sem chave nem rede neste ambiente); os testes usam modelo simulado. O ESLint não roda aqui (o registro do npm está bloqueado pela política de rede da sessão), só a checagem de sintaxe do `npm run lint`. A memória `auto` confia no modelo para não guardar o que veio de uma página — por isso o padrão é `confirmar`.
+
 ## 0.41.0 — duas falhas de segurança corrigidas e as lacunas frente a Claude Code, Codex e Antigravity
 
 **Falhas corrigidas** (cada uma reproduzida antes no loop real do agente, com modelo simulado; os testes novos falham no código anterior):
