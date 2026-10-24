@@ -13,7 +13,7 @@ process.env.USERPROFILE = HOME_FALSO;
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { criarProxy, acharNavegador } = require('../src/navegador');
+const { criarProxy, acharNavegador, explicarFalha } = require('../src/navegador');
 const { criarFerramenta, chaveAprovacao, declarations } = require('../src/tools/browserTools');
 const permissions = require('../src/permissions');
 
@@ -75,7 +75,25 @@ test('acharNavegador: caminho do config, PATH e "não achei"', () => {
   assert.equal(acharNavegador({ caminho: falso }), falso);
   assert.equal(acharNavegador({ caminho: path.join(pasta, 'nao-existe') }), null);
   assert.equal(acharNavegador({ env: { PATH: pasta }, plataforma: 'linux' }), falso);
+  const chrome = path.join(pasta, 'google-chrome');
+  fs.writeFileSync(chrome, '');
+  assert.equal(acharNavegador({ env: { PATH: pasta }, plataforma: 'linux' }), chrome, 'Google Chrome antes do Chromium');
   assert.equal(acharNavegador({ env: { PATH: fs.mkdtempSync(path.join(HOME_FALSO, 'vazio-')), PLAYWRIGHT_BROWSERS_PATH: '/nao/existe' }, plataforma: 'freebsd' }), null);
+});
+
+test('falha na partida: mostra a linha FATAL (não o despejo de registradores) e explica a sandbox', () => {
+  const saida = [
+    '[1024/141500.123:FATAL:zygote_host_impl_linux.cc(128)] No usable sandbox! Update your kernel or see https://chromium.googlesource.com/...',
+    '#0 0x55d0 base::debug::CollectStackTrace()',
+    '  r12: 0000000000000006 r13: 0000000000000b09 r14: 0000000000000016',
+    '  ip: 00007fbeeb09ec0c efl: 0000000000000246 [end of stack trace]',
+  ].join('\n');
+  const r = explicarFalha(saida);
+  assert.match(r, /^ — No usable sandbox!/);
+  assert.ok(!/r12:|\[end of stack trace\]/.test(r));
+  assert.match(r, /instale o Google Chrome/);
+  assert.equal(explicarFalha(''), '');
+  assert.match(explicarFalha('linha 1\nalgo deu errado'), / — algo deu errado\.$/);
 });
 
 test('aprovação por site e regras de permissão olham a URL', () => {

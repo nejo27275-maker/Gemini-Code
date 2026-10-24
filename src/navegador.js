@@ -22,7 +22,8 @@ const http = require('http');
 const net = require('net');
 const dns = require('dns');
 
-const NOMES = ['chromium', 'chromium-browser', 'google-chrome', 'google-chrome-stable', 'chrome', 'microsoft-edge', 'msedge'];
+// Google Chrome primeiro: traz o auxiliar da sandbox; um Chromium baixado à parte pode não conseguir usá-la (Ubuntu 23.10+).
+const NOMES = ['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser', 'chrome', 'microsoft-edge', 'msedge'];
 const PRAZO_COMANDO_MS = 30000;
 const PRAZO_CARREGAR_MS = 15000;
 
@@ -237,6 +238,21 @@ const TECLAS = {
 
 const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * O que o Chrome disse ao falhar na partida: as linhas FATAL/ERROR (as últimas costumam ser um despejo de
+ * registradores, que não ajuda), e o que fazer quando o motivo é a sandbox. A sandbox nunca é desligada sozinha.
+ */
+function explicarFalha(saida) {
+  const linhas = String(saida || '').split('\n').map((l) => l.trim()).filter(Boolean);
+  const uteis = linhas.filter((l) => /FATAL|ERROR:|sandbox|error while loading|cannot open shared|No such file/i.test(l));
+  const detalhe = (uteis.length ? uteis.slice(0, 2) : linhas.slice(-1)).join(' ').replace(/^\[[^\]]*\]\s*/, '').slice(0, 400);
+  if (!detalhe) return '';
+  const dica = /sandbox|namespace/i.test(saida)
+    ? ' Este Chrome/Chromium não consegue usar a própria sandbox (comum no Ubuntu 23.10+ com um Chromium baixado à parte): instale o Google Chrome ou o Chromium do sistema, ou aponte outro com gemini-code config set-navegador-path.'
+    : '';
+  return ` — ${detalhe}.${dica}`;
+}
+
 // ---------------------------------------------------------------------------
 // O navegador
 // ---------------------------------------------------------------------------
@@ -282,7 +298,7 @@ class Navegador {
     args.push('about:blank');
     this.processo = spawn(this.executavel, args, { stdio: ['ignore', 'ignore', 'pipe', 'pipe', 'pipe'] });
     let erroSaida = '';
-    this.processo.stderr.on('data', (d) => { if (erroSaida.length < 4000) erroSaida += d; });
+    this.processo.stderr.on('data', (d) => { if (erroSaida.length < 20000) erroSaida += d; });
     const terminou = (motivo) => {
       this.fechado = true;
       for (const [, p] of this.pendentes) p.falha(new Error(motivo));
@@ -332,8 +348,7 @@ class Navegador {
       await this.enviar('Fetch.enable', { patterns: [{ urlPattern: '*', resourceType: 'Document', requestStage: 'Request' }] });
     } catch (err) {
       this.encerrarJa();
-      const detalhe = erroSaida.trim().split('\n').slice(-3).join(' ').slice(0, 400);
-      throw new Error(`não consegui iniciar o navegador (${this.executavel}): ${err.message}${detalhe ? ` — ${detalhe}` : ''}`, { cause: err });
+      throw new Error(`não consegui iniciar o navegador (${this.executavel}): ${err.message}${explicarFalha(erroSaida)}`, { cause: err });
     }
   }
 
@@ -475,4 +490,4 @@ class Navegador {
   }
 }
 
-module.exports = { Navegador, acharNavegador, criarProxy, conectarConferido, TECLAS, NOMES };
+module.exports = { Navegador, acharNavegador, criarProxy, conectarConferido, explicarFalha, TECLAS, NOMES };
