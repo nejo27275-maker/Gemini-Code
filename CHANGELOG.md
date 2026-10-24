@@ -1,3 +1,27 @@
+## 0.43.4 — resposta longa não cai mais no tempo limite, e CI no Node 24
+
+Base: `main` depois da mesclagem do PR #5.
+
+**Corrigido: resposta longa de modelo falhava fora do chat.** Os provedores `llamacpp`, `ollama` e `openai` só pediam streaming quando havia quem exibisse os pedaços, ou seja, no chat. No `run`, no cowork, nos subagentes (`delegate_task`) e nos workflows o pedido ia com `stream: false`, e o servidor só respondia quando acabava de gerar. Assim o tempo limite, que é de **inatividade**, virava limite da resposta **inteira**:
+
+- **llama.cpp:** geração com mais de 180 s (`llamaCppTimeoutMs`), comum num celular, falhava com "sem resposta... o servidor travou". No modo híbrido o trabalho era jogado fora e repetido na nuvem.
+- **Ollama:** o `fetch` do Node desiste de esperar o cabeçalho em 300 s. Medição com um servidor que imita o Ollama gerando por 330 s, sem `onText`: o código anterior **falhou aos 301 s** com "não consegui conectar... (UND_ERR_HEADERS_TIMEOUT)" e a dica de instalar o Ollama; o novo **terminou em 330 s** com a resposta inteira (33 de 33 pedaços).
+- **openai** (OpenRouter, LM Studio...): o mesmo com o `openaiTimeoutMs` (300 s); um modelo que pensa muito passava dele.
+
+Agora os três pedem **sempre** em streaming. O `onText` (e o `enableStreaming`) só decide se os pedaços aparecem enquanto chegam; quem não exibe recebe o texto inteiro no fim, como antes. Se um servidor ignorar o `stream` e responder JSON inteiro, o texto não se perde (a escolha é pelo `Content-Type`). A regra ficou registrada no `AGENTS.md`.
+
+**Ollama com a mensagem certa.** Um Ollama que conecta e fica 5 min calado aparecia como "não consegui conectar, instale o Ollama"; agora a mensagem diz que ele ficou sem responder e sugere `ollama ps`. Conexão que cai no meio da resposta virava um `terminated` cru; agora tem mensagem própria e conta como falha de rede (o híbrido tenta o outro lado se nada foi exibido ainda).
+
+**CI:**
+
+- `actions/checkout` e `actions/setup-node` passaram da v4 para a v7. As v4 rodavam no runtime Node 20, que o GitHub está aposentando (era o aviso das execuções).
+- `persist-credentials: false` no checkout: o CI só lê o código, então o `GITHUB_TOKEN` não fica gravado no `.git` para os passos seguintes.
+- Node 24 (LTS) entrou na matriz, ao lado do 20 e do 22.
+
+Testes: 783 (782 passando, 1 pulado por rodar como root) no Node 20.20 e no 22.22, com o `ws`. No CI, disparado no branch antes do PR, os três jobs passaram, e no Node 24 foram 783 de 783 (lá não se roda como root): https://github.com/nejo27275-maker/Gemini-Code/actions/runs/40098291779. São 7 novos, com servidores HTTP reais que imitam o llama-server (geração de ~720 ms com tempo limite de 300 ms), o Ollama (NDJSON em pedaços e conexão que cai no meio) e a API OpenAI. Seis deles **falham no código anterior** (conferido); o sétimo protege o caso do servidor que ignora o `stream`. ESLint 10.1.0: 0 problemas. Varredura de segredos e autoteste das avaliações (7/7) limpos.
+
+**Limites:** não foi testado com Ollama, llama.cpp ou modelo de verdade, só com servidores simulados. No Ollama o primeiro pedaço ainda precisa chegar em até 5 min (limite do `fetch` do Node, que não dá para mudar sem dependência nova): carregar um modelo grande num celular lento pode passar disso, mas agora com a mensagem certa.
+
 ## 0.43.3 — cowork testado de verdade no CI, TVs Android 11+ e ESLint real
 
 Base: `main` depois da mesclagem do PR #4 (CI verde no PR e no `main`, Node 20).

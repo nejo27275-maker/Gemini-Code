@@ -33,6 +33,10 @@ documento é sobre como o código por trás disso está organizado.
   (`/v1/chat/completions`) do `llama-server`, sem Ollama.
 - **`src/providers/ollama.js`** — cliente opcional de compatibilidade com Ollama
   (`/api/chat`, streaming NDJSON) para instalações antigas.
+- Os provedores `llamacpp`, `ollama` e `openai` pedem **sempre** em streaming; o
+  `onText` só decide se os pedaços aparecem enquanto chegam. Assim o tempo limite de
+  cada um vale para inatividade, e não para a resposta inteira, também no `run`, no
+  cowork, nos subagentes e nos workflows (v0.43.4).
 - **`src/knowledge.js`** — conhecimento fixo (`~/.gemini-code/knowledge`,
   `GEMINI.md`/`AGENTS.md` do projeto) injetado no prompt do sistema por
   `buildSystemInstruction`.
@@ -148,6 +152,7 @@ extra). Cobertura atual:
 | `SECRET_PATHS`: o modelo não lê API key nem tokens | `leituraDeSegredos.test.js` |
 | convidado só lê dentro do projeto | `convidadoNoProjeto.test.js` |
 | `src/providers/openai.js` (servidor local imitando a API, streaming, loop do agente) | `openaiProvider.test.js` |
+| resposta mais longa que o tempo limite de inatividade termina sem `onText`; Ollama calado ou que cai no meio (servidores HTTP reais, v0.43.4) | `llamacppV037.test.js`, `ollama.test.js`, `openaiProvider.test.js` |
 | `src/compact.js` (`enxugarResultadosAntigos`, `/compact ia`) | `contextoLongo.test.js` |
 | `src/permissions.js` (regras negar/permitir) | `permissoes.test.js` |
 | chaves fora do env do MCP, do `actions.log` e da URL | `vazamentoSegredos.test.js` |
