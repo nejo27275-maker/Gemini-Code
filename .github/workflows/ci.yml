@@ -17,13 +17,19 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # package.json pede Node >= 18. O 20 saiu de suporte em abr/2026 mas segue aqui enquanto o projeto o aceitar;
+        # o 22 é LTS. (O 24 ainda não foi testado localmente para entrar na matriz.)
+        node-version: [20, 22]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: ${{ matrix.node-version }}
           cache: npm
       - name: Install dependencies
         run: npm ci
@@ -31,8 +37,13 @@ jobs:
         run: |
           find src bin tests -type f -name '*.js' -print0 | xargs -0 -n1 node --check
       - name: Unit tests
+        # inclui o cowork por WebSocket real (tests/coworkWebSocket.test.js), que precisa do "ws" do npm ci
         run: npm test
+      - name: Install ESLint (versão fixa, só para a checagem; não entra no package.json)
+        if: matrix.node-version == 22
+        run: npm install --no-save --no-audit --no-fund eslint@10.1.0
       - name: Lint
+        # com o ESLint instalado: regras de eslint.config.js e zero avisos; nos outros Node, só sintaxe
         run: npm run lint
       - name: Secret pattern scan
         run: npm run security:scan

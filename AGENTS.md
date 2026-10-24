@@ -25,7 +25,7 @@
 - Cowork traffic goes only through `src/cowork/canalSeguro.js` (encrypted, mutually authenticated). Never send a token or a task in plaintext over the network, and keep the connection limits in `src/cowork/server.js` (`admitir`, `criarConexao`).
 
 ## Runtime notes
-- Supported Node.js version: >=18; CI currently validates on Node.js 20.
+- Supported Node.js version: >=18; CI validates on Node.js 20 and 22. Real ESLint (`eslint.config.js`, pinned in CI, zero warnings) runs on the Node 22 job; locally `npm run lint` uses ESLint when it is installed in `node_modules`, otherwise only syntax.
 - Local configuration and secrets belong under `~/.gemini-code`, outside the repository.
 - The routine runner currently supports only the `http-check` action. Do not imply arbitrary shell/AI actions are available to scheduled routines.
 - The `adb` tool (`src/tools/adbTools.js`) builds argv arrays and runs them with `execFile` (never a host shell string); it is for the user's own devices. `adb shell` joins its arguments unescaped and the DEVICE shell interprets them, so every device-side argument must go through `noAparelho` (single-quoted); only the free-form `shell` action is interpreted, and it always asks. State-changing actions must keep asking for confirmation (like `run_shell`); only read-only actions (`dispositivos`, `info`, `apps`, `estado`, `tela`, `logcat`) skip it.
