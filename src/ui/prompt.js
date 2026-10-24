@@ -39,6 +39,9 @@ function suspenderPerguntas() {
   return () => { if (!desfeito) { desfeito = true; suspensas--; } };
 }
 
+/** v0.45.0: há uma rotina rodando (ninguém para responder)? O run_shell usa a sandbox em vez de recusar. */
+function perguntasSuspensas() { return suspensas > 0; }
+
 function getShared() {
   if (!rl) {
     const atual = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -118,4 +121,4 @@ function closeShared() {
   }
 }
 
-module.exports = { getShared, ask, closeShared, perguntarColando, suspenderPerguntas };
+module.exports = { getShared, ask, closeShared, perguntarColando, suspenderPerguntas, perguntasSuspensas };

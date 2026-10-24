@@ -24,7 +24,8 @@ async function ate(condicao, ms = 5000) {
   return false;
 }
 
-test.before(() => { config.saveConfig({ confirmShell: false }); });
+// v0.45.0: estes testes cobrem o caminho SEM sandbox (grupo de processos, "cmd &"); a sandbox tem testes próprios.
+test.before(() => { config.saveConfig({ confirmShell: false, shellSandbox: 'off' }); });
 
 test('roda em segundo plano, mostra a saída e encerra', { skip: semPosix }, async () => {
   const r = await shell.execute('run_shell', { command: no("let i=0;setInterval(()=>console.log('tick'+(i++)),30)"), em_segundo_plano: true });

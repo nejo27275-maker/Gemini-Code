@@ -124,8 +124,9 @@ async function executeHttpCheck(action, { allowPrivateTargets = process.env.ROUT
 // ---------------------------------------------------------------------------
 
 const INSTRUCAO_ROTINA = 'TAREFA AGENDADA: ninguém está olhando o terminal. Não faça perguntas ao usuário; ações que pediriam ' +
-  'confirmação serão recusadas automaticamente — siga sem elas ou explique o que faltou. Termine com um resumo curto e ' +
-  'objetivo do resultado (é o que o usuário vai ler na notificação e no histórico).';
+  'confirmação serão recusadas automaticamente — siga sem elas ou explique o que faltou. Comandos do run_shell (se ele ' +
+  'estiver liberado) rodam numa sandbox quando ela existe nesta máquina: sem rede e gravando só na pasta do projeto. ' +
+  'Termine com um resumo curto e objetivo do resultado (é o que o usuário vai ler na notificação e no histórico).';
 
 /**
  * Notificação do sistema, se houver como: termux-notification (Android/Termux), notify-send (Linux) ou

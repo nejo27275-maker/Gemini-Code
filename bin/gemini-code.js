@@ -157,6 +157,12 @@ No modo "chat", digite /help para ver os comandos de sessão (/clear, /model, /s
   gemini-code adb tecla <cima|baixo|ok|voltar|home|play...>   Navega na TV pelo controle virtual
   gemini-code adb abrir <pacote> | digitar <texto> | instalar <app.apk> | shell <cmd>   (pedem confirmação)
 
+  gemini-code sandbox                          Mostra se a sandbox do run_shell funciona aqui e o que ela libera
+  gemini-code sandbox testar "comando"         Roda um comando na sandbox (para ver o que funciona lá dentro)
+  gemini-code config set-sandbox auto|sempre|off   auto: o que roda sem você aprovar vai para a sandbox (Linux + bubblewrap)
+  gemini-code config set-sandbox-rede on|off   Internet dentro da sandbox (padrão: off)
+  gemini-code config add-pasta-gravavel DIR    O agente grava ali sem perguntar (fora do projeto ele pergunta)
+
   gemini-code ciencia "pergunta"               Modo ciência: explica em formato fixo (números, comparação, dá pra escapar?)
 
   gemini-code agenda add "texto" --dia N       Marca algo num dia (ou --data AAAA-MM-DD)
@@ -1430,8 +1436,46 @@ async function main() {
         navegador: (() => { const p = require('../src/navegador').acharNavegador({ caminho: cfg.navegadorPath || '' }); return { encontrado: Boolean(p), caminho: p || cfg.navegadorPath || null, abreLocalhost: cfg.navegadorPermitirLocal === true }; })(),
         adb: (() => { const p = cfg.adbPath || 'adb'; const achado = p.includes('/') || p.includes('\\') ? (fs.existsSync(p) ? p : null) : which(p); return { encontrado: Boolean(achado), caminho: achado || p, aparelhoPadrao: cfg.adbSerial || null, confirmar: cfg.adbConfirm !== false }; })(),
         cowork: (() => { try { require.resolve('ws'); return { ws: true }; } catch { return { ws: false, dica: 'rode npm install na pasta do gemini-code' }; } })(),
+        // v0.45.0: sandbox do run_shell (src/sandbox.js)
+        sandbox: await (async () => { const sb = require('../src/sandbox'); const i = await sb.verificar(); return { modo: sb.modoDe(cfg), funciona: i.ok, ...(i.ok ? { bwrap: i.arquivo } : { motivo: i.motivo }), rede: cfg.shellSandboxRede === true, confirmarForaDoProjeto: cfg.confirmarForaDoProjeto !== false }; })(),
         note: 'A presença de um executável só indica disponibilidade local; não comprova login, acesso à nuvem ou que a ferramenta funcione corretamente.' };
       console.log(JSON.stringify(report, null, 2));
+      return;
+    }
+
+    case 'sandbox': {
+      // v0.45.0: estado da sandbox do run_shell e um jeito de testar comandos lá dentro.
+      const sb = require('../src/sandbox');
+      const cfg = loadConfig();
+      const [sub, ...resto] = rest;
+      const info = await sb.verificar();
+      if (sub === 'testar' || sub === 'test') {
+        const cmd = resto.join(' ').trim();
+        if (!cmd) return console.log('Uso: gemini-code sandbox testar "comando"');
+        if (!info.ok) { process.exitCode = 1; return console.log(`A sandbox não funciona aqui: ${info.motivo}`); }
+        const prep = sb.montar(cmd, { info, cfg });
+        prep.avisos.forEach((a) => console.log(`[sandbox] ${a}`));
+        const filho = require('child_process').spawn(prep.arquivo, prep.args, { env: prep.env, stdio: ['ignore', 'inherit', 'inherit', 'pipe'] });
+        filho.stdio[3].on('error', () => { /* bwrap saiu antes de ler o filtro */ });
+        filho.stdio[3].end(prep.bpf);
+        process.exitCode = await new Promise((ok) => { filho.on('error', () => ok(127)); filho.on('close', (c) => ok(c ?? 1)); });
+        return;
+      }
+      if (sub && sub !== 'status') return console.log('Uso: gemini-code sandbox [status]  |  gemini-code sandbox testar "comando"');
+      const modo = sb.modoDe(cfg);
+      const r = sb.resumo({ cfg });
+      const home = require('os').homedir();
+      const curto = (p) => (p === home || p.startsWith(home + path.sep) ? `~${p.slice(home.length)}` : p);
+      const explica = { auto: 'comandos que rodam sem você aprovar na hora (confirmShell desligado, regra "permitir", rotinas)', sempre: 'todos os comandos do run_shell', off: 'nenhum comando (desligada)' };
+      console.log([
+        `Modo: ${modo} — vai para a sandbox: ${explica[modo]}   (config set-sandbox auto|sempre|off)`,
+        info.ok ? `Nesta máquina: funciona (bwrap: ${info.arquivo})` : `Nesta máquina: NÃO funciona — ${info.motivo}${modo === 'sempre' ? '\n  Com o modo "sempre", o run_shell recusa os comandos até isso ser resolvido.' : '\n  Os comandos rodam sem sandbox (com a confirmação de sempre).'}`,
+        `Rede: ${r.rede ? 'ligada' : 'desligada'}   (config set-sandbox-rede on|off)`,
+        `Grava em: ${r.gravaveis.length ? r.gravaveis.map(curto).join(', ') : '(nenhuma pasta)'} e num /tmp descartável; .git/hooks e .git/config só leitura`,
+        ...r.avisos.map((a) => `  aviso: ${a}`),
+        `Invisível lá dentro: ${r.escondidos.map((e) => curto(e.caminho)).join(', ') || '(nada encontrado)'}, sockets do sistema e variáveis com cara de segredo`,
+        `write_file/edit_file fora do projeto: ${cfg.confirmarForaDoProjeto === false ? 'grava sem perguntar' : 'pergunta antes'}   (config set-confirmar-fora on|off)`,
+      ].join('\n'));
       return;
     }
 

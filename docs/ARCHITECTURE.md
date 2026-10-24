@@ -37,6 +37,11 @@ documento é sobre como o código por trás disso está organizado.
   janela, comandado pelo protocolo DevTools por um pipe (sem porta aberta), perfil
   temporário e todo o tráfego por um proxy que confere o endereço na hora de conectar.
   A ferramenta que o modelo usa é `src/tools/browserTools.js` (`browser`).
+- **`src/sandbox.js`** — sandbox do `run_shell` (v0.45.0, Linux): monta a chamada do
+  bubblewrap (disco só leitura menos o projeto, `.git` só leitura, segredos e credenciais
+  invisíveis, sem rede, `/tmp` descartável) e o filtro seccomp (BPF montado em JS) que nega
+  socket `AF_UNIX`, io_uring e o chaveiro do kernel. `src/tools/shellTools.js` decide quando
+  usar: o que roda sem uma pessoa aprovar na hora vai para a sandbox. Guia: `docs/SANDBOX.md`.
 - **`src/routineRunner.js`** — executor das rotinas: `http-check` e, desde a v0.44.0,
   `agente` (o agente roda sozinho; `src/ui/prompt.js` responde "não" a toda confirmação).
 - Os provedores `llamacpp`, `ollama` e `openai` pedem **sempre** em streaming; o
@@ -170,6 +175,9 @@ extra). Cobertura atual:
 | `src/trust.js` (confiança no projeto) | `confiancaProjeto.test.js` |
 | sessão por projeto (`getActiveFor`) | `sessaoPorProjeto.test.js` |
 | `run_shell` em segundo plano + `shell_status` | `segundoPlano.test.js` |
+| sandbox do `run_shell`: filtro seccomp conferido num emulador de BPF, ambiente, pastas, montagem, onde achar o bwrap, decisão (auto/sempre/off, `fora_da_sandbox`, rotinas) com um bwrap falso, e com o bwrap real: gravar fora, segredos, rede, socket do sistema, `.git`, timeout e encerrar (v0.45.0; a parte real é obrigatória no CI) | `sandbox.test.js` |
+| gravar fora do projeto pergunta; nada dentro do `.git` (v0.45.0) | `areaTrabalho.test.js` |
+| autoGit não roda config plantada (fsmonitor, gpg, filtro) (v0.45.0) | `snapshots.test.js` |
 | hooks `UserPromptSubmit`, `SessionStart`, `Stop` | `hooksEventos.test.js` |
 | subagentes do usuário (`.md`) | `subagentesDoUsuario.test.js` |
 | anti-SSRF com IPv6 (`privateAddress`) e DNS rebinding nas rotinas (`src/redeSegura.js`) | `ssrfIpv6.test.js` |

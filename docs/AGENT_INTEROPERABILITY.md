@@ -24,6 +24,7 @@ Gemini Code borrows design ideas from public documentation for several agentic d
 | Claude/Codex/Hermes/Antigravity/Kimi SDK integrations | Not implemented | CLI detection is diagnostic only; no external sessions, account logins, or agent APIs are invoked |
 | Higgsfield generation | Not connected | Official CLI/Skills setup is documented; install/login/generation are not run automatically and require explicit authorization |
 | Browser agent | Implemented (v0.44.0) | `browser` tool: local Chrome/Chromium/Edge over a CDP pipe, temporary profile, all traffic through a proxy that blocks the local network at connect time, per-site approval; see `src/navegador.js` |
+| OS sandbox for shell commands | Implemented (v0.45.0, Linux only) | `run_shell` without a human approval runs under bubblewrap: read-only disk except the project, read-only `.git`, hidden secrets and credentials, no network by default, seccomp blocking `AF_UNIX` sockets, io_uring and keyring; leaving it always asks. Not available on Android/Termux, macOS or Windows; see `docs/SANDBOX.md` |
 | Visual recording of browser sessions | Not implemented | Screenshots only (`browser` action `print`) |
 | True cloud orchestration across providers | Not implemented | Requires deployed workers, credentials, billing choices and a persistent runtime |
 
@@ -41,5 +42,5 @@ Gemini Code borrows design ideas from public documentation for several agentic d
 
 - Checkpoint snapshots skip common secret files, symbolic links, `.git`, dependency trees, and common generated directories. This is a defense-in-depth feature, not a guarantee that arbitrary secret material can be detected.
 - Restore requires an explicit `--yes`, validates hashes before changing project files, and creates a safety checkpoint. It overwrites checkpointed files but does not delete files created after the snapshot.
-- `run --profile explore|plan|review` limits available tools via allowlists; `test` additionally exposes only the recognized `run_checks` tool. These are application-level restrictions, not a formal OS sandbox. `coder` retains the session's normal allowed tools. `run --read-only` remains an alias for `explore`. For untrusted projects, run the agent inside an OS/container sandbox with restricted network and filesystem access.
+- `run --profile explore|plan|review` limits available tools via allowlists; `test` additionally exposes only the recognized `run_checks` tool. These are application-level restrictions, not a formal OS sandbox (the OS sandbox of v0.45.0 covers `run_shell` on Linux, see `docs/SANDBOX.md`). `coder` retains the session's normal allowed tools. `run --read-only` remains an alias for `explore`. For untrusted projects, run the agent inside an OS/container sandbox with restricted network and filesystem access.
 - Artifacts and session histories may contain source code or private conversations. Keep `~/.gemini-code` private and out of public repositories.

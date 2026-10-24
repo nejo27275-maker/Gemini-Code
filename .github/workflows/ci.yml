@@ -36,12 +36,25 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
+      - name: Install bubblewrap (sandbox do run_shell)
+        # v0.45.0: os testes de fuga da sandbox (tests/sandbox.test.js) rodam com o bwrap de verdade. O Ubuntu 24.04
+        # restringe user namespaces sem privilégio pelo AppArmor; o pacote traz um perfil que libera o bwrap — e,
+        # se não bastar, a restrição é desligada só nesta máquina descartável do CI.
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq bubblewrap
+          bwrap --ro-bind / / --unshare-all --unshare-user -- true \
+            || sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          bwrap --version
       - name: Syntax checks
         run: |
           find src bin tests -type f -name '*.js' -print0 | xargs -0 -n1 node --check
       - name: Unit tests
         # inclui o cowork por WebSocket real (tests/coworkWebSocket.test.js), que precisa do "ws" do npm ci
         run: npm test
+        env:
+          # com o bubblewrap instalado, os testes de fuga da sandbox não podem ser pulados
+          GEMINI_CODE_EXIGIR_SANDBOX: '1'
       - name: Install ESLint (versão fixa, só para a checagem; não entra no package.json)
         if: matrix.node-version == 22
         run: npm install --no-save --no-audit --no-fund eslint@10.1.0

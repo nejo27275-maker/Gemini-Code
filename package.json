@@ -1,6 +1,6 @@
 {
   "name": "gemini-code",
-  "version": "0.44.1",
+  "version": "0.45.0",
   "description": "Agente Gemini Code com modelo local llama.cpp no Android/Termux, modo híbrido online/offline e base de conhecimento personalizável.",
   "type": "commonjs",
   "bin": {

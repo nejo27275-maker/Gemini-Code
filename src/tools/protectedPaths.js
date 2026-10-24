@@ -119,9 +119,73 @@ function destinoPngNovo(arquivo, prefixo = 'tela') {
   return destino;
 }
 
+/**
+ * v0.45.0: o que está no .git roda comandos fora de qualquer controle — no próximo "git" do usuário ou no autoGit
+ * do próprio gemini-code: hooks, core.fsmonitor/filtros no config, um .git/commondir ou um arquivo ".git"
+ * ("gitdir: ...") apontando para outra config. O modelo não grava nada ali (nem o próprio ".git"); para mexer no
+ * repositório, usa o comando git (run_shell, que pergunta ou roda na sandbox com o .git só leitura).
+ */
+function arquivoQueRodaNoGit(p) {
+  return caminhoReal(p).split(path.sep).some((x) => x.toLowerCase() === '.git');
+}
+
+const MSG_GIT =
+  'Bloqueado: o que está no .git (hooks, config, commondir) roda comandos fora do controle do gemini-code — no ' +
+  'próximo git do usuário — e não pode ser gravado por write_file/edit_file. Para mexer no repositório, use o ' +
+  'comando git pelo run_shell; hooks, só o usuário instala.';
+
+const contem = (base, alvo) => alvo === base || alvo.startsWith(base.endsWith(path.sep) ? base : base + path.sep);
+
+/**
+ * v0.45.0: o caminho fica FORA da área de trabalho (pasta do projeto, temporária do sistema e `pastasGravaveis`)?
+ * Se a pasta do projeto for a HOME (ou a raiz), os arquivos e pastas "ponto" da HOME (~/.bashrc, ~/.config...)
+ * contam como fora: são configuração que roda sozinha no próximo terminal/login.
+ */
+function foraDaAreaDeTrabalho(p, { raiz = process.cwd(), extras = [], home = require('os').homedir() } = {}) {
+  const alvo = caminhoReal(p);
+  const homeReal = caminhoReal(home);
+  const raizReal = caminhoReal(raiz);
+  const raizAbrangeHome = contem(raizReal, homeReal);
+  const bases = [
+    ...(raizAbrangeHome ? [] : [raizReal]),
+    caminhoReal(require('os').tmpdir()),
+    ...(Array.isArray(extras) ? extras : [])
+      .map((d) => String(d || '').trim().replace(/^~(?=$|\/)/, home))
+      .filter((d) => path.isAbsolute(d))
+      .map((d) => caminhoReal(d))
+      .filter((d) => !contem(d, homeReal)),
+  ];
+  if (bases.some((b) => contem(b, alvo))) return false;
+  if (raizAbrangeHome && contem(raizReal, alvo) && contem(homeReal, alvo) && alvo !== homeReal) {
+    return path.relative(homeReal, alvo).split(path.sep)[0].startsWith('.');
+  }
+  return true;
+}
+
+/**
+ * Pergunta UMA vez antes de gravar fora da área de trabalho (config confirmarForaDoProjeto, ligado por padrão).
+ * @returns {Promise<string|null>} mensagem de recusa, ou null para seguir
+ */
+async function confirmarForaDaArea(caminhos, { cfg, perguntar } = {}) {
+  const config = cfg || require('../config').loadConfig();
+  if (config.confirmarForaDoProjeto === false) return null;
+  const fora = [...new Set(caminhos.map(String))].filter((c) => foraDaAreaDeTrabalho(c, { extras: config.pastasGravaveis }));
+  if (!fora.length) return null;
+  const { paraExibir } = require('../ui/textoSeguro');
+  const ask = perguntar || require('../ui/prompt').ask;
+  const lista = fora.slice(0, 10).map((c) => `  ${paraExibir(path.resolve(c))}`).join('\n') + (fora.length > 10 ? `\n  … (+${fora.length - 10})` : '');
+  const r = String(await ask(`\n[gemini-code] O agente quer gravar FORA da pasta do projeto (${paraExibir(process.cwd())}):\n${lista}\nConfirmar? (s/n) `)).trim().toLowerCase();
+  if (r === 's' || r === 'y' || r === 'sim') return null;
+  return `Gravação cancelada: ${fora.length > 1 ? 'esses arquivos ficam' : 'esse arquivo fica'} fora da pasta do projeto e o usuário não confirmou. ` +
+    'Grave dentro do projeto, ou peça ao usuário (ele pode liberar pastas com "gemini-code config add-pasta-gravavel DIR").';
+}
+
 const MSG_SEGREDO =
   'Bloqueado: este arquivo (ou o destino deste link) guarda segredos do próprio gemini-code ' +
   '(API key, segredos de MCP ou token de acesso) e não pode ser lido por ferramentas do modelo. ' +
   'Para ver a configuração, peça ao usuário para rodar "gemini-code config show" (mostra mascarado).';
 
-module.exports = { caminhoReal, mesmoInode, isProtected, isSecret, dentroDePastaProtegida, verificadorDeSegredos, foraDoProjetoParaConvidado, destinoPngNovo, MSG_SEGREDO };
+module.exports = {
+  caminhoReal, mesmoInode, isProtected, isSecret, dentroDePastaProtegida, verificadorDeSegredos, foraDoProjetoParaConvidado, destinoPngNovo,
+  arquivoQueRodaNoGit, foraDaAreaDeTrabalho, confirmarForaDaArea, MSG_SEGREDO, MSG_GIT,
+};

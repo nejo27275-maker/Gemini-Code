@@ -86,6 +86,14 @@ const DEFAULT_CONFIG = {
   fallbackModel: '',
   imageModel: 'gemini-2.5-flash-image',
   confirmShell: true,
+  // v0.45.0: sandbox do run_shell (src/sandbox.js, Linux com bubblewrap). 'auto': comando que roda sem você
+  // aprovar na hora (confirmShell:false, regra "permitir", rotina) roda isolado; 'sempre': todos; 'off': nenhum.
+  // shellSandboxRede: a sandbox tem internet? pastasGravaveis: pastas além do projeto onde o agente grava sem
+  // perguntar (write_file e sandbox). confirmarForaDoProjeto: write_file/edit_file perguntam antes de gravar fora.
+  shellSandbox: 'auto',
+  shellSandboxRede: false,
+  pastasGravaveis: [],
+  confirmarForaDoProjeto: true,
   // v0.41.0: regras FERRAMENTA(PADRÃO); "negar" bloqueia sempre, "permitir" dispensa a confirmação de
   // comandos simples do run_shell. Ver src/permissions.js e "gemini-code config regras".
   permissoes: { permitir: [], negar: [] },

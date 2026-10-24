@@ -98,12 +98,12 @@ test('sem ninguém olhando: toda pergunta vira "não" na hora, e volta ao normal
   prompt.closeShared();
 });
 
-test('de ponta a ponta: o run_shell pedido pelo modelo numa rotina é recusado e o comando não roda', async () => {
+test('de ponta a ponta: sem sandbox, o run_shell pedido pelo modelo numa rotina é recusado e o comando não roda', async () => {
   const store = loja();
   const marca = path.join(HOME_FALSO, 'rodou.txt');
   const r = criar(store, { prompt: 'crie o arquivo', ferramentas: ['run_shell'] });
   fs.mkdirSync(path.join(HOME_FALSO, '.gemini-code'), { recursive: true });
-  fs.writeFileSync(path.join(HOME_FALSO, '.gemini-code', 'config.json'), JSON.stringify({ configVersion: 99, confirmShell: true }));
+  fs.writeFileSync(path.join(HOME_FALSO, '.gemini-code', 'config.json'), JSON.stringify({ configVersion: 99, confirmShell: true, shellSandbox: 'off' }));
   let passo = 0;
   let resultadoDaFerramenta = null;
   const chamada = { name: 'run_shell', args: { command: `echo x > ${JSON.stringify(marca)}` }, id: 'c1' };

@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { backupBeforeWrite } = require('./backup');
 const rewind = require('../rewind');
-const { isProtected, isSecret, foraDoProjetoParaConvidado, MSG_SEGREDO } = require('./protectedPaths');
+const { isProtected, isSecret, foraDoProjetoParaConvidado, arquivoQueRodaNoGit, confirmarForaDaArea, MSG_SEGREDO, MSG_GIT } = require('./protectedPaths');
 
 // Achado num teste (set/2026): o agente reescreveu sozinho o config.json
 // (model/fastModel/imageModel) sem o usuário pedir nem confirmar, voltando
@@ -163,6 +163,10 @@ async function execute(name, args) {
           'próprio usuário edita. Para guardar algo na memória de um agente pessoal, use memory_save.'
         );
       }
+      if (arquivoQueRodaNoGit(args.path)) return MSG_GIT;
+      // v0.45.0: fora da pasta do projeto (ex.: ~/.bashrc), pergunta antes — src/tools/protectedPaths.js
+      const recusaW = await confirmarForaDaArea([args.path]);
+      if (recusaW) return recusaW;
       fs.mkdirSync(path.dirname(path.resolve(args.path)), { recursive: true });
       rewind.registrar(args.path);
       const backupW = backupBeforeWrite(args.path);
@@ -182,6 +186,7 @@ async function execute(name, args) {
       if (typeof args.new_text !== 'string') return 'Erro: edit_file precisa de "new_text" (pode ser string vazia para apagar o trecho).';
       const p = path.resolve(args.path);
       if (!fs.existsSync(p)) return `Erro: arquivo não existe: ${args.path} (use write_file para criar um novo).`;
+      if (arquivoQueRodaNoGit(p)) return MSG_GIT;
       const src = fs.readFileSync(p, 'utf8');
       const n = src.split(args.old_text).length - 1;
       if (n === 0) {
@@ -194,6 +199,8 @@ async function execute(name, args) {
       if (n > 1) return `Erro: old_text aparece ${n} vezes no arquivo — inclua mais contexto ao redor para ficar único.`;
       const idx = src.indexOf(args.old_text);
       const novo = src.slice(0, idx) + args.new_text + src.slice(idx + args.old_text.length);
+      const recusaE = await confirmarForaDaArea([p]);
+      if (recusaE) return recusaE;
       rewind.registrar(p);
       const backupE = backupBeforeWrite(p);
       fs.writeFileSync(p, novo, 'utf8');

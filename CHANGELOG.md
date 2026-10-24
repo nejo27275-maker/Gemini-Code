@@ -1,3 +1,31 @@
+## 0.45.0 — sandbox do sistema para o shell
+
+Base: o branch da 0.44.1 (ainda sem PR). Até aqui a única barreira do `run_shell` era a confirmação. Sem ela — `confirmShell` desligado, regra `permitir`, rotina agendada — o comando rodava com todos os poderes do usuário: um texto de página da web que convencesse o modelo podia ler `~/.ssh`, mandar a chave para fora ou deixar algo no `~/.bashrc`.
+
+**Novo: sandbox do `run_shell`** (`src/sandbox.js`, Linux com bubblewrap; guia em `docs/SANDBOX.md`). Regra: **se o gemini-code não te perguntou, o comando roda isolado.**
+
+- Disco **só leitura** menos a pasta do projeto (e as liberadas com `config add-pasta-gravavel`); `/tmp` e `/run` vazios e descartáveis.
+- `~/.gemini-code`, os arquivos protegidos e as credenciais comuns (`~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.docker`, `~/.config/gh`, `~/.netrc`, perfis de navegador...) **invisíveis**; variáveis com cara de segredo não passam.
+- **Sem rede** (nem a própria máquina), a não ser com `config set-sandbox-rede on`.
+- O **`.git` inteiro só leitura**: um hook, o `core.fsmonitor` ou um `.git/commondir` plantado faria o próximo `git` do usuário rodar um comando fora da sandbox (testado: renomear o `.git` também falha).
+- Filtro **seccomp** (BPF montado no próprio JS) que nega socket `AF_UNIX`, io_uring e o chaveiro do kernel: com o disco só leitura ainda dava para **conectar** num socket existente (Docker, D-Bus, X11, ssh-agent) e sair por ele.
+- Sem capabilities, sem criar user namespace dentro, processos isolados e nova sessão de terminal.
+- Modos: `config set-sandbox auto` (padrão: o que roda sem aprovação na hora), `sempre` (até o que você aprova; sem sandbox, recusa) e `off`.
+- Se o comando precisar sair dela, o agente pede `fora_da_sandbox` — e isso **sempre** pergunta, mesmo com `confirmShell` desligado.
+- **Rotinas**: o `run_shell` (se estiver na lista de ferramentas) agora roda na sandbox em vez de ser recusado.
+- `gemini-code sandbox` mostra se funciona aqui e o que libera/esconde; `gemini-code sandbox testar "cmd"` roda um comando lá dentro; o `doctor` ganhou `sandbox`.
+- O `bwrap` só é usado se estiver numa pasta do sistema ou do `PATH` fora das pastas que o agente grava — senão um `bwrap` falso plantado pelo modelo seria executado.
+
+**Novo: gravar fora do projeto pergunta.** `write_file`, `edit_file` e `edit_files` perguntam antes de gravar fora da pasta do projeto, da temporária e das pastas liberadas (uma pergunta por edição; numa rotina, recusa). Aberto na HOME, os arquivos "ponto" (`~/.bashrc`, `~/.config/...`) contam como fora. Desliga com `config set-confirmar-fora off`. E o modelo **não grava nada dentro do `.git`**, nem um arquivo `.git` (`gitdir:`).
+
+**Corrigido (segurança): o autoGit rodava comando plantado.** As fotos automáticas do projeto rodam `git add -A` a cada turno, fora de qualquer sandbox, com a config do repositório — e o modelo podia gravar `.git/config` com `write_file` sem perguntar. Um `core.fsmonitor` ali virava um comando rodando a cada turno (reproduzido antes da correção). Agora o autoGit roda o git com `core.fsmonitor`, `core.hooksPath` e `commit.gpgSign` anulados e não tira foto de repositório cuja config define um filtro (`filter.*.clean`); filtro só na config global (git-lfs) continua valendo.
+
+**Também:** encerrar um comando de fundo logo que começou deixava o processo de dentro da sandbox órfão (o bwrap só liga o "morrer junto" no fim da montagem); agora a árvore inteira é derrubada. `shell_status` com `encerrar` não diz mais "rodando" para um comando que acabou de morrer.
+
+Testes: 846 no Node 20.20 e no 22.22 com o `ws` e um bwrap compilado aqui (845 passando, 1 pulado por rodar como root); sem bwrap, os 6 testes com a sandbox de verdade pulam (e no CI são obrigatórios: `GEMINI_CODE_EXIGIR_SANDBOX=1`). Os testes de sandbox passam também rodando como usuário comum (o caminho do user namespace, como no CI). Novos: `tests/sandbox.test.js` (24: o filtro seccomp conferido num emulador de BPF; a decisão do `run_shell` com um bwrap falso; e fugas reais — gravar fora, ler segredos, rede, socket do sistema, `.git`, timeout e encerrar sem deixar órfão), `tests/areaTrabalho.test.js` (7) e mais 2 em `tests/snapshots.test.js`. ESLint 10.1.0: 0 problemas.
+
+**Limites:** só Linux (x86_64 e arm64). No Android/Termux o sistema não deixa criar os namespaces; no macOS ainda não há suporte; no Windows não existe — nesses casos o modo `auto` funciona como antes (com a confirmação). Dentro da sandbox o `.git` é só leitura, então commit e checkout pedem para sair dela. Com a rede ligada, um comando ainda pode mandar para fora o que consegue ler.
+
 ## 0.44.1 — a TV no dia a dia: rotinas sem IA, vídeo direto na TV e o aliado da TV
 
 Base: o branch da 0.44.0 (ainda sem PR). O controle da TV por adb passa a conversar com o resto: rotinas, navegador e Aliados.

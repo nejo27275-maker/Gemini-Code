@@ -43,6 +43,46 @@ function aplicar(sub, args, saveConfig) {
     saveConfig({ navegadorPermitirLocal: a[0] === 'on' });
     return a[0] === 'on' ? 'O navegador do agente agora abre 127.0.0.1/localhost (para testar o seu app). O resto da rede local continua bloqueado.' : 'O navegador do agente voltou a bloquear 127.0.0.1/localhost.';
   }
+  // v0.45.0: sandbox do run_shell (src/sandbox.js) e pastas onde o agente grava sem perguntar.
+  if (sub === 'set-sandbox') {
+    if (!['auto', 'sempre', 'off'].includes(a[0])) {
+      return 'Uso: gemini-code config set-sandbox auto|sempre|off\n' +
+        '  auto   (padrão) comando que roda sem você aprovar na hora (confirmShell desligado, regra "permitir", rotinas) vai para a sandbox\n' +
+        '  sempre todo comando roda na sandbox, mesmo os que você aprova\n' +
+        '  off    sem sandbox (como antes da v0.45.0)';
+    }
+    saveConfig({ shellSandbox: a[0] });
+    return a[0] === 'off' ? 'Sandbox do run_shell desligada: os comandos rodam com todos os seus poderes (a confirmação continua valendo).'
+      : `Sandbox do run_shell: ${a[0]}. Veja se funciona nesta máquina com: gemini-code sandbox`;
+  }
+  if (sub === 'set-sandbox-rede') {
+    if (!['on', 'off'].includes(a[0])) return 'Uso: gemini-code config set-sandbox-rede on|off   (on: comandos na sandbox acessam a internet — mais útil, menos isolado)';
+    saveConfig({ shellSandboxRede: a[0] === 'on' });
+    return a[0] === 'on' ? 'Comandos na sandbox agora acessam a rede (npm install, git pull...). Os segredos continuam invisíveis.' : 'Comandos na sandbox voltaram a ficar sem rede.';
+  }
+  if (sub === 'add-pasta-gravavel' || sub === 'rm-pasta-gravavel') {
+    const path = require('path');
+    const os = require('os');
+    const bruto = a.join(' ').trim();
+    if (!bruto) return `Uso: gemini-code config ${sub} /caminho/da/pasta`;
+    const dir = path.resolve(bruto.replace(/^~(?=$|\/)/, os.homedir()));
+    const { loadConfig } = require('./config');
+    const atuais = Array.isArray(loadConfig().pastasGravaveis) ? loadConfig().pastasGravaveis : [];
+    if (sub === 'rm-pasta-gravavel') {
+      if (!atuais.includes(dir)) return `Essa pasta não estava liberada: ${dir}`;
+      saveConfig({ pastasGravaveis: atuais.filter((d) => d !== dir) });
+      return `Pasta removida: ${dir}`;
+    }
+    const home = path.resolve(os.homedir());
+    if (dir === path.parse(dir).root || home === dir || home.startsWith(dir + path.sep)) return `Não dá para liberar ${dir}: ela contém a sua HOME (~/.bashrc e companhia rodariam o que o agente gravasse).`;
+    if (!atuais.includes(dir)) saveConfig({ pastasGravaveis: [...atuais, dir] });
+    return `Pasta liberada: ${dir} — o agente grava ali sem perguntar (write_file e a sandbox do run_shell).`;
+  }
+  if (sub === 'set-confirmar-fora') {
+    if (!['on', 'off'].includes(a[0])) return 'Uso: gemini-code config set-confirmar-fora on|off   (on: write_file/edit_file perguntam antes de gravar fora da pasta do projeto)';
+    saveConfig({ confirmarForaDoProjeto: a[0] === 'on' });
+    return a[0] === 'on' ? 'Gravar fora da pasta do projeto volta a pedir confirmação.' : 'ATENÇÃO: o agente agora grava em qualquer lugar sem perguntar (inclusive ~/.bashrc).';
+  }
   if (sub === 'set-fallback-model') {
     saveConfig({ fallbackModel: a[0] || '' });
     return a[0] ? `Modelo reserva definido: ${a[0]}` : 'Modelo reserva desligado.';

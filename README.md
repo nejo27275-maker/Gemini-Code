@@ -26,7 +26,8 @@ O modelo GGUF é o mesmo, mas os históricos e as memórias do CLI e do app aind
 ## O que tem aqui
 
 - **Agente de terminal** (`gemini-code chat` / `gemini-code run`): conversa,
-  lê e escreve arquivos, roda comandos de shell (com confirmação), e usa
+  lê e escreve arquivos, roda comandos de shell (com confirmação, ou numa
+  sandbox no Linux), e usa
   ferramentas MCP conectadas — igual ao fluxo do Claude Code.
 - **Gemini Design** (`gemini-code design ...`): gera slides (HTML navegável +
   Markdown), documentos e imagens.
@@ -58,6 +59,23 @@ O modelo GGUF é o mesmo, mas os históricos e as memórias do CLI e do app aind
 - **Rotinas com agente** (`gemini-code routines create --prompt ...`): o agente
   faz uma tarefa sozinho no horário marcado e avisa por notificação.
 
+## Sandbox do shell — v0.45.0
+
+Comando que roda **sem você aprovar na hora** (confirmação do shell desligada, regra `permitir`, rotina agendada) agora roda numa **sandbox do sistema** (Linux + bubblewrap): disco só leitura menos a pasta do projeto, sem rede, `~/.gemini-code` e credenciais (`~/.ssh`, `~/.aws`...) invisíveis, `.git` só leitura e sockets do sistema bloqueados. Se o comando precisar sair dela, o agente pede — e isso **sempre** pergunta. Guia completo: [`docs/SANDBOX.md`](docs/SANDBOX.md).
+
+```bash
+sudo apt install bubblewrap                 # Debian/Ubuntu
+gemini-code sandbox                         # funciona aqui? o que libera e o que esconde
+gemini-code sandbox testar "ls ~/.ssh; touch /etc/x"   # veja por você
+gemini-code config set-sandbox auto|sempre|off          # sempre: até o que você aprova roda isolado
+gemini-code config set-sandbox-rede on      # internet dentro dela (padrão: sem rede)
+```
+
+- **Rotinas** com `run_shell` na lista de ferramentas passam a rodar comandos (na sandbox) em vez de tê-los recusados.
+- **Gravar fora do projeto** com `write_file`/`edit_file` agora **pergunta** (uma vez por edição; numa rotina, recusa). Dentro do `.git` (hooks, config...) o modelo nunca grava. Libere pastas com `config add-pasta-gravavel DIR`.
+- **Corrigido:** as fotos automáticas do projeto (`autoGit`) rodavam o git com a config do repositório — um `core.fsmonitor` plantado ali virava um comando rodando a cada turno, sem perguntar. Agora fsmonitor, hooks e assinatura ficam anulados, e repositório com filtro na config não ganha foto.
+- No Android/Termux, macOS e Windows não há sandbox: tudo continua como antes (com a confirmação).
+
 ## Navegador e rotinas com agente — v0.44.0
 
 **Navegador.** No chat, peça normalmente ("abre o site X e veja o preço", "testa o login do meu app em localhost:3000"). O agente usa a ferramenta `browser`: abre a página num Chrome/Chromium/Edge sem janela, recebe o texto e os elementos numerados (`[3] campo "Buscar"`), clica e digita pelo número, e pode salvar um print. Diferente do `web_fetch`, enxerga páginas montadas por JavaScript.
@@ -83,7 +101,7 @@ gemini-code routines service                  # o agendador (precisa ficar rodan
 gemini-code routines logs                     # resultado de cada execução
 ```
 
-- **Ninguém está olhando**: toda confirmação vira "não" na hora (o `run_shell` pede confirmação → não roda), mesmo com o serviço aberto num terminal. Só roda sozinho o que já roda sem perguntar no chat.
+- **Ninguém está olhando**: toda confirmação vira "não" na hora, mesmo com o serviço aberto num terminal. Só roda sozinho o que já roda sem perguntar no chat — e, desde a v0.45.0, os comandos do `run_shell` (se estiver na lista), dentro da sandbox do Linux.
 - Ferramentas: por padrão **só leitura** (`read_file`, `list_dir`, `search_files`, `glob_files`); escolha outras com `--ferramentas a,b` (ou `nenhuma`). `--passos N` limita os passos (padrão 20). O agente não repete sozinho se falhar.
 - A resposta fica no histórico e num artefato (`gemini-code artifacts show ID`); `--notificar` avisa pelo Termux:API (`termux-notification`), `notify-send` (Linux) ou notificação do macOS.
 - O `~/.gemini-code/routines.json` é protegido: o modelo não consegue agendar a si mesmo.

@@ -94,4 +94,5 @@ Esses textos passam a acompanhar as instruções enviadas ao modelo. Isso é **e
 - Se a resposta disser que não consegue conectar, verifique a primeira sessão do Termux: ela deve continuar executando `llama-server` na porta 8080.
 - Se o modelo não carregar, confira se existe `~/models/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf` e se há espaço/RAM suficiente.
 - Para trocar a URL local: `node bin/gemini-code.js config set-llamacpp-url http://127.0.0.1:8080`.
+- Sandbox do shell (v0.45.0): o Android não deixa um app comum criar os namespaces que ela usa, então no Termux os comandos do agente rodam como antes — a barreira é a confirmação (deixe `confirmShell` ligado). `gemini-code sandbox` mostra isso. Gravar fora da pasta do projeto pergunta antes, aqui também.
 - O modelo Qwen é fornecido pela comunidade bartowski no Hugging Face e tem licença Apache-2.0 indicada no card do modelo. O arquivo de pesos não está incluído neste ZIP; o script o baixa na primeira instalação.

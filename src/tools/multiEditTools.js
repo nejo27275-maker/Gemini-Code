@@ -9,7 +9,7 @@
 const fs = require('fs');
 const { backupBeforeWrite } = require('./backup');
 const rewind = require('../rewind');
-const { isProtected, isSecret, MSG_SEGREDO } = require('./protectedPaths');
+const { isProtected, isSecret, arquivoQueRodaNoGit, confirmarForaDaArea, MSG_SEGREDO, MSG_GIT } = require('./protectedPaths');
 
 const MAX_EDICOES = 50;
 const MAX_ARQUIVOS = 20;
@@ -173,6 +173,7 @@ async function execute(name, args) {
       if (isProtected(p)) {
         return `Bloqueado: ${rotulo(i)}: este arquivo (ou o destino deste link) é configuração protegida do próprio gemini-code (config, MCP, hooks, token ou agente pessoal) e não pode ser editado diretamente. Nada foi gravado.`;
       }
+      if (arquivoQueRodaNoGit(p)) return `${MSG_GIT} Recusado na ${rotulo(i)}; nada foi gravado.`;
       const r = carregar(p);
       if (r.erro) return `Erro: ${rotulo(i)}: ${r.erro} Nada foi gravado.`;
       arq = porChave.get(r.arquivo.chave);
@@ -200,6 +201,10 @@ async function execute(name, args) {
     }
   }
   if (falha) return `Erro: ${rotulo(falha.global)}: ${falha.erro} Nada foi gravado.`;
+
+  // v0.45.0: uma pergunta só para todos os arquivos fora da pasta do projeto (src/tools/protectedPaths.js).
+  const recusa = await confirmarForaDaArea([...porChave.values()].filter((a) => a.novo !== a.texto).map((a) => a.abs));
+  if (recusa) return `${recusa} Nada foi gravado.`;
 
   // 4) Grava. Uma falha no meio (disco cheio, permissão) desfaz o que já foi gravado.
   const linhas = [];

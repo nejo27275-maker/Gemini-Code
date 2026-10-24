@@ -63,3 +63,37 @@ test('restaurar volta o conteúdo (inclusive o que o shell mudou) e é reversív
   snap.restaurar({ n: 2, cwd: d }); // 2 = foto "antes de restaurar" (arquivo apagado) -> mais nova é a de n=1
   assert.throws(() => snap.restaurar({ n: 99, cwd: d }), /Só existem/);
 });
+
+// v0.45.0: o autoGit roda git FORA de qualquer sandbox, a cada turno. Uma config de repositório plantada não pode
+// fazer esse git rodar um comando (fsmonitor, assinatura com gpg.program, filtros).
+test('config plantada no repositório não roda comando na foto (fsmonitor, gpg, filtro)', { skip: process.platform === 'win32' }, () => {
+  const d = repo();
+  const marca = path.join(d, '..', `marca-${path.basename(d)}`);
+  const script = path.join(d, '..', `planta-${path.basename(d)}.sh`);
+  fs.writeFileSync(script, `#!/bin/sh\necho rodou >> "${marca}"\ncat\n`, { mode: 0o755 });
+  const g = (...a) => execFileSync('git', a, { cwd: d });
+  g('config', 'core.fsmonitor', script);
+  g('config', 'commit.gpgSign', 'true');
+  g('config', 'gpg.program', script);
+  fs.writeFileSync(path.join(d, 'b.txt'), 'mudou');
+  assert.ok(snap.tirar({ cwd: d, rotulo: 'com fsmonitor e gpg' }), 'a foto sai, com as duas anuladas');
+  assert.equal(fs.existsSync(marca), false, 'nenhum comando plantado rodou');
+  // filtro: não dá para anular sem saber o nome — a foto é pulada
+  g('config', 'filter.planta.clean', script);
+  fs.writeFileSync(path.join(d, '.gitattributes'), '* filter=planta\n');
+  fs.writeFileSync(path.join(d, 'c.txt'), 'mais');
+  assert.equal(snap.filtroNoRepositorio(d), true);
+  assert.equal(snap.tirar({ cwd: d, rotulo: 'com filtro' }), null);
+  assert.equal(fs.existsSync(marca), false);
+});
+
+test('filtro só na config GLOBAL (ex.: git-lfs) não impede a foto', { skip: process.platform === 'win32' }, () => {
+  const d = repo();
+  const global = path.join(d, '..', `global-${path.basename(d)}`);
+  fs.writeFileSync(global, '[filter "lfs"]\n\tclean = git-lfs clean -- %f\n\tprocess = git-lfs filter-process\n');
+  const antes = process.env.GIT_CONFIG_GLOBAL;
+  process.env.GIT_CONFIG_GLOBAL = global;
+  try {
+    assert.equal(snap.filtroNoRepositorio(d), false);
+  } finally { if (antes === undefined) delete process.env.GIT_CONFIG_GLOBAL; else process.env.GIT_CONFIG_GLOBAL = antes; }
+});

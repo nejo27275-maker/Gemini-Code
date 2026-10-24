@@ -15,8 +15,24 @@ const REF = 'refs/gemini-code/snapshots';
 const EXCLUIR = [':(exclude,glob)**/.env', ':(exclude,glob)**/.env.*', ':(exclude,glob)**/*.pem', ':(exclude,glob)**/*.key', ':(exclude,glob)**/*.p12', ':(exclude,glob)**/id_rsa*', ':(exclude,glob)**/credentials.json', ':(exclude,glob)**/node_modules/**'];
 const IDENT = { GIT_AUTHOR_NAME: 'gemini-code', GIT_AUTHOR_EMAIL: 'gemini-code@local', GIT_COMMITTER_NAME: 'gemini-code', GIT_COMMITTER_EMAIL: 'gemini-code@local' };
 
+// v0.45.0: este git roda no projeto FORA de qualquer sandbox, a cada turno. Uma config de repositório plantada
+// (core.fsmonitor; commit.gpgSign + gpg.program; filtros clean/process) faria ele rodar um comando. As primeiras
+// ficam anuladas por -c (a linha de comando vence a config do repositório); filtro não dá para anular sem saber
+// o nome, então com um filtro na config do repositório a foto é pulada (filtroNoRepositorio).
+const SEGURO = ['-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=/dev/null', '-c', 'commit.gpgSign=false'];
+
 function git(args, cwd, env = {}) {
-  return execFileSync('git', args, { cwd, env: { ...process.env, ...IDENT, ...env }, encoding: 'utf8', timeout: 30000, stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 20 * 1024 * 1024 }).trim();
+  return execFileSync('git', [...SEGURO, ...args], { cwd, env: { ...process.env, ...IDENT, ...env }, encoding: 'utf8', timeout: 30000, stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 20 * 1024 * 1024 }).trim();
+}
+
+/** Há filtro (clean/process) definido na config do PRÓPRIO repositório? Na dúvida (git antigo), responde que sim. */
+function filtroNoRepositorio(root) {
+  try {
+    const saida = git(['config', '--show-scope', '--includes', '--get-regexp', '^filter\\..*\\.(clean|process)$'], root);
+    return saida.split('\n').some((l) => /^(local|worktree)\t/.test(l));
+  } catch (err) {
+    return err.status !== 1; // 1 = nenhum filtro; outro erro (ex.: git sem --show-scope): pula a foto
+  }
 }
 
 function raiz(cwd = process.cwd()) {
@@ -27,7 +43,7 @@ function ultimo(root) { try { return git(['rev-parse', '--verify', '-q', REF], r
 /** Tira uma foto. Devolve {commit, curto} ou null (sem repo, nada mudou, ou erro — nunca lança). */
 function tirar({ cwd = process.cwd(), rotulo = '' } = {}) {
   const root = raiz(cwd);
-  if (!root) return null;
+  if (!root || filtroNoRepositorio(root)) return null;
   const idx = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'gc-snap-')), 'index');
   try {
     const env = { GIT_INDEX_FILE: idx };
@@ -69,4 +85,4 @@ function restaurar({ n = 1, cwd = process.cwd() } = {}) {
   return { restaurada: alvo, fotoAntes: antes };
 }
 
-module.exports = { tirar, listar, restaurar, raiz, REF };
+module.exports = { filtroNoRepositorio, tirar, listar, restaurar, raiz, REF };
