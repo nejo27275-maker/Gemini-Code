@@ -19,7 +19,7 @@ Base: o branch da 0.44.0 (ainda sem PR). O controle da TV por adb passa a conver
 
 **Também:** a leitura dos comandos de texto (`gemini-code adb ...` e `--tv`) mora num lugar só (`argsDoComando`); no navegador, se a checagem de um site der erro, a navegação é barrada (antes ficaria pendurada) e um evento mal tratado não derruba mais o processo; o adb falso dos testes virou `tests/fixtures/adbFalso.js`, usado pelos testes da ferramenta e das rotinas.
 
-Testes: 813 (812 passando, 1 pulado por rodar como root) no Node 20.20 e no 22.22, com o `ws`. Novos: `tests/rotinaTv.test.js` (5, inclusive o terminal de ponta a ponta com o adb falso: o "aparelho" recebe `KEYCODE_SLEEP` e o `am start` do link) e mais 5 em `tests/adbTools.test.js` e 1 em `tests/navegador.test.js`. ESLint 10.1.0: 0 problemas.
+Testes: 813 (812 passando, 1 pulado por rodar como root) no Node 20.20 e no 22.22, com o `ws`; no CI (Node 20, 22 e 24), 813 de 813. Novos: `tests/rotinaTv.test.js` (5, inclusive o terminal de ponta a ponta com o adb falso: o "aparelho" recebe `KEYCODE_SLEEP` e o `am start` do link) e mais 5 em `tests/adbTools.test.js` e 1 em `tests/navegador.test.js`. ESLint 10.1.0: 0 problemas.
 
 **Limites:** não testado numa TV de verdade; `KEYCODE_SLEEP`/`WAKEUP` existem desde o Android 4.4W, mas cada fabricante trata a tela/standby do seu jeito. A rotina só roda com `routines service` ativo (no PC ou no Termux).
 

@@ -6,4 +6,4 @@
 - Aliado da TV: preset `tv` (adb + navegador + web_fetch).
 - Corrigido: regras do adb comparavam com JSON e os exemplos da documentação nunca batiam; agora `config permitir "adb(tecla *)"` funciona.
 - Navegador: checagem de site com erro barra a navegação (não fica pendurada); evento mal tratado não derruba o processo.
-- Testes: 813 (812 passando, 1 pulado como root) no Node 20 e 22 com `ws`. Não testado numa TV de verdade.
+- Testes: 813 (812 passando, 1 pulado como root) no Node 20 e 22 com `ws`; no CI, 813/813 nos Node 20, 22 e 24. Não testado numa TV de verdade.
