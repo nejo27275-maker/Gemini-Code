@@ -33,6 +33,8 @@ if (process.env.ADB_MODE === 'fail') { process.stderr.write('device offline\\n')
 if (a[0] === '-s') a = a.slice(2);
 if (a[0] === 'devices') { process.stdout.write('List of devices attached\\nABC123\\tdevice\\n'); process.exit(0); }
 if (a[0] === 'connect') { process.stdout.write('connected to ' + a[1] + '\\n'); process.exit(0); }
+if (a[0] === 'pair') { process.stdout.write(a[2] === '123456' ? 'Successfully paired to ' + a[1] + ' [guid=adb-X]\\n' : 'Failed: Wrong password or connection was dropped.\\n'); process.exit(0); }
+if (a[0] === 'mdns') { process.stdout.write('List of discovered mdns services\\nadb-SALA-abc\\t_adb-tls-pairing._tcp\\t192.168.0.50:37099\\nadb-SALA-abc\\t_adb-tls-connect._tcp\\t192.168.0.50:41235\\n'); process.exit(0); }
 if (a[0] === 'exec-out') { process.stdout.write(Buffer.from([0x89, 0x50, 0x4e, 0x47, 13, 10, 26, 10])); process.exit(0); }
 if (a[0] === 'shell') {
   const comando = a.slice(1).join(' '); // como o adb real: junta SEM escapar
@@ -161,6 +163,24 @@ test('conectar: "ip" ganha a porta padrão; porta inválida é recusada; "n" can
   assert.match(await run({ acao: 'voar' }), /ação de adb desconhecida/);
 });
 
+test('descobrir (leitura) lista aparelhos anunciando depuração por Wi-Fi e diz o próximo passo', async () => {
+  const out = await run({ acao: 'descobrir' }, proibido);
+  assert.match(out, /192\.168\.0\.50:37099 {2}adb-SALA-abc {2}\(pareamento: use acao:"parear"/);
+  assert.match(out, /192\.168\.0\.50:41235 {2}adb-SALA-abc {2}\(pronto para acao:"conectar"\)/);
+  assert.deepEqual(chamadas()[0], ['mdns', 'services']);
+});
+
+test('parear (Android 11+): exige ip:porta de pareamento e código de 6 dígitos; confirma; código errado aparece', async () => {
+  assert.match(await run({ acao: 'parear', alvo: '192.168.0.50:37099', codigo: '12345' }), /6 dígitos/);
+  assert.match(await run({ acao: 'parear', alvo: '192.168.0.50', codigo: '123456' }), /ip:porta DE PAREAMENTO/);
+  assert.equal(chamadas().length, 0);
+  assert.match(await run({ acao: 'parear', alvo: '192.168.0.50:37099', codigo: '123456' }, nao), /cancelada/);
+  const ok = await run({ acao: 'parear', alvo: '192.168.0.50:37099', codigo: '123456' });
+  assert.match(ok, /Successfully paired[\s\S]*Agora conecte/);
+  assert.deepEqual(chamadas().at(-1), ['pair', '192.168.0.50:37099', '123456']);
+  assert.match(await run({ acao: 'parear', alvo: '192.168.0.50:37099', codigo: '654321' }), /Wrong password/);
+});
+
 // ---------------------------------------------------------------------------
 // Ações comuns
 // ---------------------------------------------------------------------------
@@ -248,4 +268,17 @@ test('a ferramenta adb está nas declarações e em nomesNativos', async () => {
   assert.ok((await tools.getAllDeclarations([])).length === 0);
   assert.ok((await tools.getAllDeclarations(['adb'])).some((d) => d.name === 'adb'));
   assert.ok(tools.nomesNativos().includes('adb'));
+});
+
+test('doctor mostra se o adb foi encontrado (pelo adbPath do config) e se o cowork tem o pacote ws', () => {
+  const { spawnSync } = require('child_process');
+  const doctor = () => JSON.parse(spawnSync(process.execPath, [path.join(__dirname, '..', 'bin', 'gemini-code.js'), 'doctor'], {
+    encoding: 'utf8', env: { ...process.env, HOME: HOME_FALSO, USERPROFILE: HOME_FALSO }, timeout: 20000,
+  }).stdout);
+  config.saveConfig({ adbSerial: '192.168.0.50:5555' });
+  const r = doctor();
+  assert.deepEqual(r.adb, { encontrado: true, caminho: WRAP, aparelhoPadrao: '192.168.0.50:5555', confirmar: true });
+  assert.equal(typeof r.cowork.ws, 'boolean');
+  config.saveConfig({ adbPath: path.join(DIR, 'nao-existe-adb') });
+  assert.equal(doctor().adb.encontrado, false);
 });

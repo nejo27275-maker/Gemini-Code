@@ -152,6 +152,7 @@ No modo "chat", digite /help para ver os comandos de sessão (/clear, /model, /s
 
   gemini-code adb dispositivos                 Controla uma Android TV/celular SEU por adb (USB ou Wi-Fi)
   gemini-code adb conectar <ip[:porta]>        Conecta na TV pela rede (ligue a depuração por rede antes)
+  gemini-code adb descobrir | parear <ip:porta> <código>   Android 11+: acha a TV na rede e pareia com o código da tela
   gemini-code adb info|apps|estado|tela|logcat Lê o aparelho (modelo, apps, app em foco, print, logs)
   gemini-code adb tecla <cima|baixo|ok|voltar|home|play...>   Navega na TV pelo controle virtual
   gemini-code adb abrir <pacote> | digitar <texto> | instalar <app.apk> | shell <cmd>   (pedem confirmação)
@@ -1261,6 +1262,7 @@ async function main() {
       const adbTools = require('../src/tools/adbTools');
       const ALIAS = {
         devices: 'dispositivos', dispositivos: 'dispositivos', conectar: 'conectar', connect: 'conectar',
+        descobrir: 'descobrir', discover: 'descobrir', parear: 'parear', pair: 'parear',
         desconectar: 'desconectar', disconnect: 'desconectar', tcpip: 'tcpip', info: 'info', apps: 'apps',
         estado: 'estado', tela: 'tela', print: 'tela', screenshot: 'tela', logcat: 'logcat', log: 'logcat',
         abrir: 'abrir_app', abrir_app: 'abrir_app', fechar: 'fechar_app', fechar_app: 'fechar_app',
@@ -1281,6 +1283,7 @@ async function main() {
       const args = { acao };
       if (alvoFlag) args.alvo = alvoFlag;
       if (acao === 'conectar' || acao === 'desconectar') { if (resto[0]) args.alvo = resto[0]; }
+      else if (acao === 'parear') { args.alvo = resto[0]; args.codigo = resto[1]; }
       else if (acao === 'tcpip') { if (resto[0]) args.porta = Number(resto[0]); }
       else if (acao === 'logcat') { if (resto[0]) args.linhas = Number(resto[0]); }
       else if (acao === 'tela') { if (resto[0]) args.arquivo = resto[0]; }
@@ -1438,7 +1441,11 @@ async function main() {
       };
       const cfg = loadConfig();
       const bins = ['git', 'claude', 'codex', 'agy', 'hermes', 'kimi', 'kimi-code', 'higgsfield', 'ollama', 'docker'].map((name) => { const binPath = which(name); return { name, available: !!binPath, path: binPath }; });
-      const report = { node: process.version, platform: process.platform, cwd: process.cwd(), provider: cfg.provider, model: cfg.model, ollamaModel: cfg.ollamaModel, codeIa: (() => { try { const i = require('../src/code-ia/install'); return { instalado: fs.existsSync(i.modelPath()), arquivo: i.modelPath() }; } catch { return { instalado: false }; } })(), modoSolo: require('../src/solo').ativo(cfg), geminiKeyConfigured: Boolean(cfg.apiKey), llamaCpp: (() => { const srv = require('../src/localServer'); const c = srv.caminhos(); const l = require('../src/providers/llamacpp'); let livreMB = null; try { const st = fs.statfsSync(require('os').homedir()); livreMB = Math.round((st.bavail * st.bsize) / 1048576); } catch { /* sem statfs */ } return { servidorBinario: fs.existsSync(c.servidor), modeloGGUF: fs.existsSync(c.modelo), ctx: l.ctxTamanho(cfg), autoStart: cfg.llamaCppAutoStart === true, pid: srv.lerPid(), espacoLivreMB: livreMB }; })(), integrations: bins, note: 'A presença de um executável só indica disponibilidade local; não comprova login, acesso à nuvem ou que a ferramenta funcione corretamente.' };
+      const report = { node: process.version, platform: process.platform, cwd: process.cwd(), provider: cfg.provider, model: cfg.model, ollamaModel: cfg.ollamaModel, codeIa: (() => { try { const i = require('../src/code-ia/install'); return { instalado: fs.existsSync(i.modelPath()), arquivo: i.modelPath() }; } catch { return { instalado: false }; } })(), modoSolo: require('../src/solo').ativo(cfg), geminiKeyConfigured: Boolean(cfg.apiKey), llamaCpp: (() => { const srv = require('../src/localServer'); const c = srv.caminhos(); const l = require('../src/providers/llamacpp'); let livreMB = null; try { const st = fs.statfsSync(require('os').homedir()); livreMB = Math.round((st.bavail * st.bsize) / 1048576); } catch { /* sem statfs */ } return { servidorBinario: fs.existsSync(c.servidor), modeloGGUF: fs.existsSync(c.modelo), ctx: l.ctxTamanho(cfg), autoStart: cfg.llamaCppAutoStart === true, pid: srv.lerPid(), espacoLivreMB: livreMB }; })(), integrations: bins,
+        // v0.43.3: ferramentas que dependem de algo fora do projeto: o adb (TV/celular) e o pacote ws (cowork).
+        adb: (() => { const p = cfg.adbPath || 'adb'; const achado = p.includes('/') || p.includes('\\') ? (fs.existsSync(p) ? p : null) : which(p); return { encontrado: Boolean(achado), caminho: achado || p, aparelhoPadrao: cfg.adbSerial || null, confirmar: cfg.adbConfirm !== false }; })(),
+        cowork: (() => { try { require.resolve('ws'); return { ws: true }; } catch { return { ws: false, dica: 'rode npm install na pasta do gemini-code' }; } })(),
+        note: 'A presença de um executável só indica disponibilidade local; não comprova login, acesso à nuvem ou que a ferramenta funcione corretamente.' };
       console.log(JSON.stringify(report, null, 2));
       return;
     }
