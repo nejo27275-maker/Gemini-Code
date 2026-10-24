@@ -122,13 +122,64 @@ test('streaming: texto sai em pedaços e tool_calls fragmentados são remontados
   } finally { global.fetch = antigo; }
 });
 
-test('sem onText não usa streaming (resposta inteira)', async () => {
+// v0.43.4: sem onText (run, cowork, subagentes, workflows) o pedido ia com stream:false e o timeout de
+// INATIVIDADE virava limite da geração inteira. Servidor HTTP real que imita o llama-server: com stream, um
+// pedaço a cada 120 ms; sem stream, tudo de uma vez no fim. Timeout de 300 ms, geração de ~720 ms.
+test('sem onText, geração mais longa que o timeout de inatividade termina (servidor HTTP real)', async (t) => {
+  const http = require('node:http');
+  const pedacos = ['Gerando ', 'devagar ', 'mas ', 'sem ', 'parar.'];
+  const pedidos = [];
+  const srv = http.createServer((req, res) => {
+    let bruto = '';
+    req.on('data', (c) => { bruto += c; });
+    req.on('end', () => {
+      const corpo = JSON.parse(bruto);
+      pedidos.push(corpo);
+      if (!corpo.stream) {
+        setTimeout(() => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ choices: [{ message: { content: pedacos.join('') } }] })); }, (pedacos.length + 1) * 120);
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      let i = 0;
+      const tique = setInterval(() => {
+        if (i < pedacos.length) res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: pedacos[i++] } }] })}\n\n`);
+        else { clearInterval(tique); res.end('data: [DONE]\n\n'); }
+      }, 120);
+    });
+  });
+  await new Promise((ok) => srv.listen(0, '127.0.0.1', ok));
+  t.after(() => { escreverCfg(); return new Promise((ok) => srv.close(ok)); });
+  escreverCfg({ llamaCppUrl: `http://127.0.0.1:${srv.address().port}`, llamaCppTimeoutMs: 300 });
+
+  const r = await local.chatWithTools({ history: [{ role: 'user', parts: [{ text: 'conte' }] }], tools: [] });
+  assert.equal(pedidos[0].stream, true);
+  assert.equal(r.text(), 'Gerando devagar mas sem parar.');
+});
+
+test('enableStreaming:false: o servidor ainda manda em pedaços, mas o texto só é entregue inteiro no fim', async () => {
   const antigo = global.fetch;
   let corpo;
-  global.fetch = async (url, op) => { corpo = JSON.parse(op.body); return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: 'inteira' } }] }) }; };
+  global.fetch = async (url, op) => { corpo = JSON.parse(op.body); return sseResponse([{ choices: [{ delta: { content: 'em ' } }] }, { choices: [{ delta: { content: 'partes' } }] }, '[DONE]']); };
+  escreverCfg({ enableStreaming: false });
+  const entregue = [];
+  try {
+    const r = await local.chatWithTools({ history: [{ role: 'user', parts: [{ text: 'oi' }] }], tools: [], onText: (t) => entregue.push(t) });
+    assert.equal(corpo.stream, true);
+    assert.deepEqual(entregue, ['em partes']);
+    assert.equal(r.text(), 'em partes');
+  } finally { global.fetch = antigo; escreverCfg(); }
+});
+
+test('servidor que ignora o stream e responde JSON inteiro: o texto não se perde', async () => {
+  const antigo = global.fetch;
+  global.fetch = async () => ({
+    ok: true, status: 200,
+    headers: { get: (h) => (h.toLowerCase() === 'content-type' ? 'application/json; charset=utf-8' : null) },
+    body: { getReader: () => { throw new Error('não devia ler como SSE'); } },
+    json: async () => ({ choices: [{ message: { content: 'inteira' } }] }),
+  });
   try {
     const r = await local.chatWithTools({ history: [{ role: 'user', parts: [{ text: 'oi' }] }], tools: [] });
-    assert.equal(corpo.stream, false);
     assert.equal(r.text(), 'inteira');
   } finally { global.fetch = antigo; }
 });

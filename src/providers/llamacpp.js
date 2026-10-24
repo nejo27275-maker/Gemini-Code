@@ -311,7 +311,7 @@ async function lerStream(response, onText, reiniciarTimer, criarErro = erroHttp)
   return { texto, calls: calls.filter(Boolean), usage };
 }
 
-async function pedir({ url, body, onText, timeoutMs, stream }) {
+async function pedir({ url, body, onText, timeoutMs }) {
   const ctrl = new AbortController();
   let timer;
   let estourou = false;
@@ -324,9 +324,12 @@ async function pedir({ url, body, onText, timeoutMs, stream }) {
       const data = await response.json().catch(() => ({}));
       throw erroHttp(response.status, data, url);
     }
-    if (stream && response.body && typeof response.body.getReader === 'function') {
+    // resposta inteira em JSON se o servidor ignorar o "stream"; o resto é SSE
+    const json = /application\/json/i.test(String(response.headers?.get?.('content-type') || ''));
+    if (!json && response.body && typeof response.body.getReader === 'function') {
       const r = await lerStream(response, onText, reiniciar);
-      return { texto: r.texto, calls: r.calls, jaEmitiu: true };
+      // sem onText (nada exibido durante a leitura), quem chama ainda entrega o texto inteiro no fim
+      return { texto: r.texto, calls: r.calls, jaEmitiu: Boolean(onText) };
     }
     const data = await response.json().catch(() => ({}));
     const message = data.choices?.[0]?.message || {};
@@ -388,19 +391,22 @@ async function chatWithTools({ modelName, systemInstruction, history, tools, onT
   sistema = compactarSistema(sistema, maxSistemaChars);
   const mensagens = ajustarAoContexto(converterHistorico(history, sistema), totalChars, { maxSistemaChars });
 
-  const stream = Boolean(onText) && cfg.enableStreaming !== false;
+  // v0.43.4: o servidor responde sempre em streaming, mesmo quando nada é exibido (run, cowork, subagentes,
+  // workflows). Sem streaming a resposta só chegava inteira no fim, e o llamaCppTimeoutMs, que é de
+  // inatividade, virava limite da geração toda: num celular, resposta com mais de 180 s falhava.
+  const exibir = Boolean(onText) && cfg.enableStreaming !== false;
   const body = {
     model: modelName || cfg.llamaCppModel || 'local-model',
     messages: mensagens,
     temperature: Number.isFinite(cfg.llamaCppTemperature) ? cfg.llamaCppTemperature : 0.4,
     max_tokens: maxResp,
-    stream,
+    stream: true,
   };
   if (declarations.length) body.tools = declarations;
 
   const tentar = async () => {
     try {
-      return await pedir({ url, body, onText, timeoutMs, stream });
+      return await pedir({ url, body, onText: exibir ? onText : undefined, timeoutMs });
     } catch (err) {
       if (err && err.rede === undefined && err.contexto === undefined && err.transitorio === undefined) throw erroConexao(err, base);
       throw err;
