@@ -7,7 +7,6 @@
 'use strict';
 
 const fs = require('fs');
-const path = require('path');
 const { backupBeforeWrite } = require('./backup');
 const rewind = require('../rewind');
 const { isProtected, isSecret, MSG_SEGREDO } = require('./protectedPaths');

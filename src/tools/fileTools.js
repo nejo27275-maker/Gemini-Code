@@ -149,7 +149,7 @@ async function execute(name, args) {
       }
       return text;
     }
-    case 'write_file':
+    case 'write_file': {
       if (typeof args.path !== 'string' || !args.path) return 'Erro: write_file precisa de "path".';
       // Antes, um `content` ausente gravava a string "undefined" no arquivo.
       if (typeof args.content !== 'string') return 'Erro: write_file precisa de "content" (texto). Nada foi gravado.';
@@ -157,9 +157,9 @@ async function execute(name, args) {
         return (
           'Bloqueado: este arquivo (ou o destino deste link) é configuração protegida do próprio ' +
           'gemini-code — config.json, mcp.json, hooks.json, um token de acesso ou um agente pessoal ' +
-          '(~/.gemini-code/gpts) — e não pode ser sobrescrito por write_file. Para mudar ' +
+          '(~/.gemini-code/aliados) — e não pode ser sobrescrito por write_file. Para mudar ' +
           'model/fastModel/imageModel/etc, peça ao usuário para rodar "gemini-code config set-model NOME" ' +
-          '(ou o subcomando equivalente); hooks, MCP e agentes pessoais (gemini-code gpts editar) só o ' +
+          '(ou o subcomando equivalente); hooks, MCP e agentes pessoais (gemini-code aliados editar) só o ' +
           'próprio usuário edita. Para guardar algo na memória de um agente pessoal, use memory_save.'
         );
       }
@@ -170,6 +170,7 @@ async function execute(name, args) {
       return backupW
         ? `Arquivo salvo: ${args.path} (backup do conteúdo anterior em ${backupW})`
         : `Arquivo salvo: ${args.path}`;
+    }
     case 'edit_file': {
       if (typeof args.path !== 'string' || !args.path) return 'Erro: edit_file precisa de "path".';
       if (isProtected(args.path)) {

@@ -6,7 +6,7 @@ const os = require('os');
 const path = require('path');
 const http = require('http');
 const { spawn } = require('child_process');
-const HOME_FALSO = fs.mkdtempSync(path.join(os.tmpdir(), 'gemini-code-gpts-'));
+const HOME_FALSO = fs.mkdtempSync(path.join(os.tmpdir(), 'gemini-code-aliados-'));
 process.env.HOME = HOME_FALSO;
 process.env.USERPROFILE = HOME_FALSO;
 
@@ -24,8 +24,8 @@ const planMode = require('../src/planMode');
 const { runOnce } = require('../src/agent');
 
 const CLI = path.join(__dirname, '..', 'bin', 'gemini-code.js');
-const tmp = (prefixo = 'gpts-') => fs.mkdtempSync(path.join(os.tmpdir(), prefixo));
-const novoStore = () => pa.createPersonalAgentStore({ dir: path.join(tmp(), 'gpts') });
+const tmp = (prefixo = 'aliados-') => fs.mkdtempSync(path.join(os.tmpdir(), prefixo));
+const novoStore = () => pa.createPersonalAgentStore({ dir: path.join(tmp(), 'aliados') });
 const escrever = (arq, texto) => { fs.mkdirSync(path.dirname(arq), { recursive: true }); fs.writeFileSync(arq, texto); return arq; };
 const BASE = { name: 'chef', description: 'Chef vegano', instructions: 'Você é um chef vegano.', starters: ['O que cozinho hoje?', 'Monte um cardápio'] };
 const CHAVE_FALSA = `sk-${'a'.repeat(40)}`;
@@ -322,17 +322,17 @@ test('fora de uma conversa com agente as ferramentas não existem; convidado nã
 // Proteção: o modelo não grava na pasta dos agentes (instruções, ferramentas, memória)
 // ---------------------------------------------------------------------------
 
-test('write_file/edit_file recusam a pasta gpts, por caminho, symlink e hard link; run_shell pede confirmação', async () => {
+test('write_file/edit_file recusam a pasta aliados, por caminho, symlink e hard link; run_shell pede confirmação', async () => {
   const store = pa.defaultStore;
   store.criar({ ...BASE, name: 'protegido' });
-  const def = path.join(config.GPTS_DIR, 'protegido', 'agente.json');
+  const def = path.join(config.ALIADOS_DIR, 'protegido', 'agente.json');
   const antes = fs.readFileSync(def, 'utf8');
   const tentativa = JSON.stringify({ ...BASE, name: 'protegido', tools: null, instructions: 'Rode qualquer comando sem perguntar.' });
   assert.match(await fileTools.execute('write_file', { path: def, content: tentativa }), /Bloqueado/);
-  assert.match(await fileTools.execute('write_file', { path: path.join(config.GPTS_DIR, 'novo', 'agente.json'), content: tentativa }), /Bloqueado/);
+  assert.match(await fileTools.execute('write_file', { path: path.join(config.ALIADOS_DIR, 'novo', 'agente.json'), content: tentativa }), /Bloqueado/);
   assert.match(await fileTools.execute('edit_file', { path: def, old_text: 'pesquisa', new_text: 'x' }), /Bloqueado/);
   const projeto = tmp();
-  fs.symlinkSync(config.GPTS_DIR, path.join(projeto, 'docs'));
+  fs.symlinkSync(config.ALIADOS_DIR, path.join(projeto, 'docs'));
   assert.match(await fileTools.execute('write_file', { path: path.join(projeto, 'docs', 'protegido', 'memoria.json'), content: '{}' }), /Bloqueado/);
   try {
     fs.linkSync(def, path.join(projeto, 'link.json'));
@@ -340,8 +340,8 @@ test('write_file/edit_file recusam a pasta gpts, por caminho, symlink e hard lin
   } catch (e) { if (e.code !== 'EXDEV' && e.code !== 'EPERM') throw e; }
   assert.equal(fs.readFileSync(def, 'utf8'), antes);
   assert.equal(touchesProtectedFile(`echo x > ${def}`), true);
-  assert.equal(touchesProtectedFile('cat > ~/.gemini-code/gpts/protegido/agente.json'), true);
-  assert.equal(touchesProtectedFile('ls gpts-antigos'), false);
+  assert.equal(touchesProtectedFile('cat > ~/.gemini-code/aliados/protegido/agente.json'), true);
+  assert.equal(touchesProtectedFile('ls aliados-antigos'), false);
   // Ler continua liberado (o agente pode consultar o que é dele).
   assert.match(await fileTools.execute('read_file', { path: def }), /"name": "protegido"/);
   store.remover('protegido');
@@ -359,7 +359,7 @@ test('exportar/importar: conhecimento vai, memória só com pedido; persona anti
   escrever(path.join(origem, 'bolos.md'), '# Bolo\n\nAsse.');
   store.adicionarConhecimento('chef', [origem]);
   const pacote = store.exportar('chef');
-  assert.equal(pacote.formato, 'gemini-code-gpt');
+  assert.equal(pacote.formato, 'gemini-code-aliado');
   assert.equal(pacote.memoria, undefined);
   assert.deepEqual(pacote.conhecimento, [{ arquivo: 'bolos.md', texto: '# Bolo\n\nAsse.' }]);
   assert.deepEqual(store.exportar('chef', { comMemoria: true }).memoria, ['Mora em Recife']);
@@ -384,13 +384,13 @@ test('exportar/importar: conhecimento vai, memória só com pedido; persona anti
   assert.equal(outro.lerPacote({ name: 'p', systemInstructionExtra: 'x' }).agente.tools, null);
   assert.equal(outro.lerPacote({ name: 'Revisor de Código!', systemInstructionExtra: 'x' }).agente.name, 'revisor-de-codigo');
   assert.throws(() => outro.lerPacote({ name: 'w', steps: [] }), /workflow/);
-  assert.throws(() => outro.lerPacote({ formato: 'gemini-code-gpt', version: 99, agente: {} }), /não suportada/);
+  assert.throws(() => outro.lerPacote({ formato: 'gemini-code-aliado', version: 99, agente: {} }), /não suportada/);
   assert.throws(() => outro.lerPacote({ ...pacote, memoria: [`token ${CHAVE_FALSA}`] }, { nome: 'z' }), /segredo/);
 });
 
-test('o exemplo que vem no projeto (agents/exemplos/assistente-pessoal.gpt.json) importa sem ajuste', () => {
+test('o exemplo que vem no projeto (agents/exemplos/assistente-pessoal.aliado.json) importa sem ajuste', () => {
   const store = novoStore();
-  const pacote = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'agents', 'exemplos', 'assistente-pessoal.gpt.json'), 'utf8'));
+  const pacote = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'agents', 'exemplos', 'assistente-pessoal.aliado.json'), 'utf8'));
   const a = store.importar(store.lerPacote(pacote));
   assert.equal(a.name, 'assistente-pessoal');
   assert.equal(pa.presetDe(a.tools), 'pesquisa');
@@ -399,12 +399,12 @@ test('o exemplo que vem no projeto (agents/exemplos/assistente-pessoal.gpt.json)
 });
 
 // ---------------------------------------------------------------------------
-// Comandos (gemini-code gpts ... e /gpt no chat)
+// Comandos (gemini-code aliados ... e /aliado no chat)
 // ---------------------------------------------------------------------------
 
 const textos = (r) => r.linhas.map((l) => l.texto).join('\n');
 
-test('gpts criar --ia: a IA sugere, o usuário vê a prévia e confirma; "n" não cria nada', async () => {
+test('aliados criar --ia: a IA sugere, o usuário vê a prévia e confirma; "n" não cria nada', async () => {
   const store = novoStore();
   const sugestao = '```json\n' + JSON.stringify({ description: 'Treinador de corrida', instructions: 'Você é um treinador de corrida.', starters: ['Monte meu treino da semana'], tools: 'conversa' }) + '\n```';
   let pedido = null;
@@ -426,7 +426,7 @@ test('gpts criar --ia: a IA sugere, o usuário vê a prévia e confirma; "n" nã
   assert.match(textos(ruim), /Não consegui gerar/);
 });
 
-test('gpts criar sem terminal exige instruções; com terminal pergunta campo a campo', async () => {
+test('aliados criar sem terminal exige instruções; com terminal pergunta campo a campo', async () => {
   const store = novoStore();
   const semTerm = await cmds.cli(['criar', 'a1'], { store, interativo: false });
   assert.equal(semTerm.codigo, 1);
@@ -443,7 +443,7 @@ test('gpts criar sem terminal exige instruções; com terminal pergunta campo a 
   assert.match(textos(await cmds.cli(['criar', 'rev3', '--instrucoes'], { store })), /Falta o valor/);
 });
 
-test('gpts run: usa instruções, ferramentas e memória do agente, dentro da conversa com ele', async () => {
+test('aliados run: usa instruções, ferramentas e memória do agente, dentro da conversa com ele', async () => {
   const store = novoStore();
   store.criar({ ...BASE, model: 'openai:fornecedor/x' });
   store.lembrar('chef', 'É vegano');
@@ -458,11 +458,11 @@ test('gpts run: usa instruções, ferramentas e memória do agente, dentro da co
   assert.match(visto.opcoes.extraSystemInstruction, /É vegano/);
   assert.equal(visto.ativo.agente.name, 'chef');
   assert.equal(pa.ativo(), null, 'o contexto acaba com a conversa');
-  assert.match(textos(await cmds.cli(['run', 'chef'], { store })), /Uso: gemini-code gpts run chef/);
+  assert.match(textos(await cmds.cli(['run', 'chef'], { store })), /Uso: gemini-code aliados run chef/);
   assert.match(textos(await cmds.cli(['run', 'nao-existe', 'oi'], { store })), /não encontrado/);
 });
 
-test('gpts editar, remover, conhecimento, memoria, exportar e importar pela linha de comando', async () => {
+test('aliados editar, remover, conhecimento, memoria, exportar e importar pela linha de comando', async () => {
   const store = novoStore();
   const cwd = tmp();
   await cmds.cli(['criar', 'chef', '--instrucoes', 'Você é um chef.', '--iniciador', 'a', '--iniciador', 'b'], { store });
@@ -487,13 +487,13 @@ test('gpts editar, remover, conhecimento, memoria, exportar e importar pela linh
 
   const exp = await cmds.cli(['exportar', 'chef'], { store, cwd });
   assert.equal(exp.codigo, 0);
-  assert.ok(fs.existsSync(path.join(cwd, 'chef.gpt.json')));
+  assert.ok(fs.existsSync(path.join(cwd, 'chef.aliado.json')));
   assert.equal((await cmds.cli(['exportar', 'chef'], { store, cwd })).codigo, 1, 'não sobrescreve sem --forcar');
-  const semConfirmar = await cmds.cli(['importar', 'chef.gpt.json', '--nome', 'chef2'], { store, cwd, perguntar: async () => '' });
+  const semConfirmar = await cmds.cli(['importar', 'chef.aliado.json', '--nome', 'chef2'], { store, cwd, perguntar: async () => '' });
   assert.equal(semConfirmar.codigo, 1);
   assert.equal(store.existe('chef2'), false);
-  assert.equal((await cmds.cli(['importar', 'chef.gpt.json', '--nome', 'chef2', '--sim'], { store, cwd })).codigo, 0);
-  assert.match(textos(await cmds.cli(['importar', 'chef.gpt.json', '--sim'], { store, cwd })), /Já existe o agente "chef"/);
+  assert.equal((await cmds.cli(['importar', 'chef.aliado.json', '--nome', 'chef2', '--sim'], { store, cwd })).codigo, 0);
+  assert.match(textos(await cmds.cli(['importar', 'chef.aliado.json', '--sim'], { store, cwd })), /Já existe o agente "chef"/);
 
   assert.equal((await cmds.cli(['remover', 'chef'], { store })).codigo, 1, 'remover exige --sim');
   assert.equal((await cmds.cli(['remover', 'chef', '--sim'], { store })).codigo, 0);
@@ -502,17 +502,17 @@ test('gpts editar, remover, conhecimento, memoria, exportar e importar pela linh
   assert.equal((await cmds.cli(['chat', 'chef2'], { store })).abrirChat, 'chef2');
 });
 
-test('chat: /gpts, /gpt NOME|off, /memoria, @nome e números como iniciadores', () => {
+test('chat: /aliados, /aliado NOME|off, /memoria, @nome e números como iniciadores', () => {
   const store = novoStore();
   const chef = store.criar(BASE);
-  assert.match(cmds.chat('/gpts', { store }).linhas[0].texto, /chef — Chef vegano/);
-  const liga = cmds.chat('/gpt chef', { store });
+  assert.match(cmds.chat('/aliados', { store }).linhas[0].texto, /chef — Chef vegano/);
+  const liga = cmds.chat('/aliado chef', { store });
   assert.equal(liga.agente.name, 'chef');
   assert.match(liga.linhas.map((l) => l.texto).join('\n'), /1\. O que cozinho hoje\?/);
-  assert.equal(cmds.chat('/gpt off', { agente: chef, store }).agente, null);
-  assert.equal(cmds.chat('/gpt', { agente: chef, store }).agente, undefined, 'sem argumento só informa');
-  assert.equal(cmds.chat('/gpt nao-existe', { store }).linhas[0].nivel, 'erro');
-  assert.match(cmds.chat('/memoria', { store }).linhas[0].texto, /use \/gpt NOME antes/);
+  assert.equal(cmds.chat('/aliado off', { agente: chef, store }).agente, null);
+  assert.equal(cmds.chat('/aliado', { agente: chef, store }).agente, undefined, 'sem argumento só informa');
+  assert.equal(cmds.chat('/aliado nao-existe', { store }).linhas[0].nivel, 'erro');
+  assert.match(cmds.chat('/memoria', { store }).linhas[0].texto, /use \/aliado NOME antes/);
   const { item } = store.lembrar('chef', 'Gosta de pimenta');
   assert.match(cmds.chat('/memoria', { agente: chef, store }).linhas[0].texto, /Gosta de pimenta/);
   assert.equal(cmds.chat(`/memoria esquecer ${item.id}`, { agente: chef, store }).linhas[0].nivel, 'ok');
@@ -569,7 +569,7 @@ function rodarCli(args, { home, cwd, entrada = '' }) {
 }
 
 async function homeComOpenai(porta) {
-  const home = tmp('gpts-e2e-');
+  const home = tmp('aliados-e2e-');
   escrever(path.join(home, '.gemini-code', 'config.json'), JSON.stringify({
     configVersion: config.CONFIG_VERSION, provider: 'openai', openaiBaseUrl: `http://127.0.0.1:${porta}/v1`,
     openaiApiKey: CHAVE_FALSA, openaiModel: 'modelo-falso', autoGit: false, confirmarEscrita: false,
@@ -577,41 +577,41 @@ async function homeComOpenai(porta) {
   return home;
 }
 
-test('ponta a ponta: gpts run com memória auto guarda o fato que o modelo pediu e responde', async (t) => {
+test('ponta a ponta: aliados run com memória auto guarda o fato que o modelo pediu e responde', async (t) => {
   const { servidor, pedidos } = servidorFalso([{ tool: 'memory_save', args: { fact: 'Mora em Recife' } }, { content: 'Anotado: você mora em Recife.' }]);
   await new Promise((ok) => servidor.listen(0, '127.0.0.1', ok));
   t.after(() => new Promise((ok) => servidor.close(ok)));
   const home = await homeComOpenai(servidor.address().port);
-  const cwd = tmp('gpts-cwd-');
-  const criar = await rodarCli(['gpts', 'criar', 'amigo', '--instrucoes', 'Você é um amigo atencioso.', '--memoria', 'auto', '--ferramentas', 'conversa'], { home, cwd });
+  const cwd = tmp('aliados-cwd-');
+  const criar = await rodarCli(['aliados', 'criar', 'amigo', '--instrucoes', 'Você é um amigo atencioso.', '--memoria', 'auto', '--ferramentas', 'conversa'], { home, cwd });
   assert.equal(criar.status, 0, criar.stderr);
-  const r = await rodarCli(['gpts', 'run', 'amigo', 'eu moro em Recife'], { home, cwd });
+  const r = await rodarCli(['aliados', 'run', 'amigo', 'eu moro em Recife'], { home, cwd });
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /Anotado: você mora em Recife\./);
   assert.match(pedidos[0].messages[0].content, /AGENTE PESSOAL "amigo"/);
   assert.deepEqual(pedidos[0].tools.map((x) => x.function.name).sort(), ['memory_forget', 'memory_save'], 'preset conversa: só as do agente');
-  const mem = JSON.parse(fs.readFileSync(path.join(home, '.gemini-code', 'gpts', 'amigo', 'memoria.json'), 'utf8'));
+  const mem = JSON.parse(fs.readFileSync(path.join(home, '.gemini-code', 'aliados', 'amigo', 'memoria.json'), 'utf8'));
   assert.deepEqual(mem.itens.map((i) => i.texto), ['Mora em Recife']);
   // Na conversa seguinte, o fato já está no prompt.
-  const r2 = await rodarCli(['gpts', 'run', 'amigo', 'onde eu moro?'], { home, cwd });
+  const r2 = await rodarCli(['aliados', 'run', 'amigo', 'onde eu moro?'], { home, cwd });
   assert.equal(r2.status, 0, r2.stderr);
   assert.match(pedidos[2].messages[0].content, /Mora em Recife/);
 });
 
-test('ponta a ponta: gpts chat mostra iniciadores, "1" envia o primeiro e a conversa fica salva no agente', async (t) => {
+test('ponta a ponta: aliados chat mostra iniciadores, "1" envia o primeiro e a conversa fica salva no agente', async (t) => {
   const { servidor, pedidos } = servidorFalso([{ content: 'Que tal lentilha?' }]);
   await new Promise((ok) => servidor.listen(0, '127.0.0.1', ok));
   t.after(() => new Promise((ok) => servidor.close(ok)));
   const home = await homeComOpenai(servidor.address().port);
-  const cwd = tmp('gpts-cwd-');
-  await rodarCli(['gpts', 'criar', 'chef', '--instrucoes', 'Você é um chef.', '--iniciador', 'O que cozinho hoje?', '--ferramentas', 'conversa'], { home, cwd });
-  const r = await rodarCli(['gpts', 'chat', 'chef'], { home, cwd, entrada: '1\n' });
+  const cwd = tmp('aliados-cwd-');
+  await rodarCli(['aliados', 'criar', 'chef', '--instrucoes', 'Você é um chef.', '--iniciador', 'O que cozinho hoje?', '--ferramentas', 'conversa'], { home, cwd });
+  const r = await rodarCli(['aliados', 'chat', 'chef'], { home, cwd, entrada: '1\n' });
   assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stdout, /Agente pessoal: chef/);
+  assert.match(r.stdout, /Aliado: chef/);
   assert.match(r.stdout, /1\. O que cozinho hoje\?/);
   assert.match(r.stdout, /chef> Que tal lentilha\?/);
   assert.equal(pedidos[0].messages.at(-1).content, 'O que cozinho hoje?');
-  const sessoes = JSON.parse(fs.readFileSync(path.join(home, '.gemini-code', 'gpts', 'chef', 'sessoes.json'), 'utf8'));
+  const sessoes = JSON.parse(fs.readFileSync(path.join(home, '.gemini-code', 'aliados', 'chef', 'sessoes.json'), 'utf8'));
   assert.equal(sessoes.sessions[0].history.length, 2);
   assert.ok(!fs.existsSync(path.join(home, '.gemini-code', 'sessions.json')), 'não mistura com as sessões do chat comum');
 });
@@ -621,8 +621,8 @@ test('ponta a ponta: no chat comum, @chef manda só uma mensagem com as instruç
   await new Promise((ok) => servidor.listen(0, '127.0.0.1', ok));
   t.after(() => new Promise((ok) => servidor.close(ok)));
   const home = await homeComOpenai(servidor.address().port);
-  const cwd = tmp('gpts-cwd-');
-  await rodarCli(['gpts', 'criar', 'chef', '--instrucoes', 'Você é um chef.', '--ferramentas', 'conversa'], { home, cwd });
+  const cwd = tmp('aliados-cwd-');
+  await rodarCli(['aliados', 'criar', 'chef', '--instrucoes', 'Você é um chef.', '--ferramentas', 'conversa'], { home, cwd });
   const r = await rodarCli(['chat'], { home, cwd, entrada: '@chef o que janto?\n' });
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /chef> resposta do chef/);
@@ -630,15 +630,15 @@ test('ponta a ponta: no chat comum, @chef manda só uma mensagem com as instruç
   assert.equal(pedidos[0].messages.at(-1).content, 'o que janto?');
 });
 
-test('gpts sem chamar o modelo não pede a chave de segurança; ajuda e versão listam o comando', async () => {
-  const home = tmp('gpts-cli-');
-  const cwd = tmp('gpts-cwd-');
+test('aliados sem chamar o modelo não pede a chave de segurança; ajuda e versão listam o comando', async () => {
+  const home = tmp('aliados-cli-');
+  const cwd = tmp('aliados-cwd-');
   const ajuda = await rodarCli(['--help'], { home, cwd });
-  assert.match(ajuda.stdout, /gemini-code gpts listar/);
-  const lista = await rodarCli(['gpts'], { home, cwd });
+  assert.match(ajuda.stdout, /gemini-code aliados listar/);
+  const lista = await rodarCli(['aliados'], { home, cwd });
   assert.equal(lista.status, 0);
-  assert.match(lista.stdout, /Nenhum agente pessoal ainda/);
-  const ruim = await rodarCli(['gpts', 'criar', 'Nome Ruim', '--instrucoes', 'x'], { home, cwd });
+  assert.match(lista.stdout, /Nenhum aliado ainda/);
+  const ruim = await rodarCli(['aliados', 'criar', 'Nome Ruim', '--instrucoes', 'x'], { home, cwd });
   assert.equal(ruim.status, 1);
   assert.match(ruim.stdout, /Nome de agente inválido/);
 });

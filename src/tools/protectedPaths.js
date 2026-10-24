@@ -48,7 +48,7 @@ function inodesDasPastas(pastas) {
   let vistas = 0;
   while (pendentes.length && vistas < MAX_ENTRADAS_VARRIDAS) {
     const dir = pendentes.pop();
-    let entradas = [];
+    let entradas;
     try { entradas = fs.readdirSync(dir, { withFileTypes: true }); } catch { continue; }
     for (const e of entradas) {
       if (++vistas > MAX_ENTRADAS_VARRIDAS) break;

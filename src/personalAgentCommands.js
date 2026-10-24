@@ -1,7 +1,7 @@
 // src/personalAgentCommands.js
 // v0.42.0 — comandos dos agentes pessoais, fora do bin/gemini-code.js para serem testados sem terminal:
-//   cli(args, deps)      -> `gemini-code gpts ...`; devolve { linhas, codigo, abrirChat? }
-//   chat(cmd, estado)    -> /gpts, /gpt NOME|off e /memoria dentro do chat; null se não for um deles
+//   cli(args, deps)      -> `gemini-code aliados ...`; devolve { linhas, codigo, abrirChat? }
+//   chat(cmd, estado)    -> /aliados, /aliado NOME|off e /memoria dentro do chat; null se não for um deles
 //   mencao(linha, store) -> "@nome mensagem": { agente, mensagem } ou null
 // Linhas no formato de src/workflowCommands.js: { nivel: 'dim'|'erro'|'aviso'|'ok'|'texto', texto }.
 'use strict';
@@ -13,21 +13,21 @@ const personalAgents = require('./personalAgents');
 const { LIMITES, PRESETS, PRESET_PADRAO, MEMORIA_MODOS } = personalAgents;
 const L = (nivel, texto) => ({ nivel, texto });
 
-const USO = `Agentes pessoais (como os GPTs do ChatGPT): instruções, iniciadores, base de conhecimento, memória,
-ferramentas e modelo próprios. Ficam em ~/.gemini-code/gpts/ (o modelo não grava ali).
+const USO = `Aliados — seus agentes pessoais: instruções, iniciadores, base de conhecimento, memória,
+ferramentas e modelo próprios. Ficam em ~/.gemini-code/aliados/ (o modelo não grava ali).
 
-  gemini-code gpts listar
-  gemini-code gpts criar NOME [opções]          sem opções, num terminal, pergunta campo a campo
-  gemini-code gpts criar NOME --ia "o que ele deve ser/fazer"   a IA escreve a configuração; você revisa e confirma
-  gemini-code gpts ver NOME
-  gemini-code gpts editar NOME [opções]
-  gemini-code gpts remover NOME --sim
-  gemini-code gpts chat NOME                    conversa (a conversa dele fica salva; /help lista os comandos)
-  gemini-code gpts run NOME "mensagem"          uma pergunta, sem abrir o chat
-  gemini-code gpts conhecimento NOME [listar | add ARQ|PASTA... [--forcar] | remover ARQ]
-  gemini-code gpts memoria NOME [listar | esquecer ID | limpar --sim]
-  gemini-code gpts exportar NOME [ARQUIVO] [--com-memoria]
-  gemini-code gpts importar ARQUIVO [--nome NOVO] [--forcar] [--sim]   aceita também personas antigas (agents/*.json)
+  gemini-code aliados listar
+  gemini-code aliados criar NOME [opções]          sem opções, num terminal, pergunta campo a campo
+  gemini-code aliados criar NOME --ia "o que ele deve ser/fazer"   a IA escreve a configuração; você revisa e confirma
+  gemini-code aliados ver NOME
+  gemini-code aliados editar NOME [opções]
+  gemini-code aliados remover NOME --sim
+  gemini-code aliados chat NOME                    conversa (a conversa dele fica salva; /help lista os comandos)
+  gemini-code aliados run NOME "mensagem"          uma pergunta, sem abrir o chat
+  gemini-code aliados conhecimento NOME [listar | add ARQ|PASTA... [--forcar] | remover ARQ]
+  gemini-code aliados memoria NOME [listar | esquecer ID | limpar --sim]
+  gemini-code aliados exportar NOME [ARQUIVO] [--com-memoria]
+  gemini-code aliados importar ARQUIVO [--nome NOVO] [--forcar] [--sim]   aceita também personas antigas (agents/*.json)
 
 Opções de criar/editar:
   --descricao TEXTO          o que ele faz (até ${LIMITES.descricao} caracteres)
@@ -37,7 +37,7 @@ Opções de criar/editar:
   --modelo NOME              modelo só dele (ex.: @local, openai:MODELO, gemini-...); "padrao" volta ao do config
   --memoria MODO             confirmar (padrão: pergunta antes de cada mudança) | auto | off
 
-No chat: /gpts lista, /gpt NOME conversa com ele, /gpt off volta, @NOME mensagem pergunta só uma vez, /memoria.`;
+No chat: /aliados lista, /aliado NOME conversa com ele, /aliado off volta, @NOME mensagem pergunta só uma vez, /memoria.`;
 
 const DESCRICAO_PRESETS = {
   conversa: 'sem ferramentas (só conversa, memória e conhecimento)',
@@ -86,7 +86,7 @@ function lerOpcoes(args) {
       if (COM_VALOR[flag] === 'starter') op.starters.push(valor);
       else op[COM_VALOR[flag]] = valor;
     } else if (BOOLEANAS[arg]) op[BOOLEANAS[arg]] = true;
-    else if (arg.startsWith('--')) throw new Error(`Opção desconhecida: ${arg}. Veja: gemini-code gpts ajuda`);
+    else if (arg.startsWith('--')) throw new Error(`Opção desconhecida: ${arg}. Veja: gemini-code aliados ajuda`);
     else posicionais.push(arg);
   }
   return { op, posicionais };
@@ -128,7 +128,7 @@ function textoMemoria(modo, itens) {
 function descrever(agente, store, { completo = false } = {}) {
   const arquivos = store.listarConhecimento(agente.name);
   const kb = Math.ceil(arquivos.reduce((s, a) => s + a.bytes, 0) / 1024);
-  const instr = completo || agente.instructions.length <= 300 ? agente.instructions : `${agente.instructions.slice(0, 300)}… (gpts ver ${agente.name} mostra tudo)`;
+  const instr = completo || agente.instructions.length <= 300 ? agente.instructions : `${agente.instructions.slice(0, 300)}… (aliados ver ${agente.name} mostra tudo)`;
   const linhas = [
     `${agente.name}${agente.description ? ` — ${agente.description}` : ''}`,
     `  ferramentas: ${textoFerramentas(agente.tools)}`,
@@ -141,9 +141,9 @@ function descrever(agente, store, { completo = false } = {}) {
   return linhas.join('\n');
 }
 
-/** Cabeçalho ao abrir uma conversa com o agente (no chat e no gpts chat). */
+/** Cabeçalho ao abrir uma conversa com o agente (no chat e no aliados chat). */
 function boasVindas(agente, store) {
-  const linhas = [L('ok', `Agente pessoal: ${agente.name}${agente.description ? ` — ${agente.description}` : ''}`)];
+  const linhas = [L('ok', `Aliado: ${agente.name}${agente.description ? ` — ${agente.description}` : ''}`)];
   const extras = [];
   if (agente.memory !== 'off') extras.push(`memória ${agente.memory} (${store.listarMemoria(agente.name).length} itens; /memoria)`);
   const arqs = store.listarConhecimento(agente.name).length;
@@ -168,7 +168,7 @@ function iniciadorEscolhido(agente, texto, conversaVazia) {
 // Criação: assistente (perguntas) e pela IA
 // ---------------------------------------------------------------------------
 
-const INSTRUCAO_IA = (nome, pedido) => `Configure um AGENTE PESSOAL (como um GPT personalizado) chamado "${nome}" para este pedido do usuário:
+const INSTRUCAO_IA = (nome, pedido) => `Configure um AGENTE PESSOAL (um "aliado") chamado "${nome}" para este pedido do usuário:
 """${pedido}"""
 
 Responda SÓ com um JSON, sem markdown e sem texto antes ou depois:
@@ -228,7 +228,7 @@ async function assistente(nome, perguntar, perguntarVarias) {
 }
 
 // ---------------------------------------------------------------------------
-// CLI: gemini-code gpts ...
+// CLI: gemini-code aliados ...
 // ---------------------------------------------------------------------------
 
 const SUB = {
@@ -247,7 +247,7 @@ const SUB = {
 };
 
 /**
- * @param {string[]} args  argumentos depois de "gpts"
+ * @param {string[]} args  argumentos depois de "aliados"
  * @param {object} deps    { store, perguntar(q), interativo, runOnce, cwd } — para teste; padrões reais
  * @returns {Promise<{ linhas, codigo, abrirChat?: string }>}
  */
@@ -273,7 +273,7 @@ async function cli(args = [], deps = {}) {
 
     if (sub === 'listar') {
       const todos = store.listar();
-      if (!todos.length) return ok(L('dim', 'Nenhum agente pessoal ainda. Crie um com:\n  gemini-code gpts criar NOME --ia "o que ele deve ser/fazer"\n  gemini-code gpts criar NOME --instrucoes "Você é..."'));
+      if (!todos.length) return ok(L('dim', 'Nenhum aliado ainda. Crie um com:\n  gemini-code aliados criar NOME --ia "o que ele deve ser/fazer"\n  gemini-code aliados criar NOME --instrucoes "Você é..."'));
       return ok(...todos.map((a) => (a.erro
         ? L('erro', `  ${a.name}: ${a.erro}`)
         : L('dim', `  ${a.name}${a.description ? ` — ${a.description}` : ''}  [${personalAgents.presetDe(a.tools)}; memória ${a.memory}${a.memory !== 'off' ? ` ${a.memorias}` : ''}; ${a.arquivos} arquivo(s)${a.model ? `; ${a.model}` : ''}]`))));
@@ -281,7 +281,7 @@ async function cli(args = [], deps = {}) {
 
     if (sub === 'importar') {
       const [arquivo] = pos;
-      if (!arquivo) return falha(L('erro', 'Uso: gemini-code gpts importar ARQUIVO [--nome NOVO] [--forcar] [--sim]'));
+      if (!arquivo) return falha(L('erro', 'Uso: gemini-code aliados importar ARQUIVO [--nome NOVO] [--forcar] [--sim]'));
       let dados;
       try { dados = JSON.parse(fs.readFileSync(path.resolve(cwd, arquivo), 'utf8')); } catch (e) { return falha(L('erro', `Não consegui ler ${arquivo}: ${e.message}`)); }
       let lido;
@@ -295,15 +295,15 @@ async function cli(args = [], deps = {}) {
       ]);
       if (!(await confirmado(`Importar "${lido.agente.name}"? (s/n) `, op))) return falha(...resumo, L('dim', 'Nada foi importado (sem terminal, confirme com --sim).'));
       const agente = store.importar(lido, { sobrescrever: Boolean(op.forcar) });
-      return ok(...resumo, L('ok', `Agente "${agente.name}" importado. Converse com: gemini-code gpts chat ${agente.name}`));
+      return ok(...resumo, L('ok', `Agente "${agente.name}" importado. Converse com: gemini-code aliados chat ${agente.name}`));
     }
 
     const [nomeBruto, ...outros] = pos;
-    if (!nomeBruto) return falha(L('erro', `Informe o nome do agente. Uso: gemini-code gpts ${sub} NOME`), L('dim', 'Veja todos com: gemini-code gpts ajuda'));
+    if (!nomeBruto) return falha(L('erro', `Informe o nome do agente. Uso: gemini-code aliados ${sub} NOME`), L('dim', 'Veja todos com: gemini-code aliados ajuda'));
     const nome = personalAgents.validarNome(nomeBruto);
 
     if (sub === 'criar') {
-      if (store.existe(nome)) return falha(L('aviso', `Já existe o agente "${nome}". Use: gemini-code gpts editar ${nome} ...`));
+      if (store.existe(nome)) return falha(L('aviso', `Já existe o agente "${nome}". Use: gemini-code aliados editar ${nome} ...`));
       const mudancas = mudancasDasOpcoes(op);
       let dados;
       let previa = [];
@@ -329,22 +329,22 @@ async function cli(args = [], deps = {}) {
       } else dados = { name: nome, ...mudancas };
       const agente = store.criar(dados);
       return ok(...(op.ia !== undefined ? previa : [L('dim', descrever(agente, store))]),
-        L('ok', `Agente "${agente.name}" criado. Converse com: gemini-code gpts chat ${agente.name}`),
-        L('dim', `Anexe arquivos à base dele com: gemini-code gpts conhecimento ${agente.name} add ARQUIVO`));
+        L('ok', `Agente "${agente.name}" criado. Converse com: gemini-code aliados chat ${agente.name}`),
+        L('dim', `Anexe arquivos à base dele com: gemini-code aliados conhecimento ${agente.name} add ARQUIVO`));
     }
 
     if (sub === 'ver') return ok(L('dim', descrever(store.obter(nome), store, { completo: true })));
 
     if (sub === 'editar') {
       const mudancas = mudancasDasOpcoes(op);
-      if (!Object.keys(mudancas).length) return falha(L('erro', `Nada para mudar. Ex.: gemini-code gpts editar ${nome} --memoria auto`), L('dim', USO));
+      if (!Object.keys(mudancas).length) return falha(L('erro', `Nada para mudar. Ex.: gemini-code aliados editar ${nome} --memoria auto`), L('dim', USO));
       const agente = store.atualizar(nome, mudancas);
       return ok(L('ok', `Agente "${nome}" atualizado.`), L('dim', descrever(agente, store)));
     }
 
     if (sub === 'remover') {
       store.obter(nome);
-      if (!op.sim) return falha(L('aviso', `Isso apaga o agente "${nome}", a memória, a base de conhecimento e as conversas dele. Confirme com: gemini-code gpts remover ${nome} --sim`));
+      if (!op.sim) return falha(L('aviso', `Isso apaga o agente "${nome}", a memória, a base de conhecimento e as conversas dele. Confirme com: gemini-code aliados remover ${nome} --sim`));
       store.remover(nome);
       return ok(L('ok', `Agente "${nome}" removido.`));
     }
@@ -356,7 +356,7 @@ async function cli(args = [], deps = {}) {
 
     if (sub === 'run') {
       const mensagem = outros.join(' ').trim();
-      if (!mensagem) return falha(L('erro', `Uso: gemini-code gpts run ${nome} "mensagem"`));
+      if (!mensagem) return falha(L('erro', `Uso: gemini-code aliados run ${nome} "mensagem"`));
       const agente = store.obter(nome);
       const run = deps.runOnce || require('./agent').runOnce;
       const { opcoes, ctx } = personalAgents.prepararTurno(store, agente, mensagem, { perguntar: deps.perguntar });
@@ -372,10 +372,10 @@ async function cli(args = [], deps = {}) {
         const lista = store.listarConhecimento(nome);
         return ok(L('dim', lista.length
           ? lista.map((a) => `  ${a.arquivo} (${Math.ceil(a.bytes / 1024)} KB)`).join('\n')
-          : `Nenhum arquivo. Anexe com: gemini-code gpts conhecimento ${nome} add ARQUIVO|PASTA (texto: .md, .txt, .csv, código...)`));
+          : `Nenhum arquivo. Anexe com: gemini-code aliados conhecimento ${nome} add ARQUIVO|PASTA (texto: .md, .txt, .csv, código...)`));
       }
       if (acao === 'add') {
-        if (!arquivos.length) return falha(L('erro', `Uso: gemini-code gpts conhecimento ${nome} add ARQUIVO|PASTA... [--forcar]`));
+        if (!arquivos.length) return falha(L('erro', `Uso: gemini-code aliados conhecimento ${nome} add ARQUIVO|PASTA... [--forcar]`));
         const r = store.adicionarConhecimento(nome, arquivos.map((a) => path.resolve(cwd, a)), { forcar: Boolean(op.forcar) });
         const linhas = [
           ...r.adicionados.map((a) => L('ok', `  ${a.substituiu ? 'atualizado' : 'adicionado'}: ${a.arquivo} (${Math.ceil(a.bytes / 1024)} KB)`)),
@@ -384,10 +384,10 @@ async function cli(args = [], deps = {}) {
         return { linhas: linhas.length ? linhas : [L('aviso', 'Nenhum arquivo encontrado.')], codigo: r.adicionados.length ? 0 : 1 };
       }
       if (acao === 'remover') {
-        if (!arquivos[0]) return falha(L('erro', `Uso: gemini-code gpts conhecimento ${nome} remover ARQUIVO`));
+        if (!arquivos[0]) return falha(L('erro', `Uso: gemini-code aliados conhecimento ${nome} remover ARQUIVO`));
         return store.removerConhecimento(nome, arquivos[0]) ? ok(L('ok', `Removido: ${arquivos[0]}`)) : falha(L('aviso', `"${arquivos[0]}" não está na base de ${nome}.`));
       }
-      return falha(L('erro', `Uso: gemini-code gpts conhecimento ${nome} [listar | add ARQ... | remover ARQ]`));
+      return falha(L('erro', `Uso: gemini-code aliados conhecimento ${nome} [listar | add ARQ... | remover ARQ]`));
     }
 
     if (sub === 'memoria') {
@@ -396,28 +396,28 @@ async function cli(args = [], deps = {}) {
       const agente = store.obter(nome);
       if (acao === 'listar') {
         const itens = store.listarMemoria(nome);
-        const modo = L('dim', `Memória: ${textoMemoria(agente.memory, itens.length)}. Mude com: gemini-code gpts editar ${nome} --memoria confirmar|auto|off`);
+        const modo = L('dim', `Memória: ${textoMemoria(agente.memory, itens.length)}. Mude com: gemini-code aliados editar ${nome} --memoria confirmar|auto|off`);
         return ok(L('dim', itens.length ? itens.map((i) => `  [${i.id}] ${i.texto}  (${i.criadoEm.slice(0, 10)})`).join('\n') : '  (vazia)'), modo);
       }
       if (acao === 'esquecer') {
-        if (!id) return falha(L('erro', `Uso: gemini-code gpts memoria ${nome} esquecer ID`));
+        if (!id) return falha(L('erro', `Uso: gemini-code aliados memoria ${nome} esquecer ID`));
         return store.esquecer(nome, id) ? ok(L('ok', `Esquecido: [${id}]`)) : falha(L('aviso', `Não há memória com id "${id}".`));
       }
       if (acao === 'limpar') {
-        if (!op.sim) return falha(L('aviso', `Isso apaga toda a memória de ${nome}. Confirme com: gemini-code gpts memoria ${nome} limpar --sim`));
+        if (!op.sim) return falha(L('aviso', `Isso apaga toda a memória de ${nome}. Confirme com: gemini-code aliados memoria ${nome} limpar --sim`));
         return ok(L('ok', `Memória de ${nome} apagada (${store.limparMemoria(nome)} item(ns)).`));
       }
-      return falha(L('erro', `Uso: gemini-code gpts memoria ${nome} [listar | esquecer ID | limpar --sim]`));
+      return falha(L('erro', `Uso: gemini-code aliados memoria ${nome} [listar | esquecer ID | limpar --sim]`));
     }
 
     if (sub === 'exportar') {
-      const destino = path.resolve(cwd, outros[0] || `${nome}.gpt.json`);
+      const destino = path.resolve(cwd, outros[0] || `${nome}.aliado.json`);
       if (fs.existsSync(destino) && !op.forcar) return falha(L('aviso', `${destino} já existe. Use --forcar para sobrescrever.`));
       const pacote = store.exportar(nome, { comMemoria: Boolean(op.comMemoria) });
       fs.writeFileSync(destino, JSON.stringify(pacote, null, 2) + '\n', { mode: 0o600 });
       return ok(L('ok', `Exportado: ${destino}`), L('dim', op.comMemoria
         ? 'ATENÇÃO: o arquivo inclui a memória (fatos pessoais). Compartilhe com cuidado.'
-        : 'A memória não foi incluída (é pessoal); use --com-memoria para levar junto. Importe com: gemini-code gpts importar ARQUIVO'));
+        : 'A memória não foi incluída (é pessoal); use --com-memoria para levar junto. Importe com: gemini-code aliados importar ARQUIVO'));
     }
   } catch (e) {
     return falha(L('erro', e.message));
@@ -426,7 +426,7 @@ async function cli(args = [], deps = {}) {
 }
 
 // ---------------------------------------------------------------------------
-// Chat: /gpts, /gpt NOME|off, /memoria e @nome
+// Chat: /aliados, /aliado NOME|off, /memoria e @nome
 // ---------------------------------------------------------------------------
 
 /**
@@ -436,31 +436,31 @@ async function cli(args = [], deps = {}) {
  */
 function chat(cmd, { agente = null, store = personalAgents.defaultStore } = {}) {
   const c = String(cmd).trim();
-  const m = /^\/(gpts|gpt|memoria|memória)(?:\s+([\s\S]*))?$/i.exec(c);
+  const m = /^\/(aliados|aliado|memoria|memória)(?:\s+([\s\S]*))?$/i.exec(c);
   if (!m) return null;
   const tipo = m[1].toLowerCase();
   const arg = (m[2] || '').trim();
   try {
-    if (tipo === 'gpts') {
+    if (tipo === 'aliados') {
       const todos = store.listar();
       return { linhas: [L('dim', todos.length
-        ? todos.map((a) => `  ${agente && a.name === agente.name ? '* ' : ''}${a.name}${a.erro ? ` (erro: ${a.erro})` : a.description ? ` — ${a.description}` : ''}`).join('\n') + '\nUse /gpt NOME para conversar com um deles ou @NOME mensagem para perguntar uma vez.'
-        : 'Nenhum agente pessoal. Crie fora do chat: gemini-code gpts criar NOME --ia "o que ele deve fazer"')] };
+        ? todos.map((a) => `  ${agente && a.name === agente.name ? '* ' : ''}${a.name}${a.erro ? ` (erro: ${a.erro})` : a.description ? ` — ${a.description}` : ''}`).join('\n') + '\nUse /aliado NOME para conversar com um deles ou @NOME mensagem para perguntar uma vez.'
+        : 'Nenhum aliado. Crie fora do chat: gemini-code aliados criar NOME --ia "o que ele deve fazer"')] };
     }
-    if (tipo === 'gpt') {
-      if (!arg) return { linhas: [L('dim', agente ? `Conversando com o agente pessoal "${agente.name}". /gpt off volta ao agente comum.` : 'Nenhum agente pessoal ativo. Use /gpt NOME (veja /gpts).')] };
-      if (/^(off|sair|nenhum)$/i.test(arg)) return { linhas: [L('dim', agente ? `Agente "${agente.name}" desligado; de volta ao agente comum.` : 'Nenhum agente pessoal estava ativo.')], agente: null };
+    if (tipo === 'aliado') {
+      if (!arg) return { linhas: [L('dim', agente ? `Conversando com o aliado "${agente.name}". /aliado off volta ao agente comum.` : 'Nenhum aliado ativo. Use /aliado NOME (veja /aliados).')] };
+      if (/^(off|sair|nenhum)$/i.test(arg)) return { linhas: [L('dim', agente ? `Aliado "${agente.name}" desligado; de volta ao agente comum.` : 'Nenhum aliado estava ativo.')], agente: null };
       const novo = store.obter(arg);
       return { linhas: boasVindas(novo, store), agente: novo };
     }
     // /memoria [esquecer ID]
-    if (!agente) return { linhas: [L('dim', 'A memória é de cada agente pessoal: use /gpt NOME antes (ou gemini-code gpts memoria NOME).')] };
+    if (!agente) return { linhas: [L('dim', 'A memória é de cada aliado: use /aliado NOME antes (ou gemini-code aliados memoria NOME).')] };
     const [acao, id] = arg.split(/\s+/);
     if (acao === 'esquecer') {
       if (!id) return { linhas: [L('dim', 'Uso: /memoria esquecer ID')] };
       return { linhas: [store.esquecer(agente.name, id) ? L('ok', `Esquecido: [${id}]`) : L('aviso', `Não há memória com id "${id}".`)] };
     }
-    if (acao) return { linhas: [L('dim', 'Uso: /memoria | /memoria esquecer ID (apagar tudo: gemini-code gpts memoria NOME limpar --sim)')] };
+    if (acao) return { linhas: [L('dim', 'Uso: /memoria | /memoria esquecer ID (apagar tudo: gemini-code aliados memoria NOME limpar --sim)')] };
     const itens = store.listarMemoria(agente.name);
     return { linhas: [L('dim', `Memória de ${agente.name} (${textoMemoria(agente.memory, itens.length)}):\n${itens.length ? itens.map((i) => `  [${i.id}] ${i.texto}`).join('\n') : '  (vazia)'}`)] };
   } catch (e) {
@@ -472,7 +472,7 @@ function chat(cmd, { agente = null, store = personalAgents.defaultStore } = {}) 
 function mencao(linha, store = personalAgents.defaultStore) {
   const m = /^@([a-z0-9][a-z0-9_-]{0,39})\s+(\S[\s\S]*)$/i.exec(String(linha).trim());
   if (!m) return null;
-  let agente = null;
+  let agente;
   try { agente = store.carregar(m[1]); } catch { return null; }
   return agente ? { agente, mensagem: m[2].trim() } : null;
 }

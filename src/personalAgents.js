@@ -1,5 +1,5 @@
 // src/personalAgents.js
-// v0.42.0 — AGENTES PESSOAIS, no espírito dos GPTs do ChatGPT. Cada agente tem:
+// v0.42.0 — ALIADOS: agentes pessoais do usuário. Cada aliado tem:
 //   - nome, descrição e instruções próprias (o papel dele);
 //   - iniciadores: sugestões de conversa mostradas ao abrir (digite 1, 2... para usar);
 //   - ferramentas e modelo próprios (um preset ou uma lista; nunca mais que a sessão permite);
@@ -9,7 +9,7 @@
 //   - memória: fatos sobre o usuário que o agente guarda com memory_save e que entram no prompt de
 //     toda conversa com ele. Por padrão cada mudança pede o "s" do usuário (memória "confirmar").
 //
-// Tudo fica em ~/.gemini-code/gpts/<nome>/, pasta em PROTECTED_DIRS (o modelo não grava ali):
+// Tudo fica em ~/.gemini-code/aliados/<nome>/, pasta em PROTECTED_DIRS (o modelo não grava ali):
 //   agente.json    definição            memoria.json   memória (0600)
 //   conhecimento/  arquivos anexados    sessoes.json   conversas (0600, formato de src/sessions.js)
 'use strict';
@@ -18,7 +18,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { AsyncLocalStorage } = require('async_hooks');
-const { GPTS_DIR } = require('./config');
+const { ALIADOS_DIR } = require('./config');
 const { lerJson, escreverJson } = require('./jsonStore');
 const { createSessionStore } = require('./sessions');
 const { palavras } = require('./code-ia/tokenizer');
@@ -26,7 +26,7 @@ const { mascararSegredos } = require('./securityScan');
 
 const VERSAO = 1;
 const NOME_OK = /^[a-z0-9][a-z0-9_-]{0,39}$/;
-const RESERVADOS = new Set(['off']); // "/gpt off" volta ao agente comum
+const RESERVADOS = new Set(['off']); // "/aliado off" volta ao agente comum
 const MODO_ARQUIVO = 0o600;
 
 const LIMITES = Object.freeze({
@@ -273,7 +273,7 @@ function ativo() {
 // Armazenamento
 // ---------------------------------------------------------------------------
 
-function createPersonalAgentStore({ dir = GPTS_DIR, clock = () => new Date() } = {}) {
+function createPersonalAgentStore({ dir = ALIADOS_DIR, clock = () => new Date() } = {}) {
   const cacheTrechos = new Map(); // pasta -> { assinatura, indice, arquivos, totalChars }
 
   const pastaDe = (nome) => path.join(dir, validarNome(nome));
@@ -298,7 +298,7 @@ function createPersonalAgentStore({ dir = GPTS_DIR, clock = () => new Date() } =
     let bruto;
     try { bruto = fs.readFileSync(arq, 'utf8'); } catch { return null; }
     let dados;
-    try { dados = JSON.parse(bruto); } catch (e) { throw new Error(`${arq} está ilegível (${e.message}). Corrija o JSON ou remova o agente.`); }
+    try { dados = JSON.parse(bruto); } catch (e) { throw new Error(`${arq} está ilegível (${e.message}). Corrija o JSON ou remova o aliado.`, { cause: e }); }
     // Tolerante: uma ferramenta que deixou de existir (versão nova) sai da lista em vez de inutilizar o agente.
     const agente = normalizarAgente(dados, {}, { tolerante: true });
     if (agente.name !== validarNome(nome)) throw new Error(`${arq}: o nome dentro do arquivo ("${agente.name}") não bate com a pasta ("${nome}").`);
@@ -307,7 +307,7 @@ function createPersonalAgentStore({ dir = GPTS_DIR, clock = () => new Date() } =
 
   function obter(nome) {
     const agente = carregar(nome);
-    if (!agente) throw new Error(`Agente pessoal não encontrado: "${nome}". Veja os seus com: gemini-code gpts listar`);
+    if (!agente) throw new Error(`Aliado não encontrado: "${nome}". Veja os seus com: gemini-code aliados listar`);
     return agente;
   }
 
@@ -320,7 +320,7 @@ function createPersonalAgentStore({ dir = GPTS_DIR, clock = () => new Date() } =
   function criar(dados, { sobrescrever = false } = {}) {
     const agente = normalizarAgente(dados);
     const anterior = carregar(agente.name);
-    if (anterior && !sobrescrever) throw new Error(`Já existe um agente "${agente.name}". Use "gemini-code gpts editar ${agente.name}" ou escolha outro nome.`);
+    if (anterior && !sobrescrever) throw new Error(`Já existe um agente "${agente.name}". Use "gemini-code aliados editar ${agente.name}" ou escolha outro nome.`);
     const agora = clock().toISOString();
     return gravarDef({ ...agente, createdAt: anterior ? anterior.createdAt : agora, updatedAt: agora });
   }
@@ -341,7 +341,7 @@ function createPersonalAgentStore({ dir = GPTS_DIR, clock = () => new Date() } =
   }
 
   function listar() {
-    let nomes = [];
+    let nomes;
     try { nomes = fs.readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory() && NOME_OK.test(e.name)).map((e) => e.name).sort(); } catch { return []; }
     const out = [];
     for (const nome of nomes) {
@@ -359,7 +359,7 @@ function createPersonalAgentStore({ dir = GPTS_DIR, clock = () => new Date() } =
 
   function listarConhecimento(nome) {
     const p = pastaConhecimento(nome);
-    let entradas = [];
+    let entradas;
     try { entradas = fs.readdirSync(p, { withFileTypes: true }); } catch { return []; }
     const out = [];
     for (const e of entradas) {
@@ -438,7 +438,7 @@ function createPersonalAgentStore({ dir = GPTS_DIR, clock = () => new Date() } =
     if (cache && cache.assinatura === assinatura) return cache;
     const trechos = [];
     for (const { arquivo } of arquivos) {
-      let texto = '';
+      let texto;
       try { texto = fs.readFileSync(path.join(p, arquivo), 'utf8'); } catch { continue; }
       const partes = dividirEmTrechos(texto);
       partes.forEach((t, i) => trechos.push({ arquivo, indice: i + 1, de: partes.length, texto: t }));
@@ -485,7 +485,7 @@ function createPersonalAgentStore({ dir = GPTS_DIR, clock = () => new Date() } =
     const mem = lerMemoria(nome);
     const igual = mem.itens.find((i) => i.texto.toLowerCase() === fato.toLowerCase());
     if (igual) return { item: { ...igual }, novo: false };
-    if (mem.itens.length >= LIMITES.memorias) throw new Error(`a memória está cheia (${LIMITES.memorias} itens). Peça ao usuário para apagar algo com: gemini-code gpts memoria ${nome}`);
+    if (mem.itens.length >= LIMITES.memorias) throw new Error(`a memória está cheia (${LIMITES.memorias} itens). Peça ao usuário para apagar algo com: gemini-code aliados memoria ${nome}`);
     let id;
     do { id = `m${crypto.randomBytes(3).toString('hex')}`; } while (mem.itens.some((i) => i.id === id));
     const item = { id, texto: fato, criadoEm: clock().toISOString() };
@@ -523,7 +523,7 @@ function createPersonalAgentStore({ dir = GPTS_DIR, clock = () => new Date() } =
     const agente = obter(nome);
     const p = pastaConhecimento(nome);
     const conhecimento = listarConhecimento(nome).map(({ arquivo }) => ({ arquivo, texto: fs.readFileSync(path.join(p, arquivo), 'utf8') }));
-    const pacote = { formato: 'gemini-code-gpt', version: VERSAO, agente: { ...agente } };
+    const pacote = { formato: 'gemini-code-aliado', version: VERSAO, agente: { ...agente } };
     delete pacote.agente.createdAt;
     delete pacote.agente.updatedAt;
     if (conhecimento.length) pacote.conhecimento = conhecimento;
@@ -541,7 +541,7 @@ function createPersonalAgentStore({ dir = GPTS_DIR, clock = () => new Date() } =
     let def;
     let conhecimento = [];
     let memoria = [];
-    if (dados.formato === 'gemini-code-gpt') {
+    if (dados.formato === 'gemini-code-aliado') {
       if (dados.version !== VERSAO) throw new Error(`Versão de pacote não suportada: ${dados.version}.`);
       def = { ...dados.agente };
       conhecimento = Array.isArray(dados.conhecimento) ? dados.conhecimento : [];
@@ -650,11 +650,11 @@ function combinarFerramentas(a, b) {
  * `restricao` (ex.: modo plano) só restringe: ferramentas pela interseção, instrução somada no fim.
  */
 function prepararTurno(store, agenteAberto, mensagem, { maxChars, restricao = {}, perguntar } = {}) {
-  // Relida a cada mensagem: um `gpts editar` com o chat aberto vale na hora. Removida ou estragada no meio
+  // Relida a cada mensagem: um `aliados editar` com o chat aberto vale na hora. Removida ou estragada no meio
   // da conversa, segue com a versão que estava aberta.
   let agente = agenteAberto;
   try { agente = store.carregar(agenteAberto.name) || agenteAberto; } catch { /* mantém a aberta */ }
-  const limite = Number(maxChars) > 0 ? Number(maxChars) : Number(require('./config').loadConfig().gptsConhecimentoMaxChars) || 8000;
+  const limite = Number(maxChars) > 0 ? Number(maxChars) : Number(require('./config').loadConfig().aliadosConhecimentoMaxChars) || 8000;
   const temConhecimento = store.listarConhecimento(agente.name).length > 0;
   const busca = temConhecimento ? store.buscarConhecimento(agente.name, mensagem, { maxChars: limite }) : null;
   const instrucao = instrucaoDoAgente(agente, { memoria: agente.memory === 'off' ? [] : store.listarMemoria(agente.name), busca });

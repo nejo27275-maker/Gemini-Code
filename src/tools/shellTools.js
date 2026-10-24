@@ -34,7 +34,7 @@ const { ask } = require('../ui/prompt');
 // v0.40.0: mesma lista do write_file (src/config.js), que inclui hooks.json e
 // os tokens. É heurística (texto do comando), não barreira: a barreira é
 // confirmShell, ligado por padrão.
-// v0.42.0: pastas protegidas (agentes pessoais) pelo caminho completo ou pelo trecho ".gemini-code/gpts".
+// v0.42.0: pastas protegidas (agentes pessoais) pelo caminho completo ou pelo trecho ".gemini-code/aliados".
 function touchesProtectedFile(command) {
   return PROTECTED_PATHS.some(
     (p) => command.includes(p) || command.includes(path.basename(p))

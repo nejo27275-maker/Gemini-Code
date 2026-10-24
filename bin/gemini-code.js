@@ -41,7 +41,7 @@ const customCommands = require('../src/customCommands');
 const todoTools = require('../src/tools/todoTools');
 const knowledgeModule = require('../src/knowledge');
 const personalAgents = require('../src/personalAgents');
-const gptsCommands = require('../src/personalAgentCommands');
+const aliadosCommands = require('../src/personalAgentCommands');
 const { INSTRUCAO_MODO_CIENCIA } = require('../src/modoCiencia');
 
 const [, , cmd, ...rest] = process.argv;
@@ -133,12 +133,12 @@ No modo "chat", digite /help para ver os comandos de sessão (/clear, /model, /s
 
   gemini-code skills list                     Lista as skills instaladas
 
-  gemini-code gpts listar                      Agentes pessoais (como os GPTs): instruções, memória, conhecimento
-  gemini-code gpts criar NOME --ia "o que ele faz"   A IA configura; você revisa e confirma
-  gemini-code gpts criar NOME --instrucoes "Você é..." [--iniciador T] [--ferramentas P] [--memoria M]
-  gemini-code gpts chat NOME | run NOME "msg"  Conversa com ele (ou uma pergunta só)
-  gemini-code gpts conhecimento NOME add ARQ   Anexa arquivos de texto à base dele
-  gemini-code gpts memoria NOME | ver | editar | remover | exportar | importar   (gpts ajuda: tudo)
+  gemini-code aliados listar                   Aliados: agentes pessoais com instruções, memória e conhecimento
+  gemini-code aliados criar NOME --ia "o que ele faz"   A IA configura; você revisa e confirma
+  gemini-code aliados criar NOME --instrucoes "Você é..." [--iniciador T] [--ferramentas P] [--memoria M]
+  gemini-code aliados chat NOME                Conversa com ele (aliados run NOME "msg": uma pergunta só)
+  gemini-code aliados conhecimento NOME add ARQ   Anexa arquivos de texto à base dele
+  gemini-code aliados ajuda                    Tudo: ver, editar, remover, memoria, exportar, importar
 
   gemini-code agent run caminho/arquivo.json   Roda um workflow de vários passos OU
                                                 abre chat com uma persona pronta
@@ -170,7 +170,7 @@ No modo "chat", digite /help para ver os comandos de sessão (/clear, /model, /s
   gemini-code backups arquivo                  Lista os backups automáticos de um arquivo (mais recente = 1)
   gemini-code backups restore arquivo [N]      Restaura o backup N (padrão 1); o conteúdo atual também vira backup
 
-Pastas de configuração: ~/.gemini-code (config.json, mcp.json, skills/, agents/, workflows/, gpts/)
+Pastas de configuração: ~/.gemini-code (config.json, mcp.json, skills/, agents/, workflows/, aliados/)
 `);
 }
 
@@ -224,10 +224,10 @@ Comandos disponíveis no chat:
   /workflows retomar <nome>                 continua um workflow que falhou no meio, sem refazer os passos que deram certo
   /workflows limpar historico|<nome>        apaga o histórico, ou descarta a execução interrompida de um workflow
   /commands          lista seus comandos de barra (.md em .gemini-code/commands ou ~/.gemini-code/commands)
-  /gpts              lista seus agentes pessoais (crie com: gemini-code gpts criar NOME --ia "...")
-  /gpt NOME          a conversa passa a ser com esse agente pessoal (instruções, memória e conhecimento dele); /gpt off volta
-  @NOME mensagem     manda só esta mensagem para o agente pessoal NOME
-  /memoria [esquecer ID]   o que o agente pessoal ativo guardou sobre você
+  /aliados           lista seus aliados (agentes pessoais; crie com: gemini-code aliados criar NOME --ia "...")
+  /aliado NOME       a conversa passa a ser com esse aliado (instruções, memória e conhecimento dele); /aliado off volta
+  @NOME mensagem     manda só esta mensagem para o aliado NOME
+  /memoria [esquecer ID]   o que o aliado ativo guardou sobre você
   Ctrl+C             sai
 `;
 
@@ -282,13 +282,13 @@ async function perguntarConfiancaNoProjeto() {
   return linha;
 }
 
-// v0.42.0: `gpts chat NOME` abre este mesmo chat com o agente pessoal já ativo e com as conversas DELE
-// (~/.gemini-code/gpts/NOME/sessoes.json, valem em qualquer pasta). No chat comum, /gpt NOME liga um
+// v0.42.0: `aliados chat NOME` abre este mesmo chat com o agente pessoal já ativo e com as conversas DELE
+// (~/.gemini-code/aliados/NOME/sessoes.json, valem em qualquer pasta). No chat comum, /aliado NOME liga um
 // agente pessoal na conversa atual e @NOME manda só uma mensagem para ele (src/personalAgentCommands.js).
 async function chatLoop({ agente: nomeAgente } = {}) {
-  const gptsStore = personalAgents.defaultStore;
-  let agenteAtivo = nomeAgente ? gptsStore.obter(nomeAgente) : null;
-  const sessoes = agenteAtivo ? gptsStore.sessoes(agenteAtivo.name) : sessions;
+  const aliadosStore = personalAgents.defaultStore;
+  let agenteAtivo = nomeAgente ? aliadosStore.obter(nomeAgente) : null;
+  const sessoes = agenteAtivo ? aliadosStore.sessoes(agenteAtivo.name) : sessions;
   console.log(chalk.bold(`gemini-code v${PACKAGE_JSON.version} — modo conversa. Ctrl+C para sair, /help para comandos.\n`));
   if (require('../src/solo').ativo()) console.log(chalk.green('[solo] code-ia sozinho: nenhuma outra IA (Gemini, llama.cpp, Ollama) é usada.\n'));
   const primeiraMensagem = await perguntarConfiancaNoProjeto();
@@ -304,7 +304,7 @@ async function chatLoop({ agente: nomeAgente } = {}) {
   let modeloAtual = sessaoAtual.modelName || undefined; // undefined = usa o padrão do config
   if (history.length) console.log(chalk.dim(`Sessão retomada: ${sessaoAtual.name} (${sessaoAtual.id}) — ${history.length} mensagens no histórico. Use /session new para começar outra.\n`));
   else console.log(chalk.dim(`Sessão persistente: ${sessaoAtual.name} (${sessaoAtual.id}). O histórico será salvo automaticamente.\n`));
-  if (agenteAtivo) { imprimirLinhas(gptsCommands.boasVindas(agenteAtivo, gptsStore)); console.log(''); }
+  if (agenteAtivo) { imprimirLinhas(aliadosCommands.boasVindas(agenteAtivo, aliadosStore)); console.log(''); }
   // stdin fechado (Ctrl+D ou entrada redirecionada): encerra limpo em vez de
   // estourar ERR_USE_AFTER_CLOSE na próxima pergunta.
   let fechado = false;
@@ -408,8 +408,8 @@ async function chatLoop({ agente: nomeAgente } = {}) {
       return ask();
     }
     {
-      // v0.42.0: /gpts, /gpt NOME|off e /memoria (agentes pessoais)
-      const g = gptsCommands.chat(cmd, { agente: agenteAtivo, store: gptsStore });
+      // v0.42.0: /aliados, /aliado NOME|off e /memoria (agentes pessoais)
+      const g = aliadosCommands.chat(cmd, { agente: agenteAtivo, store: aliadosStore });
       if (g) {
         imprimirLinhas(g.linhas);
         if (g.agente !== undefined) agenteAtivo = g.agente;
@@ -596,9 +596,9 @@ async function chatLoop({ agente: nomeAgente } = {}) {
     // um número escolhe um dos iniciadores dele.
     let agenteDoTurno = agenteAtivo;
     if (!textoDoPlano) {
-      const men = gptsCommands.mencao(line, gptsStore);
-      const ini = men ? null : gptsCommands.iniciadorEscolhido(agenteAtivo, line, history.length === 0);
-      if (men) { agenteDoTurno = men.agente; textoEnviado = men.mensagem; console.log(chalk.dim(`(só esta mensagem vai para o agente pessoal ${men.agente.name})`)); }
+      const men = aliadosCommands.mencao(line, aliadosStore);
+      const ini = men ? null : aliadosCommands.iniciadorEscolhido(agenteAtivo, line, history.length === 0);
+      if (men) { agenteDoTurno = men.agente; textoEnviado = men.mensagem; console.log(chalk.dim(`(só esta mensagem vai para o aliado ${men.agente.name})`)); }
       else if (ini) { textoEnviado = ini; console.log(chalk.dim(`(${ini})`)); }
     }
     // v0.41.0: /imagem CAMINHO [pergunta] e /foto [pergunta] (câmera do celular via Termux:API) mandam imagem ao agente.
@@ -641,7 +641,7 @@ async function chatLoop({ agente: nomeAgente } = {}) {
       // Com agente pessoal: instruções, memória, trechos do conhecimento, ferramentas e modelo dele; o modo
       // plano só restringe (interseção das ferramentas). O modelo do agente, se definido, vale sobre o /model.
       const restricao = planMode.opcoes(modoPlano);
-      const turno = agenteDoTurno ? personalAgents.prepararTurno(gptsStore, agenteDoTurno, textoEnviado, { restricao }) : null;
+      const turno = agenteDoTurno ? personalAgents.prepararTurno(aliadosStore, agenteDoTurno, textoEnviado, { restricao }) : null;
       process.stdout.write(chalk.green(`\n${agenteDoTurno ? agenteDoTurno.name : 'gemini-code'}> `));
       let streamed = false;
       const rodar = () => runOnce(textoEnviado, {
@@ -685,15 +685,15 @@ async function chatLoop({ agente: nomeAgente } = {}) {
 // à toa.
 const COMANDOS_SEM_DESBLOQUEIO = new Set([undefined, 'help', '--help', 'version', '--version', '-v', 'config', 'confianca', 'trust', 'agenda', 'projetos', 'backups', 'routines', 'sessions', 'checkpoints', 'artifacts', 'context', 'doctor', 'solo', 'security', 'profiles', 'agents', 'code-ia', 'codeia']);
 
-// v0.42.0: de "gpts", só conversar (chat/run) e criar com --ia chamam o modelo.
-function gptsUsaModelo() {
+// v0.42.0: de "aliados", só conversar (chat/run) e criar com --ia chamam o modelo.
+function aliadosUsaModelo() {
   const sub = String(rest[0] || '').toLowerCase();
   return ['chat', 'conversar', 'run', 'perguntar', 'ask'].includes(sub) || rest.includes('--ia') || rest.includes('--ai') || rest.some((a) => /^--(ia|ai)=/.test(a));
 }
 
 async function garantirDesbloqueio() {
   if (COMANDOS_SEM_DESBLOQUEIO.has(cmd)) return;
-  if (COMANDOS_GPTS.has(cmd) && !gptsUsaModelo()) return;
+  if (COMANDOS_ALIADOS.has(cmd) && !aliadosUsaModelo()) return;
   const cfg = loadConfig();
   if (!security.isLocked(cfg) || security.getSessionApiKey()) return;
 
@@ -726,9 +726,9 @@ function bloquearSeConvidado(mensagem) {
 // Quando o provedor code-ia é selecionado, prepara o modelo pequeno de conhecimento.
 // O padrão é o LLM geral local via llama.cpp; o modelo GGUF é baixado pelo usuário.
 const COMANDOS_COM_MODELO = new Set(['chat', 'run', 'sub', 'agent', 'live', 'voice', 'ciencia']);
-const COMANDOS_GPTS = new Set(['gpts', 'gpt', 'pessoais', 'meus-agentes']);
+const COMANDOS_ALIADOS = new Set(['aliados', 'aliado']);
 function bootstrapCodeIa() {
-  if (!COMANDOS_COM_MODELO.has(cmd) && !(COMANDOS_GPTS.has(cmd) && gptsUsaModelo())) return;
+  if (!COMANDOS_COM_MODELO.has(cmd) && !(COMANDOS_ALIADOS.has(cmd) && aliadosUsaModelo())) return;
   if (loadConfig().provider !== 'code-ia' && !require('../src/solo').ativo()) return;
   try {
     require('../src/code-ia/install').ensureInstalled({ log: (m) => console.log(chalk.dim(m)) });
@@ -849,12 +849,10 @@ async function main() {
       throw new Error('Uso: gemini-code profiles list | profiles show NOME');
     }
 
-    case 'gpts':
-    case 'gpt':
-    case 'pessoais':
-    case 'meus-agentes': {
+    case 'aliados':
+    case 'aliado': {
       // v0.42.0: agentes pessoais (src/personalAgentCommands.js)
-      const r = await gptsCommands.cli(rest, { mostrar: imprimirLinhas });
+      const r = await aliadosCommands.cli(rest, { mostrar: imprimirLinhas });
       imprimirLinhas(r.linhas);
       if (r.abrirChat) return chatLoop({ agente: r.abrirChat });
       if (r.codigo) process.exitCode = r.codigo;
