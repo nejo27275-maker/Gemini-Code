@@ -21,13 +21,16 @@ jobs:
       fail-fast: false
       matrix:
         # package.json pede Node >= 18. O 20 saiu de suporte em abr/2026 mas segue aqui enquanto o projeto o aceitar;
-        # o 22 é LTS. (O 24 ainda não foi testado localmente para entrar na matriz.)
-        node-version: [20, 22]
+        # 22 e 24 são LTS.
+        node-version: [20, 22, 24]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+        with:
+          # o CI só lê o código: não deixa o GITHUB_TOKEN gravado no .git para os passos seguintes
+          persist-credentials: false
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
