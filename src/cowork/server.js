@@ -193,7 +193,12 @@ function criarConexao({ token, enviar, fechar, ip = 'desconhecido', falhas = nul
   };
 }
 
-function startServer(port) {
+/**
+ * @param {number} [port] porta (padrão coworkPort do config; 0 = uma livre qualquer)
+ * @param {{ host?: string, runOnceFn?: Function, log?: Function }} [opcoes] host para escutar (padrão: todas as
+ *   interfaces, para o celular alcançar); runOnceFn e log existem para o teste de ponta a ponta.
+ */
+function startServer(port, { host, runOnceFn = runOnce, log = console.log } = {}) {
   // Verifica a dependência de transporte antes de criar configurações ou tokens.
   // Assim, uma instalação incompleta não deixa arquivos laterais ao falhar.
   let WebSocket;
@@ -206,12 +211,13 @@ function startServer(port) {
   }
 
   const cfg = loadConfig();
-  const finalPort = port || cfg.coworkPort;
+  const finalPort = port === 0 ? 0 : port || cfg.coworkPort;
   const token = canalSeguro.validarToken(getOrCreateToken());
   const falhas = criarLimitador({ max: FALHAS_POR_IP, janelaMs: JANELA_FALHAS_MS });
   // perMessageDeflate desligado: compressão abre espaço para "bomba" de descompressão e não ajuda texto cifrado.
   const wss = new WebSocket.Server({
     port: finalPort,
+    ...(host ? { host } : {}),
     maxPayload: MAX_PAYLOAD_BYTES,
     perMessageDeflate: false,
     verifyClient: ({ req }, aceitar) => {
@@ -221,11 +227,22 @@ function startServer(port) {
     },
   });
 
-  console.log(`\nGemini Cowork rodando na porta ${finalPort} (canal cifrado: X25519 + AES-256-GCM; o token não passa pela rede).`);
-  console.log(`Token de acesso (guarde, o celular vai pedir): ${token}`);
-  console.log('IPs desta máquina na rede local:');
-  localIps().forEach((ip) => console.log(`  ws://${ip}:${finalPort}`));
-  console.log('\nNo celular, rode: gemini-code cowork connect <ip> --token ' + token);
+  // v0.43.3: porta ocupada derrubava o processo com um evento "error" sem tratamento (pilha técnica no terminal).
+  wss.on('error', (err) => {
+    console.error(err.code === 'EADDRINUSE'
+      ? `A porta ${finalPort} já está em uso (outro cowork aberto?). Use outra: gemini-code cowork server PORTA`
+      : `Erro no servidor do cowork: ${err.message}`);
+    process.exitCode = 1;
+  });
+
+  wss.on('listening', () => {
+    const porta = wss.address().port;
+    log(`\nGemini Cowork rodando na porta ${porta} (canal cifrado: X25519 + AES-256-GCM; o token não passa pela rede).`);
+    log(`Token de acesso (guarde, o celular vai pedir): ${token}`);
+    log('IPs desta máquina na rede local:');
+    localIps().forEach((ip) => log(`  ws://${ip}:${porta}`));
+    log('\nNo celular, rode: gemini-code cowork connect <ip> --token ' + token);
+  });
 
   wss.on('connection', (ws, req) => {
     const ip = (req && req.socket.remoteAddress) || 'desconhecido';
@@ -233,6 +250,7 @@ function startServer(port) {
       token,
       ip,
       falhas,
+      runOnceFn,
       enviar: (obj) => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj)); },
       fechar: (codigo, motivo) => ws.close(codigo, motivo),
     });

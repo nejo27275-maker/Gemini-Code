@@ -38,6 +38,23 @@ gemini-code adb info                         # marca, modelo, versão do Android
 Se só tem cabo USB e quer passar para Wi-Fi: com o cabo ligado, rode `gemini-code adb tcpip 5555` e
 depois `gemini-code adb conectar <ip>`.
 
+### TVs com Android 11 ou mais novo (Google TV, Chromecast com Google TV...)
+
+Essas usam **Depuração por Wi-Fi** com **código de pareamento** (uma vez só por máquina):
+
+1. Na TV: Opções do desenvolvedor → **Depuração por Wi-Fi** → **Parear dispositivo com código**. A tela
+   mostra um código de 6 dígitos e um `ip:porta` de pareamento.
+2. No PC/celular:
+
+```bash
+gemini-code adb descobrir                         # lista o que a TV anuncia na rede (se o roteador deixar)
+gemini-code adb parear 192.168.0.50:37099 482915  # ip:porta DE PAREAMENTO e o código da tela
+gemini-code adb conectar 192.168.0.50:41235       # ip:porta mostrado na tela "Depuração por Wi-Fi" (outra porta)
+```
+
+A porta de pareamento e a de conexão são diferentes, e a de conexão muda quando a TV reinicia — o
+`descobrir` mostra a atual. Parear pede confirmação (é dar confiança a esta máquina).
+
 Para usar sempre o mesmo aparelho sem repetir o IP: `gemini-code config set-adb-serial 192.168.0.50:5555`.
 
 ## 4. No chat, peça em português

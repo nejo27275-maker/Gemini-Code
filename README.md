@@ -63,6 +63,8 @@ gemini-code adb dispositivos               # deve aparecer "device"
 gemini-code adb apps                       # apps instalados
 gemini-code adb abrir com.google.android.youtube.tv
 gemini-code adb tecla baixo                # cima/baixo/ok/voltar/home/play/volume+...
+gemini-code adb descobrir                  # Android 11+ (Google TV): acha a TV na rede
+gemini-code adb parear 192.168.0.50:37099 482915   # ...e pareia com o código mostrado na tela
 ```
 
 Só funciona nos aparelhos onde você ligou a depuração e confiou nesta máquina (a TV pede confirmação). Toda ação que muda o aparelho pede sua confirmação; leitura (listar, info, print, log) não; reiniciar, desinstalar, limpar dados, configurações `secure`/`global` e o `shell` livre perguntam sempre. Texto digitado, valores e nomes de app chegam literais ao aparelho (entre aspas para o shell da TV), então não viram comandos. Isso não "turbina" a TV: o que dá para fazer é fechar/limpar/desinstalar apps e ajustar configurações, sempre com a sua confirmação. Ferramenta em `src/tools/adbTools.js`; o gemini-code também roda *dentro* da TV via Termux (sideload), mas na prática controlar de fora é mais confortável.

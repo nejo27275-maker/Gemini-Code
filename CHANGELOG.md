@@ -1,3 +1,26 @@
+## 0.43.3 — cowork testado de verdade no CI, TVs Android 11+ e ESLint real
+
+Base: `main` depois da mesclagem do PR #4 (CI verde no PR e no `main`, Node 20).
+
+**Cowork com WebSocket real no CI.** Até aqui o transporte só tinha sido conferido à mão. Novo `tests/coworkWebSocket.test.js` sobe o servidor de verdade numa porta local e conecta um cliente `ws` de verdade: tarefa vai e volta e nem o token nem o texto aparecem no fio; token errado fecha com 4401 e a 6ª tentativa do mesmo IP recebe HTTP 429 antes do upgrade; cliente antigo recebe o aviso para atualizar; mensagem acima de 1 MiB é recusada pelo transporte (1009); a 9ª conexão recebe HTTP 503. Roda onde o pacote `ws` está instalado (no CI, sempre, pelo `npm ci`); sem ele, os testes são pulados com o motivo. `startServer` passou a aceitar `host`, porta 0 e a função do agente (para o teste) e mostra a porta real.
+
+**Corrigido:** com a porta ocupada, `gemini-code cowork server` caía com um evento `error` sem tratamento (pilha técnica); agora diz que a porta está em uso e como escolher outra.
+
+**ADB em TVs com Android 11+ (Google TV, Chromecast com Google TV...).** Essas usam "Depuração por Wi-Fi" com código de pareamento, que o `conectar` sozinho não cobria:
+
+- `descobrir` (leitura): lista o que os aparelhos anunciam na rede (`adb mdns services`) e diz o próximo passo — parear ou conectar.
+- `parear`: `adb pair ip:porta código`; exige o ip:porta de pareamento (outra porta) e os 6 dígitos da tela, e pede confirmação (é dar confiança a esta máquina).
+- Comandos `gemini-code adb descobrir` e `gemini-code adb parear IP:PORTA CÓDIGO`; passo a passo em `docs/TV_ADB.md`.
+- `gemini-code doctor` mostra se o `adb` foi encontrado (pelo `adbPath`), o aparelho padrão, e se o cowork tem o pacote `ws`.
+
+**ESLint de verdade.** O `.eslintrc.json` só funcionava no ESLint 8 (o 9 e o 10 o ignoram) e o `scripts/lint.js` passava `--ext`, que o ESLint 9 removeu — quem instalasse um ESLint atual tinha o `npm run lint` quebrado, e o CI só checava sintaxe. Agora há `eslint.config.js` (formato novo, mesmas regras: as recomendadas do ESLint + os ajustes do projeto, sem dependência extra), o `npm run lint` falha também com aviso, e o CI instala uma versão fixa (10.1.0) para rodá-lo no job do Node 22. Primeira execução no projeto inteiro: um único aviso (um `eslint-disable` de uma regra que nem existe mais), corrigido.
+
+**CI:** testes no Node 20 e 22 (antes só 20, que saiu de suporte em abril/2026). O 24 não entrou porque não havia como testá-lo localmente.
+
+Testes: 776 (775 passando, 1 pulado por rodar como root) com o pacote `ws` disponível, no Node 20.20 e no 22.22; sem o `ws` (este ambiente) os 6 de WebSocket são pulados. Lint com o ESLint 10.1.0 real: 0 erros e 0 avisos.
+
+**Limites:** o `parear`/`descobrir` não foi testado com uma TV de verdade (adb falso nos testes); o `descobrir` depende de o roteador deixar passar mDNS.
+
 ## 0.43.2 — revisão completa: injeção no aparelho, terminal enganado e ESLint zerado
 
 Revisão de todo o código desta série (Aliados, cowork cifrado, limitador, adb) e dos pontos de confirmação do projeto, procurando defeito reproduzível. Cada correção abaixo tem teste que **falha no código anterior** (conferido rodando os testes novos contra o commit anterior).

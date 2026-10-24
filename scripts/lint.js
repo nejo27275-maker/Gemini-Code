@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 'use strict';
 
-// ESLint é opcional. Quando presente, usa a configuração do repositório.
+// ESLint é opcional. Quando presente, usa a configuração do repositório (eslint.config.js, formato do
+// ESLint 9/10) e falha também com aviso (--max-warnings 0: o projeto está em zero e assim fica).
 // Sem ele (por exemplo, execução em ambiente offline), valida a sintaxe de
 // todos os JavaScript rastreados pelas pastas do projeto com o parser do Node.
 const fs = require('node:fs');
@@ -11,7 +12,8 @@ const root = path.resolve(__dirname, '..');
 const eslintCli = path.join(root, 'node_modules', 'eslint', 'bin', 'eslint.js');
 
 if (fs.existsSync(eslintCli)) {
-  const run = spawnSync(process.execPath, [eslintCli, '.', '--ext', '.js'], {
+  // v0.43.3: sem "--ext", que o ESLint 9+ removeu (o lint quebrava para quem tivesse um ESLint atual).
+  const run = spawnSync(process.execPath, [eslintCli, '.', '--max-warnings', '0'], {
     cwd: root, stdio: 'inherit', env: process.env,
   });
   process.exit(run.status ?? 1);

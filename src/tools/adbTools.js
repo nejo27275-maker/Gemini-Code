@@ -50,7 +50,7 @@ const ESPACOS_CONFIG = new Set(['system', 'secure', 'global']);
 
 // Ações que só LEEM o aparelho (não pedem confirmação). "tela" grava nesta máquina, mas só um .png NOVO,
 // fora das áreas protegidas (destinoDoPrint) — como criar um arquivo novo, que também não pergunta.
-const SO_LEITURA = new Set(['dispositivos', 'info', 'apps', 'estado', 'tela', 'logcat']);
+const SO_LEITURA = new Set(['dispositivos', 'descobrir', 'info', 'apps', 'estado', 'tela', 'logcat']);
 // Confirmam SEMPRE, mesmo com adbConfirm:false ou regra "permitir".
 const SENSIVEIS = new Set(['reiniciar', 'desinstalar', 'limpar', 'shell']);
 
@@ -67,12 +67,14 @@ const declarations = [
       properties: {
         acao: {
           type: 'string',
-          enum: ['dispositivos', 'conectar', 'desconectar', 'tcpip', 'info', 'apps', 'estado', 'tela', 'logcat',
+          enum: ['dispositivos', 'descobrir', 'parear', 'conectar', 'desconectar', 'tcpip', 'info', 'apps', 'estado', 'tela', 'logcat',
             'abrir_app', 'fechar_app', 'instalar', 'desinstalar', 'limpar', 'tecla', 'digitar', 'config', 'reiniciar', 'shell'],
-          description: 'dispositivos=lista; conectar/desconectar/tcpip=rede (Wi-Fi); info/apps/estado/tela/logcat=leitura; ' +
+          description: 'dispositivos=lista; descobrir=acha aparelhos com depuração por Wi-Fi na rede; parear=Android 11+ (código de 6 dígitos ' +
+            'da tela "Parear com código"); conectar/desconectar/tcpip=rede; info/apps/estado/tela/logcat=leitura; ' +
             'abrir_app/fechar_app/instalar/desinstalar/limpar=apps; tecla/digitar=controle; config=settings; reiniciar; shell=comando livre.',
         },
-        alvo: { type: 'string', description: 'Aparelho: serial USB, "ip" ou "ip:porta" (padrão adbSerial do config; conectar/tcpip usam o ip).' },
+        alvo: { type: 'string', description: 'Aparelho: serial USB, "ip" ou "ip:porta" (padrão adbSerial do config; conectar/tcpip usam o ip; parear usa o ip:porta DE PAREAMENTO, que é outra porta).' },
+        codigo: { type: 'string', description: 'parear: código de 6 dígitos mostrado no aparelho.' },
         app: { type: 'string', description: 'Pacote do app (ex.: com.netflix.ninja) para abrir_app/fechar_app/desinstalar/limpar.' },
         arquivo: { type: 'string', description: 'instalar: caminho do .apk; tela: .png NOVO onde salvar (padrão: ./tela-<hora>.png).' },
         tecla: { type: 'string', description: `tecla: ${Object.keys(TECLAS).join(', ')}, ou um KEYCODE_* / número.` },
@@ -172,6 +174,7 @@ function descreverAcao(acao, args, alvo) {
   const onde = alvo ? ` em ${alvo}` : '';
   const texto = String(args.texto ?? '');
   switch (acao) {
+    case 'parear': return `parear com ${args.alvo} (o aparelho passa a confiar nesta máquina)`;
     case 'conectar': return `conectar por rede a ${args.alvo}`;
     case 'desconectar': return `desconectar ${args.alvo || '(todos)'}`;
     case 'tcpip': return `ligar o adb por Wi-Fi na porta ${args.porta || loadConfig().adbPorta}${onde}`;
@@ -202,7 +205,7 @@ async function execute(name, args = {}, deps = {}) {
   if (!declarations[0].parameters.properties.acao.enum.includes(acao)) return `Erro: ação de adb desconhecida: "${paraExibir(acao)}".`;
 
   let alvo;
-  try { alvo = validarAlvo(a.alvo || (acao === 'conectar' || acao === 'desconectar' ? '' : cfg.adbSerial)); }
+  try { alvo = validarAlvo(a.alvo || (['conectar', 'desconectar', 'parear', 'descobrir'].includes(acao) ? '' : cfg.adbSerial)); }
   catch (e) { return `Erro: ${e.message}`; }
 
   if (!SO_LEITURA.has(acao)) {
@@ -220,6 +223,24 @@ async function execute(name, args = {}, deps = {}) {
       case 'dispositivos': {
         const r = await rodarAdb(adbPath, ['devices', '-l']);
         return textoSaida(r, 'Nenhum aparelho. Ligue a depuração USB/por rede e confie nesta máquina; por Wi-Fi use acao:"conectar".');
+      }
+      case 'descobrir': {
+        // Aparelhos anunciando a depuração por Wi-Fi na rede local (mDNS). Nem toda rede/roteador deixa passar.
+        const r = await rodarAdb(adbPath, ['mdns', 'services']);
+        if (r.erro) return r.erro;
+        const achados = r.stdout.split(/\r?\n/).map((l) => l.trim().split(/\s+/)).filter((p) => p.length >= 3 && /_adb/.test(p[1]));
+        if (!achados.length) return 'Nenhum aparelho anunciando depuração por Wi-Fi. Na TV: Opções do desenvolvedor → Depuração por Wi-Fi ligada (Android 11+), ou use o IP com acao:"conectar".';
+        return achados.map(([nome, tipo, end]) => `${end}  ${nome}  ${/pairing/.test(tipo) ? '(pareamento: use acao:"parear" com o código da tela)' : '(pronto para acao:"conectar")'}`).join('\n');
+      }
+      case 'parear': {
+        // Android 11+: "Depuração por Wi-Fi" → "Parear dispositivo com código" mostra ip:porta e 6 dígitos.
+        const codigo = String(a.codigo ?? '').trim();
+        if (!/^\d{6}$/.test(codigo)) return 'Erro: informe "codigo" com os 6 dígitos mostrados no aparelho.';
+        const v = validarAlvo(a.alvo);
+        if (!/:\d+$/.test(v)) return 'Erro: informe "alvo" como ip:porta DE PAREAMENTO (aparece junto com o código; não é a porta de conectar).';
+        const r = await rodarAdb(adbPath, ['pair', hostPorta(v, 0), codigo]);
+        if (r.erro) return r.erro;
+        return /Successfully paired/i.test(r.stdout) ? `${r.stdout.trim()}\nAgora conecte com acao:"conectar" usando o ip:porta mostrado na tela "Depuração por Wi-Fi" (outra porta).` : textoSaida(r);
       }
       case 'conectar':
         return textoSaida(await rodarAdb(adbPath, ['connect', hostPorta(a.alvo, a.porta || cfg.adbPorta)]));

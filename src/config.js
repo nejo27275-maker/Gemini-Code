@@ -226,7 +226,6 @@ function ensureDirs() {
 function aplicarSessaoDesbloqueada(cfg) {
   if (cfg.apiKeyLocked && !cfg.apiKey) {
     try {
-      // eslint-disable-next-line global-require
       const { getSessionApiKey } = require('./security'); // lazy: evita ciclo com security.js
       const sessao = getSessionApiKey();
       if (sessao) return { ...cfg, apiKey: sessao };
