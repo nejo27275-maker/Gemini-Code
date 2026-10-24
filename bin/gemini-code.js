@@ -168,6 +168,8 @@ No modo "chat", digite /help para ver os comandos de sessão (/clear, /model, /s
   gemini-code routines create --name N --url URL (--every 5m | --at ISO | --cron '*/5 * * * *')
   gemini-code routines create --name N --prompt "TAREFA" [--ferramentas a,b] [--passos 20] [--notificar] (--every|--at|--cron)
                                                 O agente faz a tarefa sozinho no horário (sem perguntar nada)
+  gemini-code routines create --name N --tv "tecla dormir" [--tv "..."] [--alvo IP] (--every|--at|--cron)
+                                                Comandos para a TV/celular no horário, sem IA
   gemini-code routines activate ID              Autoriza a execução automática de um rascunho
   gemini-code routines pause ID | resume ID     Pausa ou retoma uma rotina
   gemini-code routines run ID                   Executa uma verificação agora
@@ -1262,39 +1264,17 @@ async function main() {
       // antes de o agente usá-la, e para quem prefere a linha de comando. As confirmações acontecem na própria
       // ferramenta (igual ao chat): ações que mudam o aparelho pedem s/n, a menos que adbConfirm:false.
       const adbTools = require('../src/tools/adbTools');
-      const ALIAS = {
-        devices: 'dispositivos', dispositivos: 'dispositivos', conectar: 'conectar', connect: 'conectar',
-        descobrir: 'descobrir', discover: 'descobrir', parear: 'parear', pair: 'parear',
-        desconectar: 'desconectar', disconnect: 'desconectar', tcpip: 'tcpip', info: 'info', apps: 'apps',
-        estado: 'estado', tela: 'tela', print: 'tela', screenshot: 'tela', logcat: 'logcat', log: 'logcat',
-        abrir: 'abrir_app', abrir_app: 'abrir_app', fechar: 'fechar_app', fechar_app: 'fechar_app',
-        instalar: 'instalar', install: 'instalar', desinstalar: 'desinstalar', uninstall: 'desinstalar',
-        limpar: 'limpar', tecla: 'tecla', key: 'tecla', digitar: 'digitar', texto: 'digitar',
-        config: 'config', settings: 'config', reiniciar: 'reiniciar', reboot: 'reiniciar', shell: 'shell',
-      };
       const bruto = rest.slice();
       let alvoFlag;
       for (const f of ['--alvo', '-s']) { const i = bruto.indexOf(f); if (i !== -1) { alvoFlag = bruto[i + 1]; bruto.splice(i, 2); } }
-      const [subBruto = 'dispositivos', ...resto] = bruto;
-      const acao = ALIAS[String(subBruto).toLowerCase()];
-      if (!acao) {
-        console.log(`Ação de adb desconhecida: "${subBruto}". Use: ${[...new Set(Object.values(ALIAS))].join(', ')}.`);
+      // v0.44.1: a leitura das palavras mora na ferramenta (as rotinas de TV usam a mesma)
+      const args = adbTools.argsDoComando(bruto);
+      if (!args) {
+        console.log(`Ação de adb desconhecida: "${bruto[0]}". Use: ${[...new Set(Object.values(adbTools.ALIASES))].join(', ')}.`);
         process.exitCode = 1;
         return;
       }
-      const args = { acao };
       if (alvoFlag) args.alvo = alvoFlag;
-      if (acao === 'conectar' || acao === 'desconectar') { if (resto[0]) args.alvo = resto[0]; }
-      else if (acao === 'parear') { args.alvo = resto[0]; args.codigo = resto[1]; }
-      else if (acao === 'tcpip') { if (resto[0]) args.porta = Number(resto[0]); }
-      else if (acao === 'logcat') { if (resto[0]) args.linhas = Number(resto[0]); }
-      else if (acao === 'tela') { if (resto[0]) args.arquivo = resto[0]; }
-      else if (acao === 'instalar') args.arquivo = resto[0];
-      else if (acao === 'abrir_app' || acao === 'fechar_app' || acao === 'desinstalar' || acao === 'limpar') args.app = resto[0];
-      else if (acao === 'tecla') args.tecla = resto[0];
-      else if (acao === 'digitar') args.texto = resto.join(' ');
-      else if (acao === 'config') { args.espaco = resto[0]; args.chave = resto[1]; if (resto.length > 2) args.valor = resto.slice(2).join(' '); }
-      else if (acao === 'shell') args.comando = resto.join(' ');
       try { console.log(await adbTools.execute('adb', args)); }
       catch (err) { console.error(chalk.red('Erro: ' + err.message)); process.exitCode = 1; }
       require('../src/ui/prompt').closeShared();
@@ -1464,6 +1444,8 @@ async function main() {
           if (item.startsWith('--')) {
             const key = item.slice(2);
             if (['yes', 'notificar'].includes(key)) flags[key] = true;
+            // --tv pode aparecer várias vezes: um passo por vez, na ordem
+            else if ((key === 'tv' || key === 'adb') && i + 1 < items.length) (flags.tv = flags.tv || []).push(items[++i]);
             else if (i + 1 < items.length && !items[i + 1].startsWith('--')) flags[key] = items[++i];
             else throw new Error(`Informe um valor para --${key}.`);
           } else if (!flags._) flags._ = [item];
@@ -1471,7 +1453,7 @@ async function main() {
         }
         return flags;
       };
-      const fmt = (r) => `${r.id} | ${r.status} | ${r.name} | ${r.action.type === 'agente' ? 'agente' : 'http-check'} | ${r.trigger.type}${r.nextRunAt ? ` | próxima: ${r.nextRunAt}` : ''}`;
+      const fmt = (r) => `${r.id} | ${r.status} | ${r.name} | ${r.action.type} | ${r.trigger.type}${r.nextRunAt ? ` | próxima: ${r.nextRunAt}` : ''}`;
       try {
         if (sub === 'list' || sub === 'listar') {
           const lista = routines.list();
@@ -1483,12 +1465,15 @@ async function main() {
           const name = flags.name;
           const url = flags.url;
           const pedido = flags.prompt;
+          const tv = flags.tv;
           const timezone = flags.timezone || routines.DEFAULT_TIMEZONE;
           const triggers = ['every', 'at', 'cron'].filter((k) => flags[k] !== undefined);
-          if (!name || (!url === !pedido) || triggers.length !== 1) {
+          if (!name || [url, pedido, tv].filter(Boolean).length !== 1 || triggers.length !== 1) {
             console.log("Uso: gemini-code routines create --name \"Meu site\" --url https://exemplo.com (--every 5m | --at 2026-10-11T08:00:00-03:00 | --cron '*/5 * * * *') [--timezone America/Recife]");
             console.log("  ou: gemini-code routines create --name \"Resumo\" --prompt \"resuma os TODO do projeto\" [--ferramentas read_file,list_dir] [--passos 20] [--notificar] --cron '0 8 * * 1-5'");
             console.log('      (agente: sem ninguém olhando, o que pediria confirmação é recusado; padrão só leitura: ' + routines.FERRAMENTAS_ROTINA_PADRAO.join(', ') + ')');
+            console.log("  ou: gemini-code routines create --name \"Dormir\" --tv \"tecla dormir\" --cron '0 23 * * *' [--alvo 192.168.0.50]");
+            console.log('      (TV/celular, sem IA; um --tv por passo: ' + routines.ACOES_ROTINA_ADB.join(', ') + ', ex.: --tv "abrir_app com.netflix.ninja" --tv "esperar 5")');
             return;
           }
           let trigger;
@@ -1497,16 +1482,25 @@ async function main() {
           if (flags.cron !== undefined) trigger = { type: 'cron', expression: flags.cron, timezone };
           const ferramentas = flags.ferramentas === undefined ? undefined
             : ['nenhuma', 'none', ''].includes(String(flags.ferramentas).trim()) ? [] : String(flags.ferramentas).split(',').map((t) => t.trim()).filter(Boolean);
+          // "--tv 'tecla dormir'" -> { acao: 'tecla', tecla: 'dormir' } (mesma leitura do comando gemini-code adb)
+          const passoDaTv = (texto) => {
+            const palavras = String(texto).trim().split(/\s+/).filter(Boolean);
+            if (/^esperar$/i.test(palavras[0] || '')) return { acao: 'esperar', segundos: Number(palavras[1]) };
+            const args = require('../src/tools/adbTools').argsDoComando(palavras);
+            if (!args) throw new Error(`comando de aparelho desconhecido: "${texto}". Use: ${routines.ACOES_ROTINA_ADB.join(', ')}.`);
+            return args;
+          };
           const routine = routines.create({
             name, description: flags.description || '', category: flags.category,
             priority: flags.priority || 'normal', trigger,
-            action: pedido
+            action: tv ? { type: 'adb', alvo: flags.alvo, passos: tv.map(passoDaTv), notificar: flags.notificar === true } : pedido
               ? { type: 'agente', prompt: pedido, ferramentas, maxPassos: flags.passos === undefined ? undefined : Number(flags.passos), notificar: flags.notificar === true }
               : { type: 'http-check', url, timeoutMs: flags.timeout ? routines.parseDuration(flags.timeout) : 10000,
                 expectedStatus: flags['expected-status'] ? Number(flags['expected-status']) : undefined },
             missedPolicy: flags['missed-policy'] || 'skip',
           });
           if (routine.action.type === 'agente') console.log(`Ferramentas do agente nesta rotina: ${routine.action.ferramentas.length ? routine.action.ferramentas.join(', ') : '(nenhuma)'}; sem ninguém olhando, o que pediria confirmação é recusado.`);
+          if (routine.action.type === 'adb') console.log(`Passos no aparelho${routine.action.alvo ? ` ${routine.action.alvo}` : ''} (rodam sem perguntar — você os aprovou agora): ${routine.action.passos.map((p) => Object.values(p).join(' ')).join(' → ')}`);
           console.log(`Rotina criada como rascunho (não executa automaticamente até ser ativada):\n${fmt(routine)}\nAtive com: gemini-code routines activate ${routine.id}`);
           return;
         }
@@ -1540,7 +1534,8 @@ async function main() {
           const id = flags._ && flags._[0];
           const execs = routines.executions({ routineId: id, limit: flags.limit || 30 });
           // a resposta de uma rotina de agente é texto do modelo: passa pelo filtro do terminal
-          const resumo = (e) => e.error || (e.result && (e.result.resposta ? `${e.result.resposta.split('\n')[0].slice(0, 160)}${e.result.artefato ? ` (completo: gemini-code artifacts show ${e.result.artefato})` : ''}` : e.result.message)) || '';
+          const resumo = (e) => e.error || (e.result && (e.result.resposta ? `${e.result.resposta.split('\n')[0].slice(0, 160)}${e.result.artefato ? ` (completo: gemini-code artifacts show ${e.result.artefato})` : ''}`
+            : Array.isArray(e.result.passos) && e.result.passos.length ? `${e.result.message} ${e.result.passos.join(' | ').slice(0, 200)}` : e.result.message)) || '';
           console.log(execs.length ? execs.map((e) => paraTerminal(`${e.id} | ${e.status} | ${e.startedAt} | ${e.routineName} | ${resumo(e)}`)).join('\n') : 'Nenhuma execução registrada.');
           return;
         }
@@ -1578,7 +1573,7 @@ async function main() {
           console.log(JSON.stringify({ runtime: 'local-process', scheduler: 'not running unless `routines service` is active', storage: routines.ROUTINES_PATH, count: all.length, counts }, null, 2));
           return;
         }
-        console.log('Uso: gemini-code routines list | create --name N (--url URL | --prompt TAREFA) (--every 5m | --at ISO | --cron CRON) | activate ID | pause ID | resume ID | run ID | logs [ID] | remove ID --yes | service | status');
+        console.log('Uso: gemini-code routines list | create --name N (--url URL | --prompt TAREFA | --tv "COMANDO") (--every 5m | --at ISO | --cron CRON) | activate ID | pause ID | resume ID | run ID | logs [ID] | remove ID --yes | service | status');
       } catch (err) {
         console.error(chalk.red('Erro: ' + err.message));
         process.exitCode = 1;

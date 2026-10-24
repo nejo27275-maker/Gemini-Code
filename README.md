@@ -100,7 +100,13 @@ gemini-code adb abrir com.google.android.youtube.tv
 gemini-code adb tecla baixo                # cima/baixo/ok/voltar/home/play/volume+...
 gemini-code adb descobrir                  # Android 11+ (Google TV): acha a TV na rede
 gemini-code adb parear 192.168.0.50:37099 482915   # ...e pareia com o código mostrado na tela
+gemini-code adb tecla dormir               # desliga a tela ("acordar" liga; o "power" alterna)
+gemini-code adb link https://www.youtube.com/watch?v=XXXX   # abre o vídeo no app da TV
+gemini-code routines create --name "Dormir" --tv "tecla dormir" --cron '0 23 * * *' --alvo 192.168.0.50
+gemini-code aliados criar tv --ferramentas tv --instrucoes "Você controla a TV da sala."   # um aliado só da TV
 ```
+
+**v0.44.1:** rotinas de TV sem IA (`--tv`, um passo por vez, só ações que não destroem nada), `abrir_link` (o agente acha o vídeo com o navegador e manda tocar na TV), teclas `dormir`/`acordar` (não invertem como o `power`), o aliado `tv` e regras escritas como o comando (`config permitir "adb(tecla *)"`).
 
 Só funciona nos aparelhos onde você ligou a depuração e confiou nesta máquina (a TV pede confirmação). Toda ação que muda o aparelho pede sua confirmação; leitura (listar, info, print, log) não; reiniciar, desinstalar, limpar dados, configurações `secure`/`global` e o `shell` livre perguntam sempre. Texto digitado, valores e nomes de app chegam literais ao aparelho (entre aspas para o shell da TV), então não viram comandos. Isso não "turbina" a TV: o que dá para fazer é fechar/limpar/desinstalar apps e ajustar configurações, sempre com a sua confirmação. Ferramenta em `src/tools/adbTools.js`; o gemini-code também roda *dentro* da TV via Termux (sideload), mas na prática controlar de fora é mais confortável.
 

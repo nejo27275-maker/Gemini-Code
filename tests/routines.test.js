@@ -48,7 +48,7 @@ test('cria rotinas como rascunho e preserva dados em novo store', () => {
 
 test('valida ação, fuso, intervalo e execução única futura', () => {
   const store = setup();
-  assert.throws(() => store.create(base({ action: { type: 'shell', command: 'rm -rf /' } })), /Use http-check .* ou agente/);
+  assert.throws(() => store.create(base({ action: { type: 'shell', command: 'rm -rf /' } })), /Use http-check .*, agente .* ou adb/);
   assert.throws(() => store.create(base({ action: { type: 'http-check', url: 'file:///etc/passwd' } })), /HTTP\/HTTPS/);
   assert.throws(() => store.create(base({ trigger: { type: 'interval', intervalMs: 1000, timezone: 'UTC' } })), /entre 1 minuto/);
   assert.throws(() => store.create(base({ trigger: { type: 'interval', intervalMs: 60000, timezone: 'Fuso/Inventado' } })), /Fuso horário inválido/);

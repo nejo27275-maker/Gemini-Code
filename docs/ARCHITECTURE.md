@@ -159,6 +159,7 @@ extra). Cobertura atual:
 | convidado só lê dentro do projeto | `convidadoNoProjeto.test.js` |
 | `src/providers/openai.js` (servidor local imitando a API, streaming, loop do agente) | `openaiProvider.test.js` |
 | navegador do agente: proxy bloqueando a rede local (IP, nome, IPv6), aprovação por site, regras, e com Chrome/Chromium real: página em JavaScript, clique, redirecionamento, formulário, lista, alerta, outro site barrado, print, perfil apagado (v0.44.0; a parte real pula sem navegador) | `navegador.test.js` |
+| rotina de aparelho (TV) sem IA: só ações seguras, reconexão, passos sem perguntar, sem repetir, regras "negar", arquivo editado à mão recusado, CLI de ponta a ponta com o adb falso (v0.44.1) | `rotinaTv.test.js` |
 | rotina de agente: validação, execução, sem repetir, perguntas viram "não" (run_shell de ponta a ponta não roda), routines.json protegido, notificação, CLI (v0.44.0) | `rotinaAgente.test.js` |
 | resposta mais longa que o tempo limite de inatividade termina sem `onText`; Ollama calado ou que cai no meio (servidores HTTP reais, v0.43.4) | `llamacppV037.test.js`, `ollama.test.js`, `openaiProvider.test.js` |
 | `src/compact.js` (`enxugarResultadosAntigos`, `/compact ia`) | `contextoLongo.test.js` |

@@ -67,6 +67,15 @@ ferramenta `adb`:
 - "desce três vezes e entra" (ele manda as teclas do controle)
 - "tira um print da tela da TV"
 - "por que o app X está travando? olha o logcat"
+- "acha o trailer de Duna e passa na TV" (ele procura com o navegador e abre o vídeo no app da TV com `abrir_link`)
+
+**Um aliado só para a TV** — com as ferramentas certas (adb, navegador e `web_fetch`) e o seu jeito de pedir:
+
+```bash
+gemini-code aliados criar tv --ferramentas tv --descricao "controla a TV da sala" \
+  --instrucoes "Você controla a Android TV da sala (alvo 192.168.0.50:5555). Prefira abrir vídeos com abrir_link."
+gemini-code aliados chat tv
+```
 
 Também dá para usar direto pela linha de comando:
 
@@ -74,19 +83,47 @@ Também dá para usar direto pela linha de comando:
 gemini-code adb apps                         # apps instalados pelo usuário
 gemini-code adb abrir com.google.android.youtube.tv
 gemini-code adb tecla baixo                  # cima, baixo, esquerda, direita, ok, voltar, home, play, volume+/- ...
+gemini-code adb tecla dormir                 # desliga a tela; "acordar" liga (o "power" ALTERNA: liga se estiver desligada)
+gemini-code adb link https://www.youtube.com/watch?v=XXXX   # abre o vídeo no app do YouTube da TV
 gemini-code adb digitar "crianca sabia"      # escreve no campo em foco
 gemini-code adb tela                          # salva um print .png
 gemini-code adb logcat 300                    # últimas 300 linhas de log
 gemini-code adb shell "dumpsys battery"       # comando livre no aparelho (pede confirmação)
 ```
 
+## Automatizar a TV (rotinas, sem IA)
+
+Comandos para a TV num horário, sem gastar nada de IA e sem precisar de internet (só a rede local):
+
+```bash
+# todo dia às 23h: desliga a tela da TV
+gemini-code routines create --name "Dormir" --tv "tecla dormir" --cron '0 23 * * *' --alvo 192.168.0.50
+
+# sábado às 9h: acorda a TV, espera ela ligar e abre os desenhos
+gemini-code routines create --name "Desenhos" --tv "tecla acordar" --tv "esperar 5" \
+  --tv "link https://www.youtube.com/watch?v=XXXX com.google.android.youtube.tv" --cron '0 9 * * 6' --alvo 192.168.0.50
+
+gemini-code routines activate ID     # a rotina nasce como rascunho
+gemini-code routines service         # o agendador (precisa ficar rodando, ex.: no PC ou no Termux)
+gemini-code routines run ID          # testar agora
+```
+
+- Um `--tv` por passo, na ordem: `tecla`, `abrir`/`abrir_app`, `fechar`, `link`, `digitar`, `esperar N` (1–60 s), `estado`, `info`.
+- **Nunca** numa rotina: reiniciar, desinstalar, limpar dados, instalar, configurações e o shell livre (a rotina recusa).
+- Os passos rodam sem perguntar — você os aprovou ao criar. As regras `negar` continuam valendo.
+- TV por Wi-Fi: a rotina reconecta antes (a conexão do adb cai quando a TV dorme). Se não conectar, a execução falha e conta o motivo (`routines logs`); `--notificar` avisa no celular/PC.
+- Não repete sozinha se falhar: repetir um "power" desfaria o primeiro. Use `dormir`/`acordar`, que não alternam.
+
+Também dá para agendar o **agente** mexendo na TV (`--prompt "..." --ferramentas adb`), mas sem ninguém olhando ele só faz o que não pede confirmação — libere ações específicas com regras, ex.: `gemini-code config permitir "adb(tecla *)"`.
+
 ## Segurança
 
-- Toda ação que **muda** o aparelho (conectar, instalar, abrir/fechar app, digitar, tecla, configuração,
+- Toda ação que **muda** o aparelho (conectar, instalar, abrir/fechar app, abrir link, digitar, tecla, configuração,
   `shell`, reiniciar) pede **confirmação** no terminal. Leitura (listar, info, apps, estado, print, log)
-  não pede. Para liberar ações específicas sem perguntar, use regras, ex.:
-  `gemini-code config permitir "adb"` ou bloqueie o que não quiser com
-  `gemini-code config negar "adb"` (vale para o agente em qualquer modo).
+  não pede. Para liberar ações específicas sem perguntar, use regras escritas como o comando, ex.:
+  `gemini-code config permitir "adb(tecla *)"` (todas as teclas) ou
+  `gemini-code config permitir "adb(abrir_app com.netflix*)"`; bloqueie o que não quiser com
+  `gemini-code config negar "adb(desinstalar *)"` ou `config negar "adb"` (tudo; vale para o agente em qualquer modo).
 - Reiniciar, desinstalar, limpar dados, gravar em configurações `secure`/`global` e o `shell` livre
   avisam em destaque e pedem confirmação **sempre** — mesmo com `adbConfirm:false` ou uma regra
   "permitir". (Um comando livre não dá para classificar com segurança: `pm uninstall` e `reboot` não

@@ -147,11 +147,64 @@ function validarAcaoAgente(action) {
   return { type: 'agente', prompt, ferramentas: [...new Set(ferramentas)], maxPassos, notificar: action.notificar === true };
 }
 
+// v0.44.1: rotina "adb" — controla a TV/celular no horário marcado, SEM IA (sem custo, funciona offline). Quem
+// cria a rotina (o usuário, pelo terminal ou pela API com token; o modelo não grava o routines.json) aprova os
+// passos ali; por isso eles rodam sem perguntar. Só ações que não destroem nada: nunca reiniciar, desinstalar,
+// limpar dados, instalar, config nem o shell livre.
+const ACOES_ROTINA_ADB = Object.freeze(['tecla', 'abrir_app', 'fechar_app', 'abrir_link', 'digitar', 'estado', 'info', 'esperar']);
+const MAX_PASSOS_ADB = 20;
+
+function validarPassoAdb(passo, i) {
+  const adb = require('./tools/adbTools');
+  const onde = `passo ${i + 1}`;
+  if (!passo || typeof passo !== 'object' || Array.isArray(passo)) throw new Error(`${onde}: inválido.`);
+  const acao = String(passo.acao || '').trim();
+  if (!ACOES_ROTINA_ADB.includes(acao)) {
+    throw new Error(`${onde}: "${acao}" não pode rodar sozinho numa rotina. Use: ${ACOES_ROTINA_ADB.join(', ')}.`);
+  }
+  if (acao === 'esperar') {
+    const segundos = Number(passo.segundos);
+    if (!Number.isInteger(segundos) || segundos < 1 || segundos > 60) throw new Error(`${onde}: esperar precisa de 1 a 60 segundos.`);
+    return { acao, segundos };
+  }
+  if (acao === 'tecla') {
+    if (!adb.teclaValida(passo.tecla)) throw new Error(`${onde}: tecla desconhecida "${passo.tecla}". Use: ${Object.keys(adb.TECLAS).join(', ')}.`);
+    return { acao, tecla: String(passo.tecla).trim() };
+  }
+  if (acao === 'abrir_app' || acao === 'fechar_app') {
+    if (!adb.PACOTE_OK.test(String(passo.app || ''))) throw new Error(`${onde}: informe o pacote do app (ex.: com.netflix.ninja).`);
+    return { acao, app: passo.app };
+  }
+  if (acao === 'abrir_link') {
+    const link = adb.validarLink(passo.link);
+    if (passo.app !== undefined && !adb.PACOTE_OK.test(String(passo.app))) throw new Error(`${onde}: pacote do app inválido.`);
+    return { acao, link, ...(passo.app ? { app: passo.app } : {}) };
+  }
+  if (acao === 'digitar') {
+    const texto = typeof passo.texto === 'string' ? passo.texto : '';
+    if (!texto || texto.length > adb.MAX_TEXTO) throw new Error(`${onde}: digitar precisa de um texto de até ${adb.MAX_TEXTO} caracteres.`);
+    return { acao, texto };
+  }
+  return { acao }; // estado, info: só leem
+}
+
+function validarAcaoAdb(action) {
+  const adb = require('./tools/adbTools');
+  const alvo = adb.validarAlvo(action.alvo);
+  if (!Array.isArray(action.passos) || !action.passos.length || action.passos.length > MAX_PASSOS_ADB) {
+    throw new Error(`A rotina de aparelho precisa de 1 a ${MAX_PASSOS_ADB} passos.`);
+  }
+  const passos = action.passos.map(validarPassoAdb);
+  if (passos.every((p) => p.acao === 'esperar')) throw new Error('A rotina de aparelho precisa de pelo menos um passo além de esperar.');
+  return { type: 'adb', ...(alvo ? { alvo } : {}), passos, notificar: action.notificar === true };
+}
+
 function validarAcao(action) {
   if (!action || typeof action !== 'object' || Array.isArray(action)) throw new Error('A rotina precisa de uma ação válida.');
   if (action.type === 'agente') return validarAcaoAgente(action);
+  if (action.type === 'adb') return validarAcaoAdb(action);
   if (action.type !== 'http-check') {
-    throw new Error('Ação inválida. Use http-check (verificar um site) ou agente (o agente faz uma tarefa sozinho).');
+    throw new Error('Ação inválida. Use http-check (verificar um site), agente (o agente faz uma tarefa sozinho) ou adb (comandos para a TV/celular).');
   }
   let url;
   try { url = new URL(action.url); } catch { throw new Error('URL inválida para a ação http-check.'); }
@@ -225,7 +278,7 @@ function createRoutineStore({ dataPath = ROUTINES_PATH, executionsPath = EXECUTI
     if (trigger.type === 'cron') nextRunAt = nextCronDate(trigger.expression, now, trigger.timezone);
     const routine = {
       id, name, description: String(input.description || '').trim().slice(0, 1000),
-      category: String(input.category || (action.type === 'agente' ? 'agente' : 'monitoramento')).trim().slice(0, 60) || 'monitoramento',
+      category: String(input.category || ({ agente: 'agente', adb: 'aparelho' }[action.type] || 'monitoramento')).trim().slice(0, 60) || 'monitoramento',
       priority: ['baixa', 'normal', 'alta', 'critica'].includes(input.priority) ? input.priority : 'normal',
       trigger, action, status: STATUSES.DRAFT, createdAt: nowIso, updatedAt: nowIso,
       nextRunAt, lastRunAt: null, lastResult: null, lastCronSlotKey: null,
@@ -374,5 +427,6 @@ const defaultStore = createRoutineStore();
 module.exports = {
   ROUTINES_PATH, EXECUTIONS_PATH, DEFAULT_TIMEZONE, STATUSES, VALID_STATUSES,
   parseDuration, parseCron, cronMatches, nextCronDate, validarGatilho, validarAcao, createRoutineStore, FERRAMENTAS_ROTINA_PADRAO,
+  ACOES_ROTINA_ADB,
   ...defaultStore,
 };

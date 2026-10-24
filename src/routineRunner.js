@@ -192,7 +192,57 @@ async function executeAgente(routine, {
   }
 }
 
-function createRoutineRunner({ store, maxRetries = 2, baseRetryMs = 500, now = () => new Date(), allowPrivateTargets = process.env.ROUTINE_ALLOW_PRIVATE_TARGETS === '1', agente = {} } = {}) {
+// ---------------------------------------------------------------------------
+// v0.44.1: ação "adb" — comandos para a TV/celular no horário marcado, sem IA
+// ---------------------------------------------------------------------------
+
+const FALHA_ADB = /^(Erro|adb falhou|adb não encontrado|Ação de adb cancelada)/;
+
+async function executeAdb(routine, {
+  executeFn = (args, deps) => require('./tools/adbTools').execute('adb', args, deps),
+  loadConfig = () => require('./config').loadConfig(),
+  dormir = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  notificarFn = notificarSistema,
+} = {}) {
+  const { semControlesInvisiveis } = require('./ui/textoSeguro');
+  // Revalida (o arquivo pode ter sido editado à mão): só ações seguras, nunca reiniciar/desinstalar/shell.
+  const action = require('./routines').validarAcao(routine.action);
+  const cfg = loadConfig() || {};
+  const started = Date.now();
+  // Os passos foram aprovados por quem criou a rotina; este "sim" só chega a ações da lista segura.
+  const deps = { ask: async () => 's' };
+  // TV por Wi-Fi: a conexão do adb cai quando ela dorme ou reinicia. Reconecta antes (não faz mal se já estiver).
+  let alvo = action.alvo || cfg.adbSerial || '';
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(alvo)) alvo = `${alvo}:${Number(cfg.adbPorta) || 5555}`;
+  const registro = [];
+  const falhar = async (mensagem) => {
+    const err = new Error(mensagem);
+    err.result = { ok: false, message: mensagem, passos: registro, durationMs: Date.now() - started, checkedAt: new Date().toISOString() };
+    if (action.notificar) err.result.notificacao = await notificarFn(`gemini-code: ${routine.name} falhou`, mensagem);
+    throw err;
+  };
+  const anotar = (rotulo, saida) => registro.push(`${rotulo}: ${semControlesInvisiveis(String(saida)).replace(/\s+/g, ' ').trim().slice(0, 300)}`);
+  if (/:\d+$/.test(alvo)) {
+    const r = String(await executeFn({ acao: 'conectar', alvo }, deps));
+    anotar('conectar', r);
+    if (FALHA_ADB.test(r) || /cannot|failed|unable/i.test(r)) await falhar(`Não consegui conectar a ${alvo}: ${r.split('\n')[0]}`);
+  }
+  for (const [i, passo] of action.passos.entries()) {
+    if (passo.acao === 'esperar') { await dormir(passo.segundos * 1000); anotar(`esperar`, `${passo.segundos} s`); continue; }
+    const args = { ...passo, ...(alvo ? { alvo } : {}) };
+    // As regras "negar" do usuário valem também aqui (no chat quem confere é o loop do agente).
+    const regra = require('./permissions').negada('adb', args, cfg);
+    if (regra) await falhar(`Passo ${i + 1} (${passo.acao}) bloqueado pela regra de permissão "${regra}".`);
+    const r = String(await executeFn(args, deps));
+    anotar(passo.acao, r);
+    if (FALHA_ADB.test(r)) await falhar(`Passo ${i + 1} (${passo.acao}) falhou: ${r.split('\n')[0]}`);
+  }
+  const result = { ok: true, message: `${action.passos.length} passo(s) enviados ao aparelho.`, passos: registro, durationMs: Date.now() - started, checkedAt: new Date().toISOString() };
+  if (action.notificar) result.notificacao = await notificarFn(`gemini-code: ${routine.name}`, result.message);
+  return result;
+}
+
+function createRoutineRunner({ store, maxRetries = 2, baseRetryMs = 500, now = () => new Date(), allowPrivateTargets = process.env.ROUTINE_ALLOW_PRIVATE_TARGETS === '1', agente = {}, adb = {} } = {}) {
   if (!store) throw new Error('O executor precisa de um armazenamento de rotinas.');
   const inFlight = new Set();
 
@@ -211,12 +261,14 @@ function createRoutineRunner({ store, maxRetries = 2, baseRetryMs = 500, now = (
     try {
       let result;
       let lastError;
-      // O agente não repete sozinho: cada tentativa gasta tokens e pode refazer ações.
-      const tentativas = routine.action.type === 'agente' ? 0 : maxRetries;
+      // Só a verificação HTTP repete. O agente gastaria tokens e refaria ações; no aparelho, repetir um "power"
+      // desfaria o primeiro (liga e desliga).
+      const tentativas = routine.action.type === 'http-check' ? maxRetries : 0;
       for (let attempt = 0; attempt <= tentativas; attempt++) {
         try {
           if (routine.action.type === 'http-check') result = await executeHttpCheck(routine.action, { allowPrivateTargets });
           else if (routine.action.type === 'agente') result = await executeAgente(routine, agente);
+          else if (routine.action.type === 'adb') result = await executeAdb(routine, adb);
           else throw new Error(`Executor não implementado: ${routine.action.type}`);
           execution.attempts.push({ number: attempt + 1, ok: true, finishedAt: now().toISOString() });
           break;
@@ -300,4 +352,4 @@ function createRoutineRunner({ store, maxRetries = 2, baseRetryMs = 500, now = (
   return { execute, tick, start, inFlight };
 }
 
-module.exports = { createRoutineRunner, executeHttpCheck, executeAgente, notificarSistema, ensurePublicTarget, privateAddress, zonedMinuteKey, INSTRUCAO_ROTINA };
+module.exports = { createRoutineRunner, executeHttpCheck, executeAgente, executeAdb, notificarSistema, ensurePublicTarget, privateAddress, zonedMinuteKey, INSTRUCAO_ROTINA };

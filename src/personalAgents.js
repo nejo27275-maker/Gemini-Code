@@ -51,6 +51,8 @@ const PRESETS = Object.freeze({
   conversa: Object.freeze([]),
   leitura: FERRAMENTAS_LEITURA,
   pesquisa: Object.freeze([...FERRAMENTAS_LEITURA, 'web_fetch']),
+  // v0.44.1: aliado da TV — controla a TV/celular por adb e acha o que tocar na web (navegador), com as confirmações de sempre
+  tv: Object.freeze(['adb', 'browser', 'web_fetch']),
   completo: null,
 });
 const PRESET_PADRAO = 'pesquisa';
@@ -112,7 +114,7 @@ function normalizarFerramentas(valor, { conhecidas, tolerante = false } = {}) {
     if (chave === 'nenhuma' || chave === 'none') return [];
     valor = chave.split(/[\s,]+/).filter(Boolean);
   }
-  if (!Array.isArray(valor)) throw new Error('"tools" precisa ser um preset (conversa, leitura, pesquisa, completo) ou uma lista de ferramentas.');
+  if (!Array.isArray(valor)) throw new Error(`"tools" precisa ser um preset (${Object.keys(PRESETS).join(', ')}) ou uma lista de ferramentas.`);
   const validas = conhecidas || ferramentasConhecidas();
   const out = [];
   for (const bruto of valor) {

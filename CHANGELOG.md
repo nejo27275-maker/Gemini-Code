@@ -1,3 +1,28 @@
+## 0.44.1 — a TV no dia a dia: rotinas sem IA, vídeo direto na TV e o aliado da TV
+
+Base: o branch da 0.44.0 (ainda sem PR). O controle da TV por adb passa a conversar com o resto: rotinas, navegador e Aliados.
+
+**Novo: rotinas de TV sem IA** — `gemini-code routines create --name "Dormir" --tv "tecla dormir" --cron '0 23 * * *' --alvo 192.168.0.50`. Um `--tv` por passo (`tecla`, `abrir`, `fechar`, `link`, `digitar`, `esperar N`, `estado`, `info`). Não gasta IA nem precisa de internet.
+
+- **Só o que não destrói nada**: reiniciar, desinstalar, limpar dados, instalar, configurações e o shell livre são recusados na criação **e de novo na hora de rodar** (se alguém editar o arquivo à mão).
+- Os passos rodam sem perguntar — quem criou a rotina os aprovou ali (o modelo não grava o `routines.json`). As regras `negar` continuam valendo.
+- TV por Wi-Fi: reconecta antes de cada execução (a conexão do adb cai quando a TV dorme), com a porta padrão quando só o IP foi dado.
+- **Nunca repete sozinha**: repetir um `power` desfaria o primeiro. Para por no primeiro passo que falhar e conta qual (`routines logs`); `--notificar` avisa.
+
+**Novo: `abrir_link`** (`gemini-code adb link URL [APP]`): abre um endereço no app certo do aparelho (um vídeo do YouTube abre no YouTube da TV). Com o navegador da 0.44.0, o agente acha o vídeo e manda tocar na TV. Só `http`/`https`; o endereço chega literal ao shell da TV (testado com `';reboot;'` dentro do link); pede confirmação como as outras ações que mudam o aparelho.
+
+**Teclas `dormir`/`acordar`** (e `desligar`/`ligar`): desligam e ligam a tela **sem alternar**. O `power` alterna — numa rotina das 23h, se a TV já estivesse desligada, ele a **ligaria**. **Corrigido:** a tecla `liga` era o `power` (alternava); agora acorda.
+
+**Novo: aliado da TV** — preset `tv` (adb + navegador + `web_fetch`): `gemini-code aliados criar tv --ferramentas tv --instrucoes "..."`.
+
+**Corrigido: regras do adb nunca batiam como a documentação mostrava.** O `docs/TV_ADB.md` ensinava `config permitir "adb"` (o comando recusa: "permitir" exige um padrão) e o código citava `adb(tecla*)`, que nunca batia — a regra era comparada com o JSON `{"acao":"tecla",...}`. Agora a regra olha também o comando como se escreve (`tecla ok`, `abrir_app com.netflix.ninja`): `config permitir "adb(tecla *)"` libera as teclas e só elas (`digitar` com o texto "tecla x" continua perguntando). Regras antigas, que batiam no JSON, continuam valendo. Ações sensíveis continuam perguntando mesmo com "permitir".
+
+**Também:** a leitura dos comandos de texto (`gemini-code adb ...` e `--tv`) mora num lugar só (`argsDoComando`); no navegador, se a checagem de um site der erro, a navegação é barrada (antes ficaria pendurada) e um evento mal tratado não derruba mais o processo; o adb falso dos testes virou `tests/fixtures/adbFalso.js`, usado pelos testes da ferramenta e das rotinas.
+
+Testes: 813 (812 passando, 1 pulado por rodar como root) no Node 20.20 e no 22.22, com o `ws`. Novos: `tests/rotinaTv.test.js` (5, inclusive o terminal de ponta a ponta com o adb falso: o "aparelho" recebe `KEYCODE_SLEEP` e o `am start` do link) e mais 5 em `tests/adbTools.test.js` e 1 em `tests/navegador.test.js`. ESLint 10.1.0: 0 problemas.
+
+**Limites:** não testado numa TV de verdade; `KEYCODE_SLEEP`/`WAKEUP` existem desde o Android 4.4W, mas cada fabricante trata a tela/standby do seu jeito. A rotina só roda com `routines service` ativo (no PC ou no Termux).
+
 ## 0.44.0 — navegador de verdade e rotinas que rodam o agente
 
 Base: `main` depois da mesclagem do PR #6. Fecha as duas lacunas apontadas na comparação com Claude Code, Codex, Antigravity e Hermes: o agente só **lia** páginas (`web_fetch`) e as rotinas só **verificavam um site** (`http-check`).

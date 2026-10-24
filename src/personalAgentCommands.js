@@ -33,7 +33,7 @@ Opções de criar/editar:
   --descricao TEXTO          o que ele faz (até ${LIMITES.descricao} caracteres)
   --instrucoes TEXTO         o papel dele (até ${LIMITES.instrucoes} caracteres); ou --instrucoes-arquivo ARQ
   --iniciador TEXTO          sugestão de conversa (repita até ${LIMITES.iniciadores} vezes); --sem-iniciadores apaga
-  --ferramentas PRESET|LISTA conversa | leitura | pesquisa (padrão) | completo, ou "read_file,web_fetch,..."
+  --ferramentas PRESET|LISTA conversa | leitura | pesquisa (padrão) | tv | completo, ou "read_file,web_fetch,..."
   --modelo NOME              modelo só dele (ex.: @local, openai:MODELO, gemini-...); "padrao" volta ao do config
   --memoria MODO             confirmar (padrão: pergunta antes de cada mudança) | auto | off
 
@@ -43,6 +43,7 @@ const DESCRICAO_PRESETS = {
   conversa: 'sem ferramentas (só conversa, memória e conhecimento)',
   leitura: 'lê arquivos e pastas do computador',
   pesquisa: 'leitura + abre páginas web (pergunta antes de cada acesso, se confirmWeb)',
+  tv: 'controla a TV/celular por adb e acha o que tocar na web (navegador), com as confirmações de sempre',
   completo: 'todas as ferramentas da sessão (grava arquivos e roda comandos, com as confirmações de sempre)',
 };
 
@@ -175,7 +176,7 @@ Responda SÓ com um JSON, sem markdown e sem texto antes ou depois:
 {"description":"o que ele faz, em 1 frase curta",
  "instructions":"instruções completas em segunda pessoa (\\"Você é...\\"): papel, tom, o que fazer e o que evitar, formato das respostas e quando perguntar antes de agir. Até 4000 caracteres.",
  "starters":["até 4 sugestões curtas de primeira mensagem, escritas como o usuário escreveria"],
- "tools":"conversa | leitura | pesquisa | completo"}
+ "tools":"conversa | leitura | pesquisa | tv | completo"}
 
 Ferramentas: "conversa" = nenhuma; "leitura" = lê arquivos do computador; "pesquisa" = leitura + abre páginas web; "completo" = também grava arquivos e roda comandos. Escolha a MENOR que atende ao pedido. Não invente fatos sobre o usuário.`;
 
@@ -222,7 +223,7 @@ async function assistente(nome, perguntar, perguntarVarias) {
     if (!s.trim()) break;
     starters.push(s);
   }
-  const tools = (await perguntar(`Ferramentas [conversa | leitura | pesquisa | completo] (Enter = ${PRESET_PADRAO}): `)).trim() || PRESET_PADRAO;
+  const tools = (await perguntar(`Ferramentas [${Object.keys(PRESETS).join(' | ')}] (Enter = ${PRESET_PADRAO}): `)).trim() || PRESET_PADRAO;
   const memory = (await perguntar(`Memória [${MEMORIA_MODOS.join(' | ')}] (Enter = confirmar): `)).trim() || 'confirmar';
   return { name: nome, description: descricao, instructions: instrucoes, starters, tools, memory };
 }

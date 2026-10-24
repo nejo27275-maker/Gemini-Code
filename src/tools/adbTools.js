@@ -43,9 +43,13 @@ const TECLAS = Object.freeze({
   ok: 'KEYCODE_DPAD_CENTER', enter: 'KEYCODE_ENTER', voltar: 'KEYCODE_BACK', inicio: 'KEYCODE_HOME', home: 'KEYCODE_HOME',
   menu: 'KEYCODE_MENU', play: 'KEYCODE_MEDIA_PLAY_PAUSE', pause: 'KEYCODE_MEDIA_PLAY_PAUSE', parar: 'KEYCODE_MEDIA_STOP',
   proximo: 'KEYCODE_MEDIA_NEXT', anterior: 'KEYCODE_MEDIA_PREVIOUS', 'volume+': 'KEYCODE_VOLUME_UP',
-  'volume-': 'KEYCODE_VOLUME_DOWN', mudo: 'KEYCODE_VOLUME_MUTE', power: 'KEYCODE_POWER', liga: 'KEYCODE_POWER',
+  'volume-': 'KEYCODE_VOLUME_DOWN', mudo: 'KEYCODE_VOLUME_MUTE', power: 'KEYCODE_POWER',
+  // v0.44.1: "power" ALTERNA (liga se estiver desligada). Para desligar ou ligar sem risco de inverter — o que
+  // importa numa rotina das 23h — dormir/acordar. "liga" era o power (alternava); agora acorda.
+  dormir: 'KEYCODE_SLEEP', desligar: 'KEYCODE_SLEEP', acordar: 'KEYCODE_WAKEUP', ligar: 'KEYCODE_WAKEUP', liga: 'KEYCODE_WAKEUP',
   apps: 'KEYCODE_ALL_APPS', buscar: 'KEYCODE_SEARCH',
 });
+const MAX_LINK = 2000;
 const ESPACOS_CONFIG = new Set(['system', 'secure', 'global']);
 
 // Ações que só LEEM o aparelho (não pedem confirmação). "tela" grava nesta máquina, mas só um .png NOVO,
@@ -68,14 +72,17 @@ const declarations = [
         acao: {
           type: 'string',
           enum: ['dispositivos', 'descobrir', 'parear', 'conectar', 'desconectar', 'tcpip', 'info', 'apps', 'estado', 'tela', 'logcat',
-            'abrir_app', 'fechar_app', 'instalar', 'desinstalar', 'limpar', 'tecla', 'digitar', 'config', 'reiniciar', 'shell'],
+            'abrir_app', 'abrir_link', 'fechar_app', 'instalar', 'desinstalar', 'limpar', 'tecla', 'digitar', 'config', 'reiniciar', 'shell'],
           description: 'dispositivos=lista; descobrir=acha aparelhos com depuração por Wi-Fi na rede; parear=Android 11+ (código de 6 dígitos ' +
             'da tela "Parear com código"); conectar/desconectar/tcpip=rede; info/apps/estado/tela/logcat=leitura; ' +
-            'abrir_app/fechar_app/instalar/desinstalar/limpar=apps; tecla/digitar=controle; config=settings; reiniciar; shell=comando livre.',
+            'abrir_app/fechar_app/instalar/desinstalar/limpar=apps; abrir_link=abre um endereço no app certo do aparelho (ex.: um vídeo ' +
+            'do YouTube no app da TV); tecla/digitar=controle (dormir/acordar desligam/ligam a tela sem inverter); config=settings; ' +
+            'reiniciar; shell=comando livre.',
         },
         alvo: { type: 'string', description: 'Aparelho: serial USB, "ip" ou "ip:porta" (padrão adbSerial do config; conectar/tcpip usam o ip; parear usa o ip:porta DE PAREAMENTO, que é outra porta).' },
         codigo: { type: 'string', description: 'parear: código de 6 dígitos mostrado no aparelho.' },
-        app: { type: 'string', description: 'Pacote do app (ex.: com.netflix.ninja) para abrir_app/fechar_app/desinstalar/limpar.' },
+        app: { type: 'string', description: 'Pacote do app (ex.: com.netflix.ninja) para abrir_app/fechar_app/desinstalar/limpar; em abrir_link, força o app que abre o endereço (opcional).' },
+        link: { type: 'string', description: 'abrir_link: endereço http:// ou https:// (ex.: https://www.youtube.com/watch?v=...).' },
         arquivo: { type: 'string', description: 'instalar: caminho do .apk; tela: .png NOVO onde salvar (padrão: ./tela-<hora>.png).' },
         tecla: { type: 'string', description: `tecla: ${Object.keys(TECLAS).join(', ')}, ou um KEYCODE_* / número.` },
         texto: { type: 'string', description: 'digitar: texto a enviar ao campo em foco no aparelho.' },
@@ -113,6 +120,17 @@ function hostPorta(alvo, portaPadrao) {
   if (!v) throw new Error('informe o "alvo" (ip do aparelho) para conectar.');
   const m = /^(.*):(\d+)$/.exec(v);
   return m ? `${m[1]}:${validarPorta(m[2])}` : `${v}:${validarPorta(portaPadrao)}`;
+}
+
+/** abrir_link: só http/https, sem usuário/senha, sem caracteres de controle. @returns {string} o endereço normalizado */
+function validarLink(link) {
+  const bruto = String(link || '').trim();
+  let u;
+  try { u = new URL(bruto); } catch { throw new Error(`link inválido: "${paraExibir(bruto)}" (use um endereço http:// ou https://).`); }
+  if (!['http:', 'https:'].includes(u.protocol)) throw new Error('o link precisa começar com http:// ou https://.');
+  if (u.username || u.password) throw new Error('não ponha usuário/senha no link.');
+  if (u.href.length > MAX_LINK) throw new Error(`link longo demais (máx. ${MAX_LINK} caracteres).`);
+  return u.href;
 }
 
 /** Aspas simples para o shell POSIX do aparelho (mksh/toybox): o argumento chega literal, sem expansão. */
@@ -173,6 +191,7 @@ function descreverAcao(acao, args, alvo) {
     case 'desconectar': return `desconectar ${args.alvo || '(todos)'}`;
     case 'tcpip': return `ligar o adb por Wi-Fi na porta ${args.porta || loadConfig().adbPorta}${onde}`;
     case 'abrir_app': return `abrir o app ${args.app}${onde}`;
+    case 'abrir_link': return `abrir o link ${args.link}${args.app ? ` no app ${args.app}` : ''}${onde}`;
     case 'fechar_app': return `fechar o app ${args.app}${onde}`;
     case 'instalar': return `instalar ${args.arquivo}${onde}`;
     case 'desinstalar': return `DESINSTALAR o app ${args.app}${onde}`;
@@ -281,6 +300,15 @@ async function execute(name, args = {}, deps = {}) {
         if (/No activities found|monkey aborted|Error:/i.test(`${r.stdout}\n${r.stderr}`)) return `Erro: não consegui abrir ${a.app} (app não instalado ou sem tela inicial). Veja os instalados com acao:"apps".`;
         return `App ${a.app} iniciado.`;
       }
+      case 'abrir_link': {
+        // v0.44.1: "VIEW" do Android — o app dono do endereço abre (YouTube, Netflix, navegador...). Vai entre aspas.
+        const link = validarLink(a.link);
+        if (a.app !== undefined && !PACOTE_OK.test(String(a.app))) return 'Erro: "app" inválido (ex.: com.google.android.youtube.tv).';
+        const r = await rodarAdb(adbPath, comAlvo(alvo, noAparelho('am', 'start', '-a', 'android.intent.action.VIEW', '-d', link, ...(a.app ? ['-p', a.app] : []))));
+        if (r.erro) return r.erro;
+        if (/^Error|unable to resolve|Exception/im.test(`${r.stdout}\n${r.stderr}`)) return `Erro: o aparelho não abriu o link (nenhum app aceitou ${a.app ? `em ${a.app}` : 'esse endereço'}).`;
+        return `Link aberto no aparelho: ${link}`;
+      }
       case 'fechar_app':
         if (!PACOTE_OK.test(String(a.app || ''))) return 'Erro: informe "app".';
         return textoSaida(await rodarAdb(adbPath, comAlvo(alvo, noAparelho('am', 'force-stop', a.app))), `App ${a.app} fechado.`);
@@ -334,4 +362,49 @@ async function execute(name, args = {}, deps = {}) {
   }
 }
 
-module.exports = { declarations, execute, TECLAS, validarAlvo, validarPorta, hostPorta, descreverAcao, noAparelho, SO_LEITURA, SENSIVEIS };
+// ---------------------------------------------------------------------------
+// Comandos em texto ("tecla dormir", "abrir_app com.netflix.ninja") — terminal e rotinas de TV
+// ---------------------------------------------------------------------------
+
+const ALIASES = Object.freeze({
+  devices: 'dispositivos', dispositivos: 'dispositivos', conectar: 'conectar', connect: 'conectar',
+  descobrir: 'descobrir', discover: 'descobrir', parear: 'parear', pair: 'parear',
+  desconectar: 'desconectar', disconnect: 'desconectar', tcpip: 'tcpip', info: 'info', apps: 'apps',
+  estado: 'estado', tela: 'tela', print: 'tela', screenshot: 'tela', logcat: 'logcat', log: 'logcat',
+  abrir: 'abrir_app', abrir_app: 'abrir_app', link: 'abrir_link', abrir_link: 'abrir_link', url: 'abrir_link',
+  fechar: 'fechar_app', fechar_app: 'fechar_app', instalar: 'instalar', install: 'instalar',
+  desinstalar: 'desinstalar', uninstall: 'desinstalar', limpar: 'limpar', tecla: 'tecla', key: 'tecla',
+  digitar: 'digitar', texto: 'digitar', config: 'config', settings: 'config', reiniciar: 'reiniciar', reboot: 'reiniciar', shell: 'shell',
+});
+
+/**
+ * Palavras de um comando -> argumentos da ferramenta (sem executar nada). null se a ação não existe.
+ * @param {string[]} palavras ex.: ['abrir_link', 'https://youtu.be/x', 'com.google.android.youtube.tv']
+ */
+function argsDoComando(palavras) {
+  const [primeira = 'dispositivos', ...resto] = palavras;
+  const acao = ALIASES[String(primeira).toLowerCase()];
+  if (!acao) return null;
+  const args = { acao };
+  if (acao === 'conectar' || acao === 'desconectar') { if (resto[0]) args.alvo = resto[0]; }
+  else if (acao === 'parear') { args.alvo = resto[0]; args.codigo = resto[1]; }
+  else if (acao === 'tcpip') { if (resto[0]) args.porta = Number(resto[0]); }
+  else if (acao === 'logcat') { if (resto[0]) args.linhas = Number(resto[0]); }
+  else if (acao === 'tela') { if (resto[0]) args.arquivo = resto[0]; }
+  else if (acao === 'instalar') args.arquivo = resto[0];
+  else if (['abrir_app', 'fechar_app', 'desinstalar', 'limpar'].includes(acao)) args.app = resto[0];
+  else if (acao === 'abrir_link') { args.link = resto[0]; if (resto[1]) args.app = resto[1]; }
+  else if (acao === 'tecla') args.tecla = resto[0];
+  else if (acao === 'digitar') args.texto = resto.join(' ');
+  else if (acao === 'config') { args.espaco = resto[0]; args.chave = resto[1]; if (resto.length > 2) args.valor = resto.slice(2).join(' '); }
+  else if (acao === 'shell') args.comando = resto.join(' ');
+  return args;
+}
+
+/** A tecla vira um KEYCODE conhecido? (nome amigável, KEYCODE_* ou número) */
+const teclaValida = (t) => Boolean(TECLAS[String(t || '').trim().toLowerCase()] || /^(KEYCODE_[A-Z0-9_]+|\d{1,4})$/.test(String(t || '').trim()));
+
+module.exports = {
+  declarations, execute, TECLAS, ALIASES, PACOTE_OK, MAX_TEXTO, validarAlvo, validarPorta, validarLink, hostPorta, descreverAcao,
+  noAparelho, argsDoComando, teclaValida, SO_LEITURA, SENSIVEIS,
+};

@@ -328,7 +328,10 @@ class Navegador {
           const p = this.pendentes.get(msg.id);
           this.pendentes.delete(msg.id);
           if (msg.error) p.falha(new Error(msg.error.message || 'erro do navegador')); else p.ok(msg.result || {});
-        } else if (msg.method) this.aoEvento(msg);
+        } else if (msg.method) {
+          // um evento mal tratado não pode derrubar o processo (o erro sairia do leitor do pipe)
+          try { this.aoEvento(msg); } catch (e) { this.aviso(`erro interno ao tratar ${msg.method}: ${e.message}`); }
+        }
       }
     });
 
@@ -380,9 +383,14 @@ class Navegador {
     if (frameId !== this.framePrincipal) return continuar(); // iframes: só as regras de rede valem
     let url;
     try { url = new URL(request.url); } catch { url = null; }
-    const motivo = !url ? 'endereço inválido'
-      : !['http:', 'https:'].includes(url.protocol) ? `o navegador só abre páginas http/https (pedido: ${url.protocol})`
-        : this.navegacaoBarrada(url);
+    let motivo;
+    try {
+      motivo = !url ? 'endereço inválido'
+        : !['http:', 'https:'].includes(url.protocol) ? `o navegador só abre páginas http/https (pedido: ${url.protocol})`
+          : this.navegacaoBarrada(url);
+    } catch (e) {
+      motivo = `não deu para conferir o site (${e.message})`; // na dúvida, barra — e a página não fica pendurada
+    }
     if (!motivo) return continuar();
     this.aviso(`A página tentou ir para ${String(request.url).slice(0, 200)} e foi barrada: ${motivo}`);
     return this.enviar('Fetch.failRequest', { requestId, errorReason: 'BlockedByClient' }).catch(() => {});

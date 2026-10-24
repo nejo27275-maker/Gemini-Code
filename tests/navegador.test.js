@@ -13,7 +13,7 @@ process.env.USERPROFILE = HOME_FALSO;
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { criarProxy, acharNavegador, explicarFalha } = require('../src/navegador');
+const { criarProxy, acharNavegador, explicarFalha, Navegador } = require('../src/navegador');
 const { criarFerramenta, chaveAprovacao, declarations } = require('../src/tools/browserTools');
 const permissions = require('../src/permissions');
 
@@ -94,6 +94,23 @@ test('falha na partida: mostra a linha FATAL (não o despejo de registradores) e
   assert.match(r, /instale o Google Chrome/);
   assert.equal(explicarFalha(''), '');
   assert.match(explicarFalha('linha 1\nalgo deu errado'), / — algo deu errado\.$/);
+});
+
+test('navegação da página principal: se a checagem do site falhar, barra (não deixa pendurada nem passa)', async () => {
+  const n = new Navegador({ executavel: 'x', navegacaoBarrada: () => { throw new Error('config ilegível'); } });
+  n.framePrincipal = 'F';
+  const enviados = [];
+  n.enviar = async (metodo) => { enviados.push(metodo); return {}; };
+  await n.decidirNavegacao({ requestId: '1', request: { url: 'https://site.com/' }, frameId: 'F' });
+  assert.deepEqual(enviados, ['Fetch.failRequest']);
+  assert.match(n.tirarAvisos()[0], /não deu para conferir o site \(config ilegível\)/);
+  await n.decidirNavegacao({ requestId: '2', request: { url: 'https://anuncio.com/' }, frameId: 'OUTRO' });
+  assert.deepEqual(enviados, ['Fetch.failRequest', 'Fetch.continueRequest'], 'iframe: só as regras de rede valem');
+  n.navegacaoBarrada = () => null;
+  await n.decidirNavegacao({ requestId: '3', request: { url: 'file:///etc/passwd' }, frameId: 'F' });
+  assert.equal(enviados.at(-1), 'Fetch.failRequest');
+  await n.decidirNavegacao({ requestId: '4', request: { url: 'https://site.com/ok' }, frameId: 'F' });
+  assert.equal(enviados.at(-1), 'Fetch.continueRequest');
 });
 
 test('aprovação por site e regras de permissão olham a URL', () => {
