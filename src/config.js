@@ -151,6 +151,14 @@ const DEFAULT_CONFIG = {
   webDominiosPermitidos: [],
   // Orçamento (em caracteres) do conhecimento fixo injetado no prompt — ver src/knowledge.js
   knowledgeMaxChars: 10000,
+  // v0.43.0: ADB — controlar aparelhos Android do próprio usuário (TV, celular) por USB ou Wi-Fi.
+  // adbPath: caminho do executável adb; adbSerial: aparelho padrão (-s); adbPorta: porta do adb por rede
+  // (connect/tcpip); adbConfirm: pergunta antes de cada ação que muda o aparelho (como confirmShell).
+  // Ferramenta em src/tools/adbTools.js; comando "gemini-code adb".
+  adbPath: 'adb',
+  adbSerial: '',
+  adbPorta: 5555,
+  adbConfirm: true,
   // v0.42.0: orçamento por mensagem dos trechos da base de conhecimento de um agente pessoal (src/personalAgents.js)
   aliadosConhecimentoMaxChars: 8000,
 };

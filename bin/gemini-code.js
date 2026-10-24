@@ -148,6 +148,12 @@ No modo "chat", digite /help para ver os comandos de sessão (/clear, /model, /s
   gemini-code cowork connect <ip> --token X    Conecta do celular ao PC (canal cifrado)
   gemini-code cowork novo-token                Troca o token do cowork (o antigo deixa de valer)
 
+  gemini-code adb dispositivos                 Controla uma Android TV/celular SEU por adb (USB ou Wi-Fi)
+  gemini-code adb conectar <ip[:porta]>        Conecta na TV pela rede (ligue a depuração por rede antes)
+  gemini-code adb info|apps|estado|tela|logcat Lê o aparelho (modelo, apps, app em foco, print, logs)
+  gemini-code adb tecla <cima|baixo|ok|voltar|home|play...>   Navega na TV pelo controle virtual
+  gemini-code adb abrir <pacote> | digitar <texto> | instalar <app.apk> | shell <cmd>   (pedem confirmação)
+
   gemini-code ciencia "pergunta"               Modo ciência: explica em formato fixo (números, comparação, dá pra escapar?)
 
   gemini-code agenda add "texto" --dia N       Marca algo num dia (ou --data AAAA-MM-DD)
@@ -684,7 +690,7 @@ async function chatLoop({ agente: nomeAgente } = {}) {
 // "agenda" e "projetos" são só arquivo local (sem API key nenhuma
 // envolvida) — pedir a chave de segurança pra só ver a lista seria atrito
 // à toa.
-const COMANDOS_SEM_DESBLOQUEIO = new Set([undefined, 'help', '--help', 'version', '--version', '-v', 'config', 'confianca', 'trust', 'agenda', 'projetos', 'backups', 'routines', 'sessions', 'checkpoints', 'artifacts', 'context', 'doctor', 'solo', 'security', 'profiles', 'agents', 'code-ia', 'codeia']);
+const COMANDOS_SEM_DESBLOQUEIO = new Set([undefined, 'help', '--help', 'version', '--version', '-v', 'config', 'confianca', 'trust', 'agenda', 'projetos', 'backups', 'routines', 'sessions', 'checkpoints', 'artifacts', 'context', 'doctor', 'solo', 'security', 'profiles', 'agents', 'code-ia', 'codeia', 'adb']);
 
 // v0.42.0: de "aliados", só conversar (chat/run) e criar com --ia chamam o modelo.
 function aliadosUsaModelo() {
@@ -1242,6 +1248,48 @@ async function main() {
         return;
       }
       return console.log('Uso: gemini-code cowork server [porta] | gemini-code cowork connect <ip> --token X [--port P] | gemini-code cowork novo-token');
+    }
+
+    case 'adb': {
+      // v0.43.0: expõe a ferramenta adb (src/tools/adbTools.js) no terminal — útil para parear a TV uma vez
+      // antes de o agente usá-la, e para quem prefere a linha de comando. As confirmações acontecem na própria
+      // ferramenta (igual ao chat): ações que mudam o aparelho pedem s/n, a menos que adbConfirm:false.
+      const adbTools = require('../src/tools/adbTools');
+      const ALIAS = {
+        devices: 'dispositivos', dispositivos: 'dispositivos', conectar: 'conectar', connect: 'conectar',
+        desconectar: 'desconectar', disconnect: 'desconectar', tcpip: 'tcpip', info: 'info', apps: 'apps',
+        estado: 'estado', tela: 'tela', print: 'tela', screenshot: 'tela', logcat: 'logcat', log: 'logcat',
+        abrir: 'abrir_app', abrir_app: 'abrir_app', fechar: 'fechar_app', fechar_app: 'fechar_app',
+        instalar: 'instalar', install: 'instalar', desinstalar: 'desinstalar', uninstall: 'desinstalar',
+        limpar: 'limpar', tecla: 'tecla', key: 'tecla', digitar: 'digitar', texto: 'digitar',
+        config: 'config', settings: 'config', reiniciar: 'reiniciar', reboot: 'reiniciar', shell: 'shell',
+      };
+      const bruto = rest.slice();
+      let alvoFlag;
+      for (const f of ['--alvo', '-s']) { const i = bruto.indexOf(f); if (i !== -1) { alvoFlag = bruto[i + 1]; bruto.splice(i, 2); } }
+      const [subBruto = 'dispositivos', ...resto] = bruto;
+      const acao = ALIAS[String(subBruto).toLowerCase()];
+      if (!acao) {
+        console.log(`Ação de adb desconhecida: "${subBruto}". Use: ${[...new Set(Object.values(ALIAS))].join(', ')}.`);
+        process.exitCode = 1;
+        return;
+      }
+      const args = { acao };
+      if (alvoFlag) args.alvo = alvoFlag;
+      if (acao === 'conectar' || acao === 'desconectar') { if (resto[0]) args.alvo = resto[0]; }
+      else if (acao === 'tcpip') { if (resto[0]) args.porta = Number(resto[0]); }
+      else if (acao === 'logcat') { if (resto[0]) args.linhas = Number(resto[0]); }
+      else if (acao === 'tela') { if (resto[0]) args.arquivo = resto[0]; }
+      else if (acao === 'instalar') args.arquivo = resto[0];
+      else if (acao === 'abrir_app' || acao === 'fechar_app' || acao === 'desinstalar' || acao === 'limpar') args.app = resto[0];
+      else if (acao === 'tecla') args.tecla = resto[0];
+      else if (acao === 'digitar') args.texto = resto.join(' ');
+      else if (acao === 'config') { args.espaco = resto[0]; args.chave = resto[1]; if (resto.length > 2) args.valor = resto.slice(2).join(' '); }
+      else if (acao === 'shell') args.comando = resto.join(' ');
+      try { console.log(await adbTools.execute('adb', args)); }
+      catch (err) { console.error(chalk.red('Erro: ' + err.message)); process.exitCode = 1; }
+      require('../src/ui/prompt').closeShared();
+      return;
     }
 
     case 'ciencia': {

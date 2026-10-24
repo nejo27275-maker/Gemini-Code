@@ -49,6 +49,23 @@ O modelo GGUF é o mesmo, mas os históricos e as memórias do CLI e do app aind
 - **Aliados** (`gemini-code aliados ...`): seus agentes pessoais — cada um com
   instruções, sugestões de conversa, base de conhecimento, memória, ferramentas
   e modelo próprios.
+- **ADB** (`gemini-code adb ...`): controla uma Android TV, celular ou tablet SEUS
+  por USB ou Wi-Fi — ver/abrir/instalar apps, navegar na TV pelo controle, ajustar
+  configurações, print e logs. Veja `docs/TV_ADB.md`.
+
+## Controlar a TV e outros aparelhos (ADB) — v0.43.0
+
+O agente fala **adb**, então controla aparelhos Android SEUS (Android TV, celular, tablet) por cabo ou pela rede local. Ligue a depuração na TV, conecte uma vez e peça em português ("abre o YouTube na TV", "desce e entra", "tira um print", "quais apps estão instalados"). Passo a passo completo em **`docs/TV_ADB.md`**.
+
+```bash
+gemini-code adb conectar 192.168.0.50     # a TV pede para confiar nesta máquina
+gemini-code adb dispositivos               # deve aparecer "device"
+gemini-code adb apps                       # apps instalados
+gemini-code adb abrir com.google.android.youtube.tv
+gemini-code adb tecla baixo                # cima/baixo/ok/voltar/home/play/volume+...
+```
+
+Só funciona nos aparelhos onde você ligou a depuração e confiou nesta máquina (a TV pede confirmação). Toda ação que muda o aparelho pede sua confirmação; leitura (listar, info, print, log) não. Os comandos vão ao `adb` como lista de argumentos, sem shell (sem injeção). Isso não "turbina" a TV: o que dá para fazer é fechar/limpar/desinstalar apps e ajustar configurações, sempre com a sua confirmação. Ferramenta em `src/tools/adbTools.js`; o gemini-code também roda *dentro* da TV via Termux (sideload), mas na prática controlar de fora é mais confortável.
 
 ## Novidades da v0.43.0 — blindagem contra ataques
 

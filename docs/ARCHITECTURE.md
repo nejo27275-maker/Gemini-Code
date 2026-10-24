@@ -46,6 +46,9 @@ Cada arquivo expõe um conjunto de "tools" que o modelo pode chamar durante
 o loop do agente:
 
 - `fileTools.js` — ler, escrever e editar arquivos.
+- `adbTools.js` (v0.43.0) — controla aparelhos Android do usuário (TV, celular) por adb: comandos
+  montados como lista de argumentos (execFile, sem shell), ações que mudam o aparelho pedem
+  confirmação (como o `run_shell`). Comando `gemini-code adb` e guia `docs/TV_ADB.md`.
 - `shellTools.js` — rodar comandos de shell, com confirmação do usuário via
   a readline compartilhada (`src/ui/prompt.js`).
 - `searchTools.js` — busca (web e/ou local, conforme configurado).
@@ -154,6 +157,7 @@ extra). Cobertura atual:
 | `edit_files`, `glob_files`, `web_fetch` (inclusive DNS rebinding, `src/redeSegura.js`) | `multiEditTools.test.js`, `globTools.test.js`, `webTools.test.js` |
 | integração das ferramentas novas (`/passo`, modos restritos, risco de workflow) | `ferramentasIntegradas.test.js` |
 | agentes pessoais: definição, conhecimento, memória, prompt, ferramentas no loop, pasta protegida, comandos e CLI de ponta a ponta (v0.42.0) | `agentesPessoais.test.js` |
+| ferramenta `adb` com um adb falso: comandos montados, confirmação, teclas, alvo, erros (v0.43.0) | `adbTools.test.js` |
 
 `runOnce` (agente), `runWorkflowData`/`runWorkflow`/`runAgentFile`
 (runner) e `runLive` (live) aceitam um argumento opcional `deps` — ex.:

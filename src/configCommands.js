@@ -21,6 +21,9 @@ const SETTERS = {
   'set-ollama-url': { campo: 'ollamaUrl', url: true, ok: (v) => `Endereço do Ollama definido: ${v}`, uso: 'gemini-code config set-ollama-url http://127.0.0.1:11434' },
   'set-openai-url': { campo: 'openaiBaseUrl', url: true, ok: (v) => `API compatível com OpenAI: ${v}`, uso: 'gemini-code config set-openai-url https://openrouter.ai/api/v1' },
   'set-openai-model': { campo: 'openaiModel', ok: (v) => `Modelo da API OpenAI-compatível: ${v}`, uso: 'gemini-code config set-openai-model NOME (ex.: anthropic/claude-sonnet-4.5 no OpenRouter)' },
+  // v0.43.0: ADB (controlar TV/celular do usuário).
+  'set-adb-path': { campo: 'adbPath', ok: (v) => `Caminho do adb definido: ${v}`, uso: 'gemini-code config set-adb-path /caminho/do/adb' },
+  'set-adb-serial': { campo: 'adbSerial', ok: (v) => `Aparelho adb padrão definido: ${v}`, uso: 'gemini-code config set-adb-serial SERIAL_OU_IP[:PORTA]' },
 };
 
 /** @returns {string|null} texto para mostrar, ou null se `sub` não é daqui. */

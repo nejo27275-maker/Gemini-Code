@@ -1,3 +1,20 @@
+## 0.43.1 — controlar a TV e outros aparelhos por ADB
+
+**Novo: ferramenta `adb`** (`src/tools/adbTools.js`) e comando `gemini-code adb`. O agente passa a controlar aparelhos Android **do próprio usuário** (Android TV, celular, tablet) por USB ou pela rede local, com o `adb` do Android SDK: listar/abrir/instalar/desinstalar/limpar apps, navegar numa TV pelas teclas do controle (`cima`, `baixo`, `ok`, `voltar`, `home`, `play`, `volume+`…), digitar texto, ler e gravar `settings`, tirar print (`screencap`), ver `logcat`, reiniciar e um `shell` livre no aparelho. No chat dá para pedir em português ("abre o YouTube na TV", "desce e entra", "tira um print"); também há o comando direto `gemini-code adb ...`. Guia completo em `docs/TV_ADB.md`.
+
+**Segurança (igual ao `run_shell`):**
+
+- Comandos montados como **lista de argumentos** e executados com `execFile` — **sem shell**: aspas, `;`, `$()` e afins não são interpretados, então não há injeção. O alvo (serial/ip) é validado e não pode começar com `-` (não vira uma flag do adb).
+- Toda ação que **muda** o aparelho pede confirmação no terminal; as de **leitura** (`dispositivos`, `info`, `apps`, `estado`, `tela`, `logcat`) não pedem. Ações **irreversíveis** (reiniciar, desinstalar, limpar dados, `shell` destrutivo pela heurística do `run_shell`) confirmam **mesmo** com `adbConfirm:false`.
+- As regras do config valem: `negar` bloqueia em qualquer modo (vem do loop do agente) e a nova função `permissions.permitido` deixa `permitir: ["adb"]` (ou com padrão) dispensar a confirmação de ações específicas. Config: `adbPath`, `adbSerial`, `adbPorta`, `adbConfirm`, com `gemini-code config set-adb-path|set-adb-serial`.
+- O adb só conecta em aparelho onde o dono ligou a depuração e confiou nesta máquina (o aparelho pede confirmação). Não é ferramenta de invasão.
+
+**Rodar na própria TV:** Android TV é Android; o gemini-code roda nela via Termux (sideload), como em qualquer Android (`ANDROID_TERMUX.md`). Na prática, controlar a TV de fora por adb é mais confortável do que digitar nela.
+
+Testes: 20 novos em `tests/adbTools.test.js`, com um `adb` falso que registra os argumentos exatos de cada chamada — conferindo a montagem dos comandos, a confirmação (e o que a dispensa/força), o mapa de teclas, o alvo `-s`, o print salvo e as mensagens de erro (adb ausente, aparelho offline). ESLint 10 limpo. Não testado contra uma TV real (sem adb nem aparelho neste ambiente).
+
+**Limites honestos:** controlar por adb não "deixa a TV mais rápida" por mágica — dá para fechar/limpar/desinstalar apps e ajustar configurações, com a sua confirmação, e nada além do que o adb já permite. Marcas diferentes usam nomes de app e caminhos de configuração diferentes; o agente descobre com `apps`/`estado`, mas pode errar o pacote.
+
 ## 0.43.0 — blindagem: cowork cifrado de ponta a ponta e limites contra sobrecarga
 
 **Falha corrigida — P1: o token do cowork e todas as tarefas iam abertos pela rede.** O celular mandava `{type:"auth", token}` em texto puro por `ws://`, e as tarefas e respostas também. Qualquer um na mesma Wi-Fi com um capturador de tráfego pegava o token e rodava o agente inteiro no PC (arquivos e shell); com ARP spoofing, podia até alterar as tarefas no caminho. Confirmado no código anterior (`ws.send(JSON.stringify({ type: 'auth', token }))` no `client.js`); o teste novo procura o token e o texto da tarefa em cada quadro da rede.

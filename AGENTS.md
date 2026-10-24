@@ -28,4 +28,5 @@
 - Supported Node.js version: >=18; CI currently validates on Node.js 20.
 - Local configuration and secrets belong under `~/.gemini-code`, outside the repository.
 - The routine runner currently supports only the `http-check` action. Do not imply arbitrary shell/AI actions are available to scheduled routines.
+- The `adb` tool (`src/tools/adbTools.js`) builds argv arrays and runs them with `execFile` (never a shell string); it is for the user's own devices. State-changing actions must keep asking for confirmation (like `run_shell`); only read-only actions (`dispositivos`, `info`, `apps`, `estado`, `tela`, `logcat`) skip it.
 - The routine API should remain bound to localhost unless a secure HTTPS/authenticated deployment is configured.

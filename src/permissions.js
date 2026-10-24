@@ -90,8 +90,19 @@ function shellPermitido(command, cfg) {
   return regrasDe(cfg, 'permitir').some((regra) => regra.padrao && bate(regra, 'run_shell', { command: command.trim() }));
 }
 
+/**
+ * true se uma chamada (de qualquer ferramenta que NÃO seja o run_shell) bate numa regra de "permitir".
+ * Usado pela ferramenta adb (src/tools/adbTools.js) para dispensar a confirmação de ações específicas,
+ * ex.: "permitir": ["adb(info*)", "adb(tecla*)"]. Não vale para run_shell (esse usa shellPermitido, que
+ * é mais restrito por causa de comandos compostos).
+ */
+function permitido(nome, args, cfg) {
+  if (nome === 'run_shell') return false;
+  return regrasDe(cfg, 'permitir').some((regra) => bate(regra, nome, args));
+}
+
 function validar(regra) {
   return parseRegra(regra) ? null : `Regra inválida: "${regra}". Use FERRAMENTA ou FERRAMENTA(PADRÃO), ex.: run_shell(npm test*)`;
 }
 
-module.exports = { negada, shellPermitido, parseRegra, validar, globParaRegex, alvos, equivalentes };
+module.exports = { negada, shellPermitido, permitido, parseRegra, validar, globParaRegex, alvos, equivalentes };
