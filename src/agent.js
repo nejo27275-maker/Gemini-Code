@@ -19,6 +19,10 @@ const hooks = require('./hooks');
 const stepApproval = require('./stepApproval');
 const loopGuard = require('./loopGuard');
 const outputCompact = require('./outputCompact');
+const { enxugarResultadosAntigos } = require('./compact');
+const permissions = require('./permissions');
+const { partesComImagens, tirarImagensDoHistorico } = require('./imagens');
+const { paraTerminal } = require('./ui/textoSeguro');
 
 // Item 4 do roadmap "top 1" (set/2026): antes o agente só sabia em que
 // projeto estava se o usuário explicasse (nome, stack, scripts disponíveis)
@@ -92,8 +96,10 @@ function buildSystemInstruction(extra, { cwd = process.cwd() } = {}) {
   // "extra" é a instrução adicional de uma persona (agents/*.json,
   // campo "systemInstructionExtra") — antes esse campo existia no JSON de
   // exemplo mas não era lido em lugar nenhum do código.
-  const completo = base + conhecimento;
-  return extra ? `${completo}\n\n${extra}` : completo;
+  // v0.42.0: o extra (persona, perfil, modo plano, agente pessoal) vem ANTES do conhecimento fixo. O provedor
+  // local corta o system pelo fim para caber em contextos pequenos (compactarSistema em src/providers/llamacpp.js):
+  // com o extra no fim, era o papel do agente que sumia primeiro, e não o conhecimento.
+  return extra ? `${base}\n\n${extra}${conhecimento}` : base + conhecimento;
 }
 
 // Item 5 da revisão (set/2026): em sessões longas de chat/cowork, `history`
@@ -103,6 +109,7 @@ function buildSystemInstruction(extra, { cwd = process.cwd() } = {}) {
 // MAX_TURNOS_HISTORICO mensagens, mantém as 2 primeiras (contexto inicial da
 // conversa) + as últimas MANTER_RECENTES, descartando o meio.
 const MAX_TURNOS_HISTORICO = 40;
+const MAX_CONTINUACOES_STOP = 3; // hook Stop não pode prender o agente num laço sem fim
 const MANTER_RECENTES = 30;
 
 // Correção (v0.3.6): o corte antigo (`slice(0, 2)` + `slice(-30)`) ignorava a
@@ -189,7 +196,8 @@ function podarHistorico(convo) {
  * normal (CLI) ninguém passa `deps` e o comportamento é idêntico ao de antes.
  */
 async function runOnce(userMessage, opts = {}) {
-  const { history = [], modelName, extraSystemInstruction, allowedTools, onText, deps = {}, maxSteps = 60, logPrefix = '' } = opts;
+  // `imagens` (v0.41.0): [{ inlineData: {mimeType, data} }] de src/imagens.js, enviadas junto com a mensagem.
+  const { history = [], modelName, extraSystemInstruction, allowedTools, onText, deps = {}, maxSteps = 60, logPrefix = '', imagens = [] } = opts;
   const loadConfigFn = deps.loadConfig || loadConfig;
   const chatWithToolsFn = deps.chatWithTools || chatWithTools;
   const getAllDeclarationsFn = deps.getAllDeclarations || tools.getAllDeclarations;
@@ -203,9 +211,23 @@ async function runOnce(userMessage, opts = {}) {
   // fora dessa lista existem, e mesmo que insistisse, executeFn recusaria.
   const allowedToolsEfetivo = security.restringirParaSessao(allowedTools);
   const declarations = await getAllDeclarationsFn(allowedToolsEfetivo);
-  const systemInstruction = buildSystemInstructionFn(extraSystemInstruction);
+  // v0.41.0: hooks SessionStart (contexto no prompt do sistema, 1x por processo) e UserPromptSubmit
+  // (código 2 bloqueia o pedido; saída com código 0 vira contexto extra) — ver src/hooks.js.
+  const inicio = hooks.contextoDeInicio();
+  inicio.avisos.forEach((a) => console.log(chalk.yellow(`${logPrefix}[hook SessionStart] ${a}`)));
+  const systemInstruction = buildSystemInstructionFn(extraSystemInstruction) +
+    (inicio.texto ? `\n\nContexto adicionado pelo hook SessionStart do usuário:\n${inicio.texto}` : '');
+  // UserPromptSubmit e Stop são do pedido do USUÁRIO: dentro de um subagente (delegate_task) não rodam —
+  // senão um Stop "npm test ainda falha" obrigava até o explorador somente leitura a continuar.
+  const dentroDeSubagente = subagent.profundidadeAtual() > 0;
+  const envio = dentroDeSubagente ? { avisos: [], bloqueado: false, saidas: [] } : hooks.executar('UserPromptSubmit', { extra: { prompt: userMessage } });
+  envio.avisos.forEach((a) => console.log(chalk.yellow(`${logPrefix}[hook UserPromptSubmit] ${a}`)));
+  if (envio.bloqueado) return { text: `Pedido bloqueado por hook do usuário (UserPromptSubmit): ${envio.mensagem}`, history: [...history] };
+  const mensagemFinal = envio.saidas.length ? `${userMessage}\n\n[contexto adicionado por hook do usuário]\n${envio.saidas.join('\n')}` : userMessage;
 
-  const convo = podarHistorico([...history, { role: 'user', parts: [{ text: userMessage }] }]);
+  const convo = podarHistorico([...history, { role: 'user', parts: partesComImagens(mensagemFinal, imagens) }]);
+  // Imagens valem para ESTE pedido; no histórico devolvido viram um marcador curto.
+  const fechar = (resultado) => (imagens.length ? { ...resultado, history: tirarImagensDoHistorico(resultado.history) } : resultado);
 
   // Limite alto (não removido de propósito): sem nenhum teto, se o modelo
   // entrar num loop chamando ferramenta sem nunca fechar com texto, o
@@ -215,11 +237,20 @@ async function runOnce(userMessage, opts = {}) {
   // v0.32.0: corta o modelo repetindo a mesma chamada com o mesmo resultado (ver src/loopGuard.js).
   const guarda = loopGuard.criar();
   let loopDetectado = '';
+  // v0.41.0: orçamento do histórico enviado a cada passo (ver enxugarResultadosAntigos). 0 desliga.
+  const maxCharsContexto = cfg.contextoMaxChars === 0 ? 0 : Number(cfg.contextoMaxChars) || 300000;
+  let avisouEnxugar = false;
+  let continuacoesStop = 0;
   for (let step = 0; step < maxSteps; step++) {
+    const enxuto = enxugarResultadosAntigos(podarHistorico(convo), { maxChars: maxCharsContexto });
+    if (enxuto.enxugados && !avisouEnxugar) {
+      avisouEnxugar = true;
+      console.log(chalk.dim(`${logPrefix}(contexto grande: resultados antigos de ferramenta viraram resumo curto para caber e gastar menos)`));
+    }
     const response = await chatWithToolsFn({
       modelName, // undefined = o roteador (src/provider.js) escolhe conforme o config
       systemInstruction,
-      history: podarHistorico(convo),
+      history: enxuto.history,
       tools: declarations,
       onText,
     });
@@ -228,7 +259,16 @@ async function runOnce(userMessage, opts = {}) {
     if (!calls || calls.length === 0) {
       const text = response.text();
       convo.push({ role: 'model', parts: [{ text }] });
-      return { text, history: convo };
+      // v0.41.0: hook Stop com código 2 obriga a continuar (ex.: "os testes não passaram"), até 3 vezes.
+      const parada = !dentroDeSubagente && continuacoesStop < MAX_CONTINUACOES_STOP ? hooks.executar('Stop', { extra: { resposta: text } }) : null;
+      if (parada) parada.avisos.forEach((a) => console.log(chalk.yellow(`${logPrefix}[hook Stop] ${a}`)));
+      if (parada && parada.bloqueado) {
+        continuacoesStop++;
+        console.log(chalk.yellow(`${logPrefix}[hook Stop] ainda não terminou: ${parada.mensagem}`));
+        convo.push({ role: 'user', parts: [{ text: `[hook Stop do usuário] A tarefa ainda não terminou: ${parada.mensagem}\nContinue até resolver isso.` }] });
+        continue;
+      }
+      return fechar({ text, history: convo });
     }
 
     // O modelo pediu para usar uma ou mais ferramentas.
@@ -241,13 +281,18 @@ async function runOnce(userMessage, opts = {}) {
 
     // Executa UMA chamada e devolve o functionResponse correspondente.
     const executarChamada = async (call) => {
-      console.log(chalk.dim(`\n${logPrefix}→ usando ferramenta: ${call.name}(${JSON.stringify(call.args)})`));
+      console.log(chalk.dim(`\n${logPrefix}→ usando ferramenta: ${paraTerminal(call.name)}(${paraTerminal(JSON.stringify(call.args))})`));
       let result;
       let ap;
+      // v0.41.0: regras "negar" do config (src/permissions.js) valem antes de tudo.
+      const regraNegar = permissions.negada(call.name, call.args || {}, cfg);
       // v0.13.0: hooks do usuário (~/.gemini-code/hooks.json) — ver src/hooks.js.
-      const pre = hooks.executar('PreToolUse', { tool: call.name, args: call.args || {} });
+      const pre = regraNegar ? { avisos: [], bloqueado: false } : hooks.executar('PreToolUse', { tool: call.name, args: call.args || {} });
       pre.avisos.forEach((a) => console.log(chalk.yellow(`${logPrefix}[hook] ${a}`)));
-      if (pre.bloqueado) {
+      if (regraNegar) {
+        result = `Bloqueado pela regra de permissão "${regraNegar}" (config.json → permissoes.negar). Não tente contornar; peça ao usuário se precisar.`;
+        logAcao({ tool: call.name, args: call.args, erro: result });
+      } else if (pre.bloqueado) {
         result = `Bloqueado por hook do usuário: ${pre.mensagem}`;
         logAcao({ tool: call.name, args: call.args, erro: result });
       } else if (!(ap = await stepApproval.checar(call.name, call.args || {})).permitido) {
@@ -309,7 +354,7 @@ async function runOnce(userMessage, opts = {}) {
     convo.push({ role: 'user', parts: responseParts });
     if (loopDetectado) {
       convo.push({ role: 'model', parts: [{ text: loopDetectado }] });
-      return { text: loopDetectado, history: convo };
+      return fechar({ text: loopDetectado, history: convo });
     }
   }
 
@@ -321,7 +366,7 @@ async function runOnce(userMessage, opts = {}) {
   // "assistente" fechando aquele turno, o que deixa o histórico inconsistente.
   const aviso = '(número máximo de passos de ferramenta atingido)';
   convo.push({ role: 'model', parts: [{ text: aviso }] });
-  return { text: aviso, history: convo };
+  return fechar({ text: aviso, history: convo });
 }
 
 module.exports = { runOnce, buildSystemInstruction, podarHistorico, cortarResultado };

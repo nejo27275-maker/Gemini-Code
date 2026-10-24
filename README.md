@@ -46,6 +46,104 @@ O modelo GGUF é o mesmo, mas os históricos e as memórias do CLI e do app aind
 - **Gemini Cowork** (`gemini-code cowork ...`): o celular conecta no PC
   **na mesma rede local** e manda tarefas para o agente rodar direto no PC
   (arquivos, comandos, tudo), com autenticação por token.
+- **Aliados** (`gemini-code aliados ...`): seus agentes pessoais — cada um com
+  instruções, sugestões de conversa, base de conhecimento, memória, ferramentas
+  e modelo próprios.
+- **ADB** (`gemini-code adb ...`): controla uma Android TV, celular ou tablet SEUS
+  por USB ou Wi-Fi — ver/abrir/instalar apps, navegar na TV pelo controle, ajustar
+  configurações, print e logs. Veja `docs/TV_ADB.md`.
+
+## Controlar a TV e outros aparelhos (ADB) — v0.43.0
+
+O agente fala **adb**, então controla aparelhos Android SEUS (Android TV, celular, tablet) por cabo ou pela rede local. Ligue a depuração na TV, conecte uma vez e peça em português ("abre o YouTube na TV", "desce e entra", "tira um print", "quais apps estão instalados"). Passo a passo completo em **`docs/TV_ADB.md`**.
+
+```bash
+gemini-code adb conectar 192.168.0.50     # a TV pede para confiar nesta máquina
+gemini-code adb dispositivos               # deve aparecer "device"
+gemini-code adb apps                       # apps instalados
+gemini-code adb abrir com.google.android.youtube.tv
+gemini-code adb tecla baixo                # cima/baixo/ok/voltar/home/play/volume+...
+```
+
+Só funciona nos aparelhos onde você ligou a depuração e confiou nesta máquina (a TV pede confirmação). Toda ação que muda o aparelho pede sua confirmação; leitura (listar, info, print, log) não; reiniciar, desinstalar, limpar dados, configurações `secure`/`global` e o `shell` livre perguntam sempre. Texto digitado, valores e nomes de app chegam literais ao aparelho (entre aspas para o shell da TV), então não viram comandos. Isso não "turbina" a TV: o que dá para fazer é fechar/limpar/desinstalar apps e ajustar configurações, sempre com a sua confirmação. Ferramenta em `src/tools/adbTools.js`; o gemini-code também roda *dentro* da TV via Termux (sideload), mas na prática controlar de fora é mais confortável.
+
+## Novidades da v0.43.0 — blindagem contra ataques
+
+**Cowork com criptografia de ponta a ponta.** Antes, o celular mandava o token aberto pela Wi-Fi: qualquer pessoa na mesma rede com um capturador de tráfego (Wireshark, ARP spoofing) pegava o token e passava a rodar comandos no seu PC. Agora:
+
+- o token **nunca** passa pela rede — cada lado prova que o conhece (HMAC-SHA256 sobre o aperto de mão);
+- o celular só manda tarefas depois que o **PC também prova** que conhece o token (um PC falso na rede não recebe nada);
+- tudo vai cifrado com **AES-256-GCM**; mensagem alterada, repetida ou fora de ordem derruba a conexão;
+- cada conexão tem chaves novas (**X25519** efêmero): quem gravou o tráfego e um dia roubar o token não decifra o que gravou.
+
+**Contra sobrecarga (DoS):** o cowork aceita no máximo 8 conexões, dá 10 s para autenticar, barra por 15 min o IP que errar o token 5 vezes (ou mandar lixo), limita 60 mensagens por minuto e roda uma tarefa por vez. A API de rotinas ganhou prazos contra conexões lentas de propósito ("slowloris"), teto de conexões, memória limitada para o controle por IP e bloqueio depois de 10 tokens errados.
+
+```bash
+gemini-code cowork novo-token   # depois de atualizar o PC e o celular: o token antigo já passou aberto pela rede
+```
+
+**O que isso não faz (honestamente):** nenhum programa é "impossível de hackear". Um ataque distribuído de verdade (DDoS, milhares de máquinas) se barra na rede — roteador, firewall, provedor —, não dentro de um aplicativo; por isso o cowork é só para rede local e a API de rotinas escuta só em `127.0.0.1` por padrão. O protocolo do cowork usa primitivas padrão (as mesmas do TLS 1.3), mas é próprio e não passou por auditoria externa. E **ofuscar o código contra engenharia reversa não protege nada aqui**: o projeto é aberto e a segurança não depende de esconder o código — depende de os segredos (API key, tokens, memória dos aliados) ficarem fora do código, com permissão só sua, longe do alcance do modelo e, no cowork, nunca na rede.
+
+## Novidades da v0.42.0 — Aliados: seus agentes pessoais
+
+Crie quantos agentes quiser, cada um com o seu papel. Exemplo:
+
+```bash
+# A IA escreve a configuração a partir da sua descrição; você lê e confirma
+gemini-code aliados criar chef --ia "um chef vegano que monta cardápios da semana com o que eu tenho em casa"
+
+# Ou escreva você mesmo
+gemini-code aliados criar tutor --instrucoes "Você é um tutor paciente de matemática..." \
+  --iniciador "Me explique frações" --iniciador "Corrija meu exercício" --ferramentas conversa
+
+gemini-code aliados conhecimento chef add receitas.md minhas-anotacoes/   # base de conhecimento (arquivos de texto)
+gemini-code aliados chat chef                                             # conversa (digite 1, 2... para usar uma sugestão)
+gemini-code aliados run chef "o que eu janto hoje?"                       # uma pergunta só
+```
+
+| Recurso | Como funciona |
+|---|---|
+| **Instruções** | O papel do agente (até 8000 caracteres). `--instrucoes`, `--instrucoes-arquivo` ou `--ia`. |
+| **Iniciadores** | Até 6 sugestões de primeira mensagem, mostradas ao abrir a conversa; digite o número para mandar. |
+| **Base de conhecimento** | Arquivos de texto (`.md`, `.txt`, `.csv`, código...; até 100 arquivos e 5 MB por agente). A cada mensagem, os trechos mais relevantes (busca BM25) entram no prompt sozinhos — funciona até com modelo local pequeno; o agente também pode buscar com `knowledge_search`. PDF, imagem e docx não são lidos (converta para texto). Arquivo com cara de chave/token é recusado (`--forcar` aceita). |
+| **Memória** | Fatos sobre você que o agente guarda com `memory_save` e lembra em toda conversa. Padrão `confirmar`: cada gravação ou exclusão pergunta `s/n`. `--memoria auto` grava sozinho e avisa; `off` desliga. Nunca guarda o que parece senha/chave. Veja e apague com `gemini-code aliados memoria chef` ou `/memoria` no chat. |
+| **Ferramentas** | `conversa` (nenhuma), `leitura` (lê arquivos), `pesquisa` (leitura + páginas web; padrão), `completo` (todas as da sessão, com as confirmações de sempre) ou uma lista (`--ferramentas read_file,web_fetch`). |
+| **Modelo** | `--modelo` só para ele (`@local`, `openai:MODELO`, um Gemini...); se definido, vale no lugar do `/model`. |
+| **Conversas** | Cada agente guarda as conversas dele (valem em qualquer pasta); `/session` funciona dentro do `aliados chat`. |
+| **Compartilhar** | `aliados exportar chef` gera `chef.aliado.json` (instruções + conhecimento; a memória só com `--com-memoria`). `aliados importar ARQUIVO` mostra instruções e ferramentas pedidas e só grava depois do seu `s` (ou `--sim`). Também importa as personas antigas de `agents/*.json`. |
+
+**No chat comum:** `/aliados` lista, `/aliado chef` passa a conversa para o chef (`/aliado off` volta), `@chef mensagem` pergunta só uma vez, `/memoria` mostra o que o agente ativo guardou. No modo `/plano`, o agente pessoal só lê (as ferramentas são a interseção das duas listas).
+
+**Segurança:** os agentes ficam em `~/.gemini-code/aliados/` (pasta 0700, memória e conversas 0600), que entrou nas pastas protegidas: o modelo **não grava ali** com `write_file`/`edit_file`/`edit_files` — nem por symlink ou hard link — e `run_shell` mencionando a pasta pede confirmação. Assim uma página ou um repositório malicioso não consegue reescrever as instruções de um agente, dar ferramentas a ele nem plantar "memórias"; a memória só muda pela ferramenta `memory_save`, com a sua confirmação no modo padrão. No prompt, a memória e o conhecimento vão marcados como dados, não ordens. Na sessão de convidado as ferramentas de memória não existem.
+
+**Limites (honestos):** a busca é por palavras (BM25 com o tokenizador do code-ia, PT/EN), não por significado — sinônimos que o tokenizador não conhece não casam. Nada aqui foi medido com um modelo de verdade; os testes usam um modelo simulado (inclusive de ponta a ponta, com o CLI real e um servidor local imitando a API da OpenAI). A memória no modo `auto` confia no modelo para não guardar o que veio de uma página web — por isso o padrão é `confirmar`.
+
+## Novidades da v0.41.0
+
+**Use o mesmo modelo forte dos outros agentes** (provedor `openai`: OpenRouter, OpenAI, Groq, DeepSeek ou qualquer API compatível com OpenAI):
+
+```bash
+gemini-code config set-openai-key SUA_CHAVE          # ou GEMINI_CODE_OPENAI_KEY
+gemini-code config set-openai-model fornecedor/modelo
+gemini-code config set-provider openai               # ou: set-provider hybrid + set-hybrid-cloud openai
+# outra API: gemini-code config set-openai-url https://api.openai.com/v1
+```
+
+No chat, `@openai` ou `openai:MODELO` força esse provedor numa mensagem. O uso conta no `/custo`.
+
+- **Ferramentas novas do agente:** `edit_files` (várias edições em vários arquivos de uma vez, tudo ou nada), `glob_files` (achar arquivos por nome, `**/*.test.js`, respeitando o `.gitignore`) e `web_fetch` (ler uma página; pergunta antes de cada acesso — `webDominiosPermitidos` no config libera domínios — e nunca acessa endereço da rede local).
+- **Comandos em segundo plano:** o agente pode subir `npm run dev` com `run_shell` em segundo plano e acompanhar com `shell_status`; tudo é encerrado quando o gemini-code sai.
+- **Regras de permissão:** `gemini-code config negar "run_shell(git push*)"`, `config permitir "run_shell(npm test*)"`, `config regras`, `config remover-regra REGRA`. "negar" bloqueia sempre; "permitir" só pula a pergunta de comando simples (sem `;`, `&&`, `|`...).
+- **Confiança no projeto:** ao abrir o chat num repositório com `AGENTS.md`, `CLAUDE.md` etc., o gemini-code pergunta uma vez se essas instruções podem entrar. `gemini-code confianca status | confiar | negar | esquecer [PASTA]`.
+- **Hooks** (`~/.gemini-code/hooks.json`): além de `PreToolUse`/`PostToolUse`, agora `UserPromptSubmit`, `SessionStart` e `Stop` (código 2 no Stop faz o agente continuar, até 3 vezes — ex.: "os testes ainda falham").
+- **Seus subagentes:** um `.md` por subagente em `~/.gemini-code/subagentes/` (ou `.gemini-code/subagentes/` do projeto), com `name`, `description`, `tools`, `model` e `max_passos` no cabeçalho.
+- **MCP remoto:** no `mcp.json`, `"meu": { "url": "https://.../mcp", "headers": { "Authorization": "Bearer ${MEU_TOKEN}" } }`.
+- **Imagem:** `gemini-code run --imagem tela.png "o que está errado aqui?"`; no chat, `/imagem ARQ` e `/foto`.
+- **Automação:** `gemini-code run --json "..."` imprime uma linha JSON (`ok`, `texto`, `uso`...) e mais nada no stdout.
+- **Tarefas longas:** resultados antigos de ferramenta são resumidos acima de `contextoMaxChars` (300 000 caracteres); `/compact ia` pede ao modelo um resumo da conversa.
+- **Segurança:** uma lista vazia de ferramentas não libera mais todas; o modelo não lê mais a API key, os tokens nem a cópia `mcp.json.bak` (antes a sessão de convidado lia o token do cowork e virava dona); o convidado só lê a pasta do projeto; o anti-SSRF bloqueia IPv4 privado escondido em IPv6 e conecta no IP que conferiu (sem DNS rebinding); as chaves não vão mais para servidores MCP nem para o `actions.log`. Antes de fechar a versão, uma revisão adversarial achou e reproduziu 22 defeitos nas novidades, todos corrigidos (lista no `CHANGELOG.md`).
+
+**O que não foi medido:** nenhum desses recursos foi rodado aqui com um modelo de verdade, nem comparado com Claude Code, Codex, Antigravity ou Hermes Agent. Para comparar com justiça, use o mesmo modelo nos dois lados (veja "Mesmo modelo, ferramentas diferentes" em `docs/EVALS.md`).
 
 ## Segurança e avaliação (v0.40.0)
 
@@ -178,6 +276,10 @@ gemini-code agent run workflows/exemplos/design-e-publicar.json
 # Abrir chat com uma persona pronta (modelo, instrução e ferramentas já configurados)
 gemini-code agent run agents/exemplos/revisor-de-codigo.json
 
+# Ou transformar a persona num agente pessoal (com memória, conhecimento e conversas salvas)
+gemini-code aliados importar agents/exemplos/revisor-de-codigo.json
+gemini-code aliados importar agents/exemplos/assistente-pessoal.aliado.json
+
 # Ver as skills instaladas
 gemini-code skills list
 ```
@@ -236,8 +338,11 @@ Agora tudo que você digitar no celular roda como uma tarefa completa do
 agente **no PC** (arquivos, comandos, tudo o que o PC tiver acesso).
 
 O token fica em `~/.gemini-code/cowork-token.txt`, legível só pelo seu usuário.
-A conexão é `ws://` sem criptografia: quem estiver na mesma rede e capturar o
-tráfego vê o token. Use só em rede de confiança e nunca exponha a porta na internet.
+**Desde a v0.43.0 o canal é cifrado** (veja "Blindagem" no começo deste README): o
+token não passa pela rede, e quem estiver na mesma Wi-Fi não lê nem altera as
+tarefas. Atualize o gemini-code nos dois aparelhos (o celular antigo é recusado) e
+depois rode `gemini-code cowork novo-token`, porque as versões antigas já mandaram o
+token aberto. Mesmo assim, nunca exponha a porta na internet.
 
 ### Voz
 
@@ -309,6 +414,8 @@ gemini-code/
   src/skills/loader.js      carregador de skills
   src/agents/runner.js      executor de workflows
   src/workflowCommands.js   comandos /workflows do chat (testáveis)
+  src/personalAgents.js     agentes pessoais: definição, conhecimento, memória, prompt
+  src/personalAgentCommands.js  comandos aliados e /aliado (testáveis)
   src/cowork/               servidor/cliente celular<->PC
   src/voice/voice.js        integração com Termux:API
   skills/                   suas skills (SKILL.md)

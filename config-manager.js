@@ -13,7 +13,7 @@ class ConfigManager {
   // dono lê. `mode` só vale na criação, por isso o chmod nos já existentes.
   _write(filePath, data) {
     fs.writeFileSync(filePath, data, { encoding: 'utf8', mode: 0o600 });
-    try { fs.chmodSync(filePath, 0o600); } catch (err) { /* Windows/FS sem permissões POSIX */ }
+    try { fs.chmodSync(filePath, 0o600); } catch { /* Windows/FS sem permissões POSIX */ }
   }
 
   save(config) {
@@ -30,7 +30,7 @@ class ConfigManager {
       const raw = fs.readFileSync(filePath, 'utf8');
       if (!raw.trim()) return null;
       return JSON.parse(raw);
-    } catch (err) {
+    } catch {
       return null;
     }
   }
@@ -43,7 +43,7 @@ class ConfigManager {
   _restringirPermissoes() {
     if (process.platform === 'win32') return;
     for (const p of [this.configPath, this.backupPath]) {
-      try { if (fs.statSync(p).mode & 0o077) fs.chmodSync(p, 0o600); } catch (err) { /* não existe */ }
+      try { if (fs.statSync(p).mode & 0o077) fs.chmodSync(p, 0o600); } catch { /* não existe */ }
     }
   }
 

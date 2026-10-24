@@ -7,8 +7,10 @@
 
 const fs = require('fs');
 const path = require('path');
+const { paraExibir } = require('./ui/textoSeguro');
 
-const FERRAMENTAS = new Set(['write_file', 'edit_file']);
+// v0.41.0: edit_files (várias edições atômicas) também grava — sem estar aqui, furava o /passo.
+const FERRAMENTAS = new Set(['write_file', 'edit_file', 'edit_files']);
 const MAX_LINHAS = 12;
 let estado = { ativo: false, perguntar: null };
 
@@ -28,6 +30,12 @@ function cortar(texto, rotulo) {
 /** Texto da prévia mostrada ao usuário. Nunca lança. */
 function previa(nome, args = {}) {
   try {
+    if (nome === 'edit_files') {
+      const edits = Array.isArray(args.edits) ? args.edits : [];
+      const blocos = edits.slice(0, 8).map((e, i) => `[${i + 1}/${edits.length}] ${String((e && e.path) || '(sem caminho)')}${e && e.replace_all ? ' (todas as ocorrências)' : ''}\n${cortar((e && e.old_text) ?? '', '-')}\n${cortar((e && e.new_text) ?? '', '+')}`);
+      if (edits.length > 8) blocos.push(`… (+${edits.length - 8} edições)`);
+      return `edit_files — ${edits.length} edição(ões) aplicadas juntas\n${blocos.join('\n')}`;
+    }
     const alvo = String(args.path || '(sem caminho)');
     if (nome === 'edit_file') {
       return `edit_file ${alvo}\n${cortar(args.old_text ?? '', '-')}\n${cortar(args.new_text ?? '', '+')}`;
@@ -46,11 +54,12 @@ async function checar(nome, args) {
   if (!estado.ativo || !FERRAMENTAS.has(nome)) return { permitido: true };
   if (!estado.perguntar) return { permitido: false, motivo: 'Recusado: aprovação passo a passo ligada, mas não há terminal para perguntar.' };
   let r;
-  try { r = String(await estado.perguntar(`${previa(nome, args)}\nGravar? (s/n/t = sim e desligar o /passo) `)).trim().toLowerCase(); }
+  try { r = String(await estado.perguntar(`${paraExibir(previa(nome, args))}\nGravar? (s/n/t = sim e desligar o /passo) `)).trim().toLowerCase(); }
   catch { return { permitido: false, motivo: 'Recusado: não foi possível perguntar ao usuário.' }; }
   if (r === 's' || r === 'sim' || r === 'y') return { permitido: true };
   if (r === 't' || r === 'todos') { estado.ativo = false; return { permitido: true }; }
-  return { permitido: false, motivo: `Recusado pelo usuário: ${nome} em ${args && args.path}. Nada foi gravado. Pergunte o que ele prefere antes de tentar de novo.` };
+  const onde = nome === 'edit_files' && args && Array.isArray(args.edits) ? [...new Set(args.edits.map((e) => e && e.path))].join(', ') : args && args.path;
+  return { permitido: false, motivo: `Recusado pelo usuário: ${nome} em ${onde}. Nada foi gravado. Pergunte o que ele prefere antes de tentar de novo.` };
 }
 
 module.exports = { configurar, ativo, checar, previa, FERRAMENTAS };

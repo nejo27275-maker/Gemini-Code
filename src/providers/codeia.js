@@ -129,7 +129,7 @@ function decidirEscrita(texto, disponiveis, { history, obterModelo: getModelo, c
   const pre = String.raw`^(?:por favor,?\s*)?`;
 
   let m = t.match(new RegExp(pre + String.raw`(?:salv[ea]r?|grav[ea]r?)\s+(?:isso|esse\s+c[oó]digo|o\s+c[oó]digo|a[ií])?\s*(?:em|como|no\s+arquivo|num\s+arquivo|arquivo)\s+` + ARQ + String.raw`\s*$`, 'i'));
-  let pedido = null, conteudo = null, titulo = null;
+  let pedido = null, conteudo, titulo = null;
   if (m) {
     pedido = m[1];
     conteudo = ultimoCodigoDoModelo(history);
@@ -172,7 +172,7 @@ function decidirEdicao(texto, disponiveis, { cwd = process.cwd() } = {}) {
   const base = path.basename(alvo);
   if (/^\.env/i.test(base) || /(^|[-_.])(secret|credentials|id_rsa)/i.test(base)) return { texto: 'Não edito arquivos de chaves/segredos (.env etc.).' };
   let conteudo;
-  try { conteudo = fs.readFileSync(alvo, 'utf8'); } catch { return { texto: `Não achei \`${pedido}\` pra editar. Se for um arquivo novo, peça \"crie ${pedido} com …\".` }; }
+  try { conteudo = fs.readFileSync(alvo, 'utf8'); } catch { return { texto: `Não achei \`${pedido}\` pra editar. Se for um arquivo novo, peça "crie ${pedido} com …".` }; }
   const vezes = conteudo.split(antigo).length - 1;
   if (vezes === 0) return { texto: `Não encontrei \`${antigo}\` em \`${pedido}\`, então não mudei nada.` };
   if (vezes > 1) return { texto: `\`${antigo}\` aparece ${vezes} vezes em \`${pedido}\`. Só troco quando o trecho é único — inclua mais contexto (ex.: a linha toda).` };
@@ -236,10 +236,10 @@ function soOCodigo(modelo, base, n, history) {
 function limparErroColado(texto) {
   const linhas = String(texto || '').split('\n').map((l) => l.trim()).filter(Boolean);
   if (linhas.length < 3) return texto;
-  const ehTrace = linhas.some((l) => /^at\s/.test(l) || /^Traceback \(most recent/i.test(l) || /^File \"/.test(l));
+  const ehTrace = linhas.some((l) => /^at\s/.test(l) || /^Traceback \(most recent/i.test(l) || /^File "/.test(l));
   if (!ehTrace) return texto;
-  const erros = linhas.filter((l) => /(Error|Exception|ENOENT|EACCES|EADDRINUSE|ECONN\w+|ETIMEDOUT|ENOTFOUND|RESOURCE_EXHAUSTED|not found|denied|undefined)/i.test(l) && !/^at\s/.test(l) && !/^File \"/.test(l));
-  const util = erros.slice(-2).join(' ').replace(/(?:\/|[A-Za-z]:\\)[^\s:'\"]+/g, ' ');
+  const erros = linhas.filter((l) => /(Error|Exception|ENOENT|EACCES|EADDRINUSE|ECONN\w+|ETIMEDOUT|ENOTFOUND|RESOURCE_EXHAUSTED|not found|denied|undefined)/i.test(l) && !/^at\s/.test(l) && !/^File "/.test(l));
+  const util = erros.slice(-2).join(' ').replace(/(?:\/|[A-Za-z]:\\)[^\s:'"]+/g, ' ');
   return util.trim() || texto;
 }
 

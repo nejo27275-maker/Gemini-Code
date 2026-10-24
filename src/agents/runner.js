@@ -24,6 +24,7 @@ const fs = require('fs');
 const chalk = require('../terminalColors');
 const { runOnce } = require('../agent');
 const usage = require('../usage');
+const { paraTerminal } = require('../ui/textoSeguro');
 const { getShared: getSharedReadline, perguntarColando } = require('../ui/prompt');
 
 // v0.18.0: {{var}} ou {{var|valor padrão}} (o padrão vale quando a variável não existe ou está vazia).
@@ -60,7 +61,7 @@ const MAX_ITENS = 10;
 // v0.25.1: "paralelo" só é aceito em passos com ferramentas SOMENTE de leitura (ou sem ferramentas): vários itens
 // ao mesmo tempo não podem pedir confirmação no terminal nem gravar no mesmo arquivo.
 const MAX_PARALELO = 3;
-const FERRAMENTAS_LEITURA = ['read_file', 'list_dir', 'search_files'];
+const FERRAMENTAS_LEITURA = ['read_file', 'list_dir', 'search_files', 'glob_files']; // v0.41.0: glob_files só lista nomes
 
 function extrairItens(texto, max = MAX_ITENS) {
   const limite = Math.max(1, Math.min(MAX_ITENS, Number(max) || MAX_ITENS));
@@ -213,7 +214,7 @@ async function runWorkflowData(workflow, deps = {}) {
       ctx[step.id] = junto;
       if (gastosPasso > 0) console.log(chalk.dim(`(${gastosPasso.toLocaleString('pt-BR')} tokens neste passo)`));
       results.push({ id: step.id, output: junto, itens: itens.length, ...(falhasItens ? { falhasItens } : {}), ...(gastosPasso > 0 ? { tokens: gastosPasso } : {}) });
-      console.log(junto);
+      console.log(paraTerminal(junto));
       continue;
     }
     const tokensAntes = usage.total();
@@ -225,7 +226,7 @@ async function runWorkflowData(workflow, deps = {}) {
     const tentativas = 1 + Math.max(0, Math.min(2, Number(step.retry) || 0));
     const opcoes = { history: manterHistorico ? history : [] };
     if (typeof step.model === 'string' && step.model.trim()) opcoes.modelName = step.model.trim();
-    if (Array.isArray(step.tools)) opcoes.allowedTools = step.tools.map(String); // [] = passo SEM ferramentas (quem trata é run_workflow)
+    if (Array.isArray(step.tools)) opcoes.allowedTools = step.tools.map(String); // [] = passo SEM ferramentas
     console.log(`\n=== Passo: ${step.id} ===`);
     let resposta = null; let ultimoErro = null; let usadas = 0;
     for (let i = 0; i < tentativas && !resposta; i++) {
@@ -245,7 +246,7 @@ async function runWorkflowData(workflow, deps = {}) {
       const msg = `[falhou: ${ultimoErro.message}]`;
       ctx[step.id] = msg;
       results.push({ id: step.id, output: msg, falhou: true, tentativas: usadas, ...(gastos > 0 ? { tokens: gastos } : {}) });
-      console.log(msg);
+      console.log(paraTerminal(msg));
       continue;
     }
     const { text, history: novoHistorico } = resposta;
@@ -253,7 +254,7 @@ async function runWorkflowData(workflow, deps = {}) {
     ctx[step.id] = text;
     if (gastos > 0) console.log(chalk.dim(`(${gastos.toLocaleString('pt-BR')} tokens neste passo)`));
     results.push({ id: step.id, output: text, ...(usadas > 1 ? { tentativas: usadas } : {}), ...(gastos > 0 ? { tokens: gastos } : {}) });
-    console.log(text);
+    console.log(paraTerminal(text));
   }
 
   return { name: workflow.name, results };
@@ -292,11 +293,11 @@ async function runPersonaChat(persona) {
         allowedTools: persona.allowedTools,
         onText: (pedaco) => {
           streamed = true;
-          process.stdout.write(pedaco);
+          process.stdout.write(paraTerminal(pedaco));
         },
       });
       history = newHistory;
-      if (!streamed) process.stdout.write(text);
+      if (!streamed) process.stdout.write(paraTerminal(text));
       console.log('\n');
     } catch (err) {
       console.error(chalk.red('Erro: ' + err.message));

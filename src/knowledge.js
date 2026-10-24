@@ -64,7 +64,9 @@ function arquivosDeProjeto(cwd) {
  * protege o contexto do modelo — o que não couber é cortado com aviso.
  */
 function loadKnowledge({ cwd = process.cwd(), maxChars = 10000 } = {}) {
-  const candidatos = [...arquivosDeProjeto(cwd), ...arquivosDaPasta(knowledgeDir())];
+  // v0.41.0: projeto em que o usuário negou confiança (src/trust.js) só usa o conhecimento global.
+  const doProjeto = require('./trust').projetoLiberado(cwd) ? arquivosDeProjeto(cwd) : [];
+  const candidatos = [...doProjeto, ...arquivosDaPasta(knowledgeDir())];
   const vistos = new Set();
   const blocos = [];
   const usados = [];

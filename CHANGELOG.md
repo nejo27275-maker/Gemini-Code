@@ -1,3 +1,132 @@
+## 0.43.2 — revisão completa: injeção no aparelho, terminal enganado e ESLint zerado
+
+Revisão de todo o código desta série (Aliados, cowork cifrado, limitador, adb) e dos pontos de confirmação do projeto, procurando defeito reproduzível. Cada correção abaixo tem teste que **falha no código anterior** (conferido rodando os testes novos contra o commit anterior).
+
+**Corrigido:**
+
+- **P1 — injeção de comando na TV pelo adb.** O `adb shell a b c` junta os argumentos com espaço **sem escapar** (comentário no próprio código-fonte do adb: "just like ssh") e o shell do aparelho os interpreta. `digitar` com o texto `a;reboot` reiniciava a TV; um `valor` de `config` rodava qualquer comando lá — e `digitar`/`config` podiam estar liberados sem confirmação (`adbConfirm:false` ou regra "permitir"). Agora todo argumento que vai ao shell do aparelho sai entre aspas simples (`noAparelho`) e chega literal. **A v0.43.1 afirmava "sem shell: não há injeção" — valia só para esta máquina, não para o aparelho.** O teste usa um adb falso que junta os argumentos como o real e os roda num `sh` com comandos falsos do aparelho.
+- **P2 — o `shell` livre do adb e gravações em `secure`/`global` rodavam sem perguntar** com `adbConfirm:false` ou "permitir": a heurística de comando destrutivo é de comandos de PC (não reconhece `reboot`, `pm uninstall`, `settings put global package_verifier_enable 0`). Agora confirmam sempre.
+- **P2 — o print (`adb tela`) gravava em qualquer caminho sem perguntar**, inclusive sobrescrevendo código do projeto ou arquivos protegidos do gemini-code com bytes de imagem. Agora só cria um `.png` novo, fora das áreas protegidas.
+- **P2 — confirmações enganáveis pelo terminal.** O texto do modelo/arquivo/servidor ia cru para a pergunta: um comando com `\r` + `ESC[2K` apagava a própria parte perigosa da tela e o usuário confirmava achando que era outra coisa; caracteres de direção (U+202E…) reordenavam o texto; centenas de linhas em branco empurravam o perigoso para fora da tela. Novo `src/ui/textoSeguro.js` (`paraExibir`) em todas as perguntas: `run_shell`, adb, MCP, `/passo`, memória dos aliados, `web_fetch`, `run_checks` e a pergunta de confiança no projeto (nomes de arquivo do repositório).
+- **P2 — a resposta do modelo chegava ao terminal com sequências de controle.** Um modelo manipulado por uma página podia gravar na área de transferência (OSC 52 — o usuário depois cola um comando que nunca viu), limpar a tela ou disfarçar links. `paraTerminal` filtra chat (inclusive streaming, com a sequência partida entre pedaços), `run`, `ciencia`, `sub`, workflows, persona, `live`, cowork, aliados e a linha "→ usando ferramenta". Mantém acentos, emoji, quebras de linha e as marcas de direção comuns em texto RTL.
+- **P3:** texto guardado dos aliados (instruções importadas de terceiros, descrição, memória) perde controles C1 e de direção; porta do adb validada (1–65535); `abrir_app` avisa quando o app não existe (o `monkey` sai com 0 mesmo assim); `instalar` exige `.apk`.
+
+**Qualidade:** ESLint 10 com as regras recomendadas agora dá **0** apontamentos no projeto inteiro (eram 31, todos de código anterior a esta série): atribuições inúteis, erros relançados sem a causa original (`mcpClient`, `workflowCommands`), escapes desnecessários, BOM literal num regex (`subagent`), imports e variáveis sem uso; regex com caracteres de controle de propósito ficaram com `eslint-disable` justificado. Nenhum era bug escondido, exceto um teste: "passa allowedTools adiante pro execute" nunca chamava o `execute` — agora chama e confere.
+
+Testes: 767 (766 passando, 1 pulado por rodar como root), no Node 22. Novos: `tests/textoSeguro.test.js` (11, inclusive `run` e chat de ponta a ponta contra um servidor que devolve OSC 52) e `tests/adbTools.test.js` reescrito (16). Lint de sintaxe, varredura de segredos e autoteste das avaliações (7/7) limpos.
+
+**Limites:** o filtro de terminal cobre os caminhos por onde o texto do modelo é impresso hoje; um caminho novo precisa usar `paraTerminal`/`paraExibir` (regra registrada no `AGENTS.md`). O adb continua sem teste contra uma TV real.
+
+## 0.43.1 — controlar a TV e outros aparelhos por ADB
+
+**Novo: ferramenta `adb`** (`src/tools/adbTools.js`) e comando `gemini-code adb`. O agente passa a controlar aparelhos Android **do próprio usuário** (Android TV, celular, tablet) por USB ou pela rede local, com o `adb` do Android SDK: listar/abrir/instalar/desinstalar/limpar apps, navegar numa TV pelas teclas do controle (`cima`, `baixo`, `ok`, `voltar`, `home`, `play`, `volume+`…), digitar texto, ler e gravar `settings`, tirar print (`screencap`), ver `logcat`, reiniciar e um `shell` livre no aparelho. No chat dá para pedir em português ("abre o YouTube na TV", "desce e entra", "tira um print"); também há o comando direto `gemini-code adb ...`. Guia completo em `docs/TV_ADB.md`.
+
+**Segurança (igual ao `run_shell`):**
+
+- Comandos montados como **lista de argumentos** e executados com `execFile` — **sem shell**: aspas, `;`, `$()` e afins não são interpretados, então não há injeção. O alvo (serial/ip) é validado e não pode começar com `-` (não vira uma flag do adb).
+- Toda ação que **muda** o aparelho pede confirmação no terminal; as de **leitura** (`dispositivos`, `info`, `apps`, `estado`, `tela`, `logcat`) não pedem. Ações **irreversíveis** (reiniciar, desinstalar, limpar dados, `shell` destrutivo pela heurística do `run_shell`) confirmam **mesmo** com `adbConfirm:false`.
+- As regras do config valem: `negar` bloqueia em qualquer modo (vem do loop do agente) e a nova função `permissions.permitido` deixa `permitir: ["adb"]` (ou com padrão) dispensar a confirmação de ações específicas. Config: `adbPath`, `adbSerial`, `adbPorta`, `adbConfirm`, com `gemini-code config set-adb-path|set-adb-serial`.
+- O adb só conecta em aparelho onde o dono ligou a depuração e confiou nesta máquina (o aparelho pede confirmação). Não é ferramenta de invasão.
+
+**Rodar na própria TV:** Android TV é Android; o gemini-code roda nela via Termux (sideload), como em qualquer Android (`ANDROID_TERMUX.md`). Na prática, controlar a TV de fora por adb é mais confortável do que digitar nela.
+
+Testes: 20 novos em `tests/adbTools.test.js`, com um `adb` falso que registra os argumentos exatos de cada chamada — conferindo a montagem dos comandos, a confirmação (e o que a dispensa/força), o mapa de teclas, o alvo `-s`, o print salvo e as mensagens de erro (adb ausente, aparelho offline). ESLint 10 limpo. Não testado contra uma TV real (sem adb nem aparelho neste ambiente).
+
+**Limites honestos:** controlar por adb não "deixa a TV mais rápida" por mágica — dá para fechar/limpar/desinstalar apps e ajustar configurações, com a sua confirmação, e nada além do que o adb já permite. Marcas diferentes usam nomes de app e caminhos de configuração diferentes; o agente descobre com `apps`/`estado`, mas pode errar o pacote.
+
+## 0.43.0 — blindagem: cowork cifrado de ponta a ponta e limites contra sobrecarga
+
+**Falha corrigida — P1: o token do cowork e todas as tarefas iam abertos pela rede.** O celular mandava `{type:"auth", token}` em texto puro por `ws://`, e as tarefas e respostas também. Qualquer um na mesma Wi-Fi com um capturador de tráfego pegava o token e rodava o agente inteiro no PC (arquivos e shell); com ARP spoofing, podia até alterar as tarefas no caminho. Confirmado no código anterior (`ws.send(JSON.stringify({ type: 'auth', token }))` no `client.js`); o teste novo procura o token e o texto da tarefa em cada quadro da rede.
+
+**Protocolo 2** (`src/cowork/canalSeguro.js`, só `crypto` do Node, sem dependência nova): o servidor manda um nonce e uma chave X25519 efêmera; o cliente responde com os dele e uma prova HMAC-SHA256 do token sobre toda a transcrição; o servidor confere e devolve a própria prova, que o celular confere antes de mandar qualquer tarefa. As chaves de sessão saem por HKDF do segredo X25519, salgadas com o token, uma por direção; cada mensagem vai em AES-256-GCM com nonce = direção + contador, e o contador tem de ser exatamente o próximo. Resultado: o token não passa pela rede; um PC falso não recebe tarefas; quem está no meio não lê nem altera nada; mensagem repetida, pulada, adulterada ou refletida derruba a conexão; autenticação gravada não serve em outra conexão; e o tráfego gravado continua ilegível mesmo se o token vazar depois (sigilo futuro). Tamanho e horário das mensagens continuam visíveis.
+
+**Contra sobrecarga (DoS):**
+
+- cowork: no máximo 8 conexões; 10 s para autenticar; a autenticação tem de ser a primeira mensagem (qualquer desvio fecha); IP com 5 falhas (token errado ou lixo) em 15 min é recusado com HTTP 429 antes do aperto de mão; 60 mensagens por minuto por conexão; uma tarefa por vez (antes várias rodavam juntas na mesma conversa); compressão desligada (sem "bomba" de descompressão); cliente com teto de 16 MiB por mensagem (o padrão do `ws` era 100 MiB).
+- API de rotinas: cabeçalhos em até 10 s e requisição inteira em até 30 s (contra "slowloris"), no máximo 128 conexões e 64 cabeçalhos, controle por IP com memória limitada (antes um `Map` que só crescia) e IP bloqueado por 15 min depois de 10 tokens errados.
+- `src/limitador.js`: janela por chave com teto de memória, usado pelos dois.
+
+**Novo:** `gemini-code cowork novo-token`. As versões anteriores já mandaram o token aberto: depois de atualizar o PC e o celular, troque-o. Um celular antigo é recusado com o aviso para atualizar.
+
+**Quebra de compatibilidade (intencional):** cowork 0.43 não conversa com 0.42 ou anterior, nos dois sentidos.
+
+Também: o recurso de agentes pessoais da v0.42.0 passou a se chamar **Aliados** (`gemini-code aliados`, `/aliado NOME`, `/aliados`, pasta `~/.gemini-code/aliados/`, pacote `.aliado.json`, config `aliadosConhecimentoMaxChars`); a v0.42.0 não chegou a ser publicada, então não há migração. E o ESLint completo (v10, regras recomendadas) passou a rodar limpo em todos os arquivos tocados — inclusive dois apontamentos que já existiam (`no-case-declarations` no `write_file`, import sem uso no `multiEditTools`); um aviso antigo de variável sem uso em `tests/agent.test.js` ficou como estava.
+
+Testes: 740 (739 passando, 1 pulado como root), no Node 22. 18 novos em `tests/coworkCifrado.test.js`, com ataques simulados por uma "rede" em memória que registra cada quadro: homem no meio trocando a chave do hello, PC falso, autenticação gravada e reenviada, mensagem repetida/pulada/adulterada/refletida/de outra sessão, cliente antigo, chave pública inválida, token errado até o IP ser barrado, lixo antes do aperto de mão, conexão parada, texto aberto injetado depois da autenticação, inundação de mensagens e tarefa concorrente. O transporte de verdade (servidor `ws` numa porta local e cliente `ws`) foi conferido à mão com o `ws` embutido no Playwright, que existe neste ambiente: tarefa e token ausentes do tráfego, 4401 para token errado, HTTP 429 na 6ª tentativa (mesmo com o token certo, enquanto o IP está barrado), aviso para o cliente antigo e 4408 depois de 10 s sem autenticar.
+
+**Limites:** nenhum programa é impossível de invadir. O protocolo usa primitivas padrão (as do TLS 1.3), mas é próprio e não teve auditoria externa. DDoS de verdade (muitas máquinas) se barra na rede, não no aplicativo: o cowork é para rede local e a API de rotinas escuta em `127.0.0.1` por padrão. Ofuscar o código contra engenharia reversa não foi feito porque não protegeria nada: o código é aberto e nenhum segredo mora nele. O bloqueio por IP também barra quem está atrás do mesmo IP que o atacante enquanto durar (15 min).
+
+## 0.42.0 — Aliados: agentes pessoais com memória e base de conhecimento
+
+Base: a v0.41.0, que estava no branch `claude/rlr-omni-evolution-fqrsux` e ainda não tinha entrado no `main`, foi incorporada sem alterações.
+
+**Novo: `gemini-code aliados`** (`src/personalAgents.js`, `src/personalAgentCommands.js`, `src/tools/personalTools.js`). Cada agente pessoal tem:
+
+- **instruções** próprias (até 8000 caracteres), **descrição** e até 6 **iniciadores** (sugestões de primeira mensagem; ao abrir a conversa, digitar o número manda a sugestão — só numa conversa vazia, para "2" no meio da conversa continuar sendo resposta);
+- **base de conhecimento**: arquivos de texto (até 100 e 5 MB por agente). A cada mensagem, os trechos mais relevantes entram no prompt sozinhos (BM25 sobre trechos de ~1200 caracteres, com o tokenizador PT/EN do code-ia; base pequena vai inteira; orçamento `aliadosConhecimentoMaxChars`, padrão 8000) — sem depender do modelo lembrar de buscar, o que modelos locais pequenos fazem mal; `knowledge_search` existe para ir além. Binário (PDF, imagem, docx), arquivo acima de 1 MB, ocultos de uma pasta, segredos do gemini-code e texto com cara de chave/token são recusados (`--forcar` aceita só o último caso);
+- **memória** persistente: `memory_save` / `memory_forget`. Padrão `confirmar` (cada mudança pergunta s/n; sem terminal, é "não"), `auto` (grava e avisa) ou `off`. Recusa o que parece segredo; até 200 itens; no prompt vai marcada como dado, não ordem;
+- **ferramentas**: presets `conversa`, `leitura`, `pesquisa` (padrão: leitura + `web_fetch`, que pergunta antes) e `completo`, ou uma lista; nome desconhecido é erro ao criar (ferramenta que deixou de existir numa versão nova só sai da lista ao carregar);
+- **modelo** próprio (`@local`, `openai:X`, Gemini...), que vale sobre o `/model`;
+- **conversas** próprias, em qualquer pasta (`aliados chat NOME`, com `/session`). A definição é relida a cada mensagem: um `aliados editar` com o chat aberto vale na hora.
+
+Comandos: `listar`, `criar` (por opções, por perguntas num terminal, ou `--ia "descrição"`: o modelo escreve descrição, instruções, iniciadores e o menor preset de ferramentas; você vê a prévia e confirma), `ver`, `editar`, `remover --sim`, `chat`, `run`, `conhecimento add|listar|remover`, `memoria listar|esquecer|limpar --sim`, `exportar` (pacote JSON com conhecimento; memória só com `--com-memoria`) e `importar` (mostra instruções e ferramentas pedidas e só grava depois do `s` ou `--sim`; aceita as personas antigas de `agents/*.json`). Exemplo novo: `agents/exemplos/assistente-pessoal.aliado.json`.
+
+No chat comum: `/aliados`, `/aliado NOME` (a conversa passa a ser com ele; `/aliado off` volta), `@NOME mensagem` (só uma mensagem) e `/memoria`. No `/plano`, as ferramentas são a interseção das duas listas (o agente pessoal também só lê).
+
+**Segurança:**
+
+- `~/.gemini-code/aliados/` entrou em `PROTECTED_DIRS` (nova lista em `src/config.js`, usada por `isProtected`): `write_file`, `edit_file` e `edit_files` recusam qualquer caminho dentro dela, inclusive por symlink e hard link, e `run_shell` mencionando a pasta pede confirmação mesmo com `confirmShell: false`. Sem isso, uma página lida com `web_fetch` ou um repositório malicioso poderia reescrever as instruções de um agente, dar `completo` a ele ou plantar "memórias" que entram em toda conversa futura.
+- Pasta 0700; memória, conversas, definição e conhecimento 0600 (`escreverJson` e o armazenamento de sessões ganharam `mode`).
+- As ferramentas de memória só existem numa conversa com um agente pessoal (contexto por `AsyncLocalStorage`) e nunca na sessão de convidado.
+
+**Corrigido no caminho (afeta todos os modos):** a instrução extra (persona, perfil `run --profile`, modo plano, modo ciência, agente pessoal) ia no FIM do prompt do sistema, e o provedor local corta o prompt pelo fim para caber em contextos pequenos — era o papel do agente que sumia primeiro, não o conhecimento fixo. Agora o extra vem antes do conhecimento fixo; o teste que exigia "termina com o extra" passou a exigir essa ordem e o corte local preservando o extra.
+
+Testes: 726 (725 passando, 1 pulado por rodar como root; eram 700), no Node 22, mais lint de sintaxe e varredura de segredos limpos. 26 novos em `tests/agentesPessoais.test.js` — inclusive três de ponta a ponta com o CLI real e o provedor `openai` apontando para um servidor local que imita a API (`aliados run` guardando memória e lembrando na conversa seguinte; `aliados chat` com iniciador e conversa salva no agente; `@chef` no chat comum) — e o assistente interativo conferido num pseudoterminal (`script`): o processo agora sai sozinho no fim (antes ficava preso esperando o teclado) e instruções coladas com várias linhas não se perdem.
+
+**Limites:** a busca é por palavras, não por significado. Nada foi rodado com um modelo de verdade (sem chave nem rede neste ambiente); os testes usam modelo simulado. O ESLint não roda aqui (o registro do npm está bloqueado pela política de rede da sessão), só a checagem de sintaxe do `npm run lint`. A memória `auto` confia no modelo para não guardar o que veio de uma página — por isso o padrão é `confirmar`.
+
+## 0.41.0 — duas falhas de segurança corrigidas e as lacunas frente a Claude Code, Codex e Antigravity
+
+**Falhas corrigidas** (cada uma reproduzida antes no loop real do agente, com modelo simulado; os testes novos falham no código anterior):
+
+- **P1 — lista vazia de ferramentas liberava todas.** Na camada de ferramentas, `tools: []` significava "todas": um passo de workflow com `tools: []` rodado por `gemini-code agent run` recebia `write_file` e `run_shell`. Agora só a *ausência* de lista libera tudo; `[]` = nenhuma (também na sessão de convidado).
+- **P1 — o convidado virava dono.** `read_file`, `search_files` e `read_skill` liam `~/.gemini-code/cowork-token.txt` (com ele, o convidado conecta no cowork com o agente inteiro) e a API key do `config.json`. Nova lista `SECRET_PATHS` (config + `.bak`/`.tmp`, `mcp.json`, tokens): nenhuma ferramenta do modelo lê esses arquivos, nem por symlink ou hard link. E o convidado só lê dentro da pasta em que o gemini-code foi aberto (antes lia chaves SSH, outros projetos...).
+- **P1 — anti-SSRF furado por IPv6.** `privateAddress` (rotinas e `web_fetch`) comparava texto: `64:ff9b::7f00:1` (NAT64 → 127.0.0.1), `64:ff9b::a9fe:a9fe` (metadata da nuvem), `::7f00:1`, `2002:a00:1::1` (6to4) e `0:0:0:0:0:0:0:1` passavam. Agora o IPv6 é expandido em 8 blocos e o IPv4 embutido passa pela regra do IPv4.
+- **P2 — chaves vazavam.** Servidores MCP (muitas vezes de terceiros) herdavam `GEMINI_API_KEY` do ambiente; o `actions.log` guardava comandos com `Authorization: Bearer ...` em texto puro; a chave do Veo ia na URL (`?key=`).
+- **P2 — instruções de qualquer repositório entravam no prompt sem aviso** (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`... e `.gemini-code/commands` virando `/comandos`): injeção num repositório clonado. Agora o chat pergunta uma vez por pasta (`src/trust.js`; decisão em `~/.gemini-code/confianca.json`, protegido contra o modelo). Sem terminal, pasta não decidida continua carregando (como o `claude -p`); `gemini-code confianca negar PASTA` bloqueia.
+- **P2 — o chat retomava a conversa de outro projeto** (a sessão ativa era global). Agora é por pasta.
+
+**Lacunas fechadas** (levantadas por auditoria do código frente ao que os outros agentes documentam):
+
+- **Provedor `openai`**: qualquer API compatível com OpenAI com chave (OpenRouter por padrão, OpenAI, Groq, DeepSeek...) — os mesmos modelos fortes dos outros agentes. `config set-openai-key | set-openai-model | set-openai-url`, `@openai`, `openai:MODELO`, e `config set-hybrid-cloud openai` para usá-lo como lado nuvem do híbrido. O uso real conta no `/custo` e no limite de tokens. Chave também por `GEMINI_CODE_OPENAI_KEY`.
+- **Ferramentas novas**: `edit_files` (várias edições em vários arquivos, atômicas, com rollback), `glob_files` (`**/*.test.js`, respeita `.gitignore`) e `web_fetch` (pergunta antes; `webDominiosPermitidos` e `confirmWeb`; anti-SSRF em cada redirecionamento; 2 MB; saída marcada como dado externo). `/passo` e a análise de risco de workflows cobrem as novas.
+- **Comandos em segundo plano**: `run_shell { em_segundo_plano: true }` + `shell_status` (subir um servidor e testá-lo); até 5; todos encerrados quando o gemini-code sai.
+- **Regras de permissão** no `config.json`: `"permissoes": { "negar": ["run_shell(git push*)"], "permitir": ["run_shell(npm test*)"] }` e `config negar | permitir | regras | remover-regra`. `negar` vale em todo modo (inclusive subagentes e workflows); `permitir` só dispensa a confirmação de comando simples.
+- **Contexto em tarefas longas**: resultados antigos de ferramenta viram um aviso curto acima de `contextoMaxChars` (padrão 300 000 caracteres) — antes uma tarefa de muitas leituras reenviava tudo a cada passo. `/compact ia`: o próprio modelo resume a conversa.
+- **Hooks** `UserPromptSubmit`, `SessionStart` e `Stop` (código 2 no Stop obriga a continuar, até 3 vezes).
+- **Subagentes do usuário** em `.md` (`~/.gemini-code/subagentes/` ou do projeto, se confiável), com ferramentas e modelo próprios; nunca recebem mais ferramentas que o pai.
+- **MCP remoto** (Streamable HTTP): `"url"` e `"headers"` com `${VAR}` no `mcp.json`. Sem OAuth.
+- **Imagem como entrada**: `run --imagem ARQ`, `/imagem ARQ` e `/foto` no chat.
+- **`run --json`**: uma linha JSON no stdout (`{ok, texto, uso, ...}`) para CI e scripts; todo o resto vai para o stderr.
+- **Avaliação**: tarefa nova `refatorar-multiarquivo` (7 no total) e, em `docs/EVALS.md`, como comparar com o **mesmo modelo** pelo provedor `openai`, separando a qualidade do agente da do modelo.
+
+**Revisão adversarial antes de fechar a versão.** 4 revisores com lentes diferentes (permissões, rede e segredos, corretude, ferramentas novas), cada achado só valendo com reprodução executada e cada um entregue a um cético independente para tentar derrubá-lo. Os 10 achados de segurança foram confirmados pelos céticos (9 distintos: dois revisores acharam o mesmo `mcp.json.bak`). Mais 1 visto pelo revisor de rede fora do limite de achados dele, também reproduzido aqui. Os 12 de corretude e das ferramentas novas ficaram sem cético (limite de sessão); cada um deles eu reproduzi com um teste que falha no código anterior antes de corrigir. Todos corrigidos, um commit por achado:
+
+- **P1 — DNS rebinding no `web_fetch`** (e no `http-check` das rotinas): o anti-SSRF resolvia o nome, conferia o IP e o fetch resolvia de novo para conectar; um DNS com TTL 0 trocava o IP público por 127.0.0.1 ou 169.254.169.254. Agora a conexão usa um `lookup` que confere cada endereço na hora de conectar (`src/redeSegura.js`).
+- **P1 — `mcp.json.bak`** (cópia com os tokens que o `mcp add/remove` deixa) era lido por `read_file`, `search_files` e `read_skill`. Entrou em `SECRET_PATHS` e `PROTECTED_PATHS`, com permissão 0600.
+- **P1 — subagentes do projeto** (`.gemini-code/subagentes/`) entravam sem a pergunta de confiança.
+- **P2 — regras "negar" contornáveis:** `run_shell` com `&`, `$(...)`, crases, `(...)` e `{ ...; }`; `web_fetch` por redirecionamento ou por variação da URL (maiúsculas, `:443`); regras e hooks escritos para `edit_file` não valiam para o `edit_files`.
+- **P2 — MCP remoto:** um corpo que parava no meio travava o agente para sempre (o prazo acabava nos cabeçalhos); um 307/308 levava o token do cabeçalho para outro endereço (P3).
+- **P2 — chat por pipe:** `echo "pergunta" | gemini-code chat` num repositório com `AGENTS.md` perdia a pergunta na pergunta de confiança e saía sem responder.
+- **P2 — `/compact ia`:** o resumo do modelo era apagado na compactação seguinte (que o auto-compact disparava logo no turno seguinte, medindo a própria chamada do resumo); com contexto pequeno o modelo só via o fim das mensagens antigas e o resumo dele substituía todas. Agora o resumo anterior é levado adiante e o registro local vai junto.
+- **P2 — uma imagem contava o base64 inteiro** no orçamento de contexto e apagava resultados de ferramenta numa conversa curta.
+- **P2 — `glob_files` numa subpasta do repositório** ignorava o `.gitignore` do topo; também `.gitignore` com BOM e `[!-9]` (conferidos contra o git).
+- **P3:** `run_shell` em segundo plano com `cmd &` fugia do limite de 5 e ficava órfão (e terminal fechado, SIGHUP, não passava pela limpeza); `actions.log` deixava passar `password = "..."` nos argumentos; hooks Stop/UserPromptSubmit rodavam dentro de subagentes; a validação de workflow dizia que as ferramentas novas "não existem"; `confianca esquecer` numa subpasta prometia perguntar de novo; `<pre>` perdia o recuo; o charset do `<meta>` era ignorado; um "İ" antes de `<script>` desalinhava o texto.
+
+Testes: 700 (699 passando, 1 pulado por rodar como root), no Node 20 e no 22; eram 524 na v0.40.0.
+
+**Limites (importante):** nada aqui foi executado com Gemini, llama.cpp, uma API compatível com OpenAI de verdade, Claude Code, Codex, Antigravity ou Hermes Agent (sem chave nem rede neste ambiente): **não há resultado comparativo**, só as ferramentas para medir. Medido de verdade: code-ia solo 0/6 (v0.40.0). As regras de permissão e a heurística do `run_shell` são casamento de texto, não sandbox (ex.: `git -C . push` ainda escapa de `run_shell(git push*)`). MCP remoto sem OAuth. `glob_files` não entende classes POSIX (`[[:digit:]]`). O limite de 1 MiB do cowork não foi exercitado com `ws` real. ESLint não roda offline (lint só de sintaxe).
+
 ## 0.40.0 — segurança das ferramentas, execução sem terminal e avaliação reproduzível
 
 Base: o pacote v0.39.0 (MinhaIA) foi importado no repositório sem alterações; o `aplicar-correcao-gemini.sh` saiu (reescrevia `src/gemini.js` e `shellTools.js` inteiros com o código da v0.1 e quebraria o CLI; continua no histórico do git).

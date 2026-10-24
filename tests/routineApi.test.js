@@ -7,7 +7,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { createRoutineStore } = require('../src/routines');
 const { createRoutineRunner } = require('../src/routineRunner');
-const { createRoutineApiServer, safeEqual, readJson } = require('../src/routineApi');
+const { createRoutineApiServer, safeEqual } = require('../src/routineApi');
 
 function setup() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gemini-code-api-'));

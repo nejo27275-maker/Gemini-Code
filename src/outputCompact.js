@@ -7,6 +7,7 @@
 'use strict';
 
 // CSI (cores, cursor) e OSC (título/links); sem dependências.
+// eslint-disable-next-line no-control-regex -- casar ESC/BEL é o objetivo
 const ANSI = /\u001b\[[0-?]*[ -/]*[@-~]|\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)|\u001b[@-Z\\-_]/g;
 
 function compactar(texto) {

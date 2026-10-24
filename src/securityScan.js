@@ -66,4 +66,20 @@ function scanSecrets(root = process.cwd()) {
     summary: findings.length ? `${findings.length} ocorrência(s) potencial(is); revisão manual necessária.` : 'Nenhum padrão conhecido detectado. Isso não garante ausência de segredos.' };
 }
 
-module.exports = { scanSecrets, MAX_FILES, MAX_FILE_BYTES };
+// v0.41.0: as mesmas regras mascaram segredos antes de gravar em log (src/decisionLog.js).
+const MASCARAR = [...RULES, { name: 'token Bearer', regex: /\bBearer\s+([A-Za-z0-9._~+/-]{20,}=*)/g, group: 1 }];
+
+function mascararSegredos(texto) {
+  if (typeof texto !== 'string' || !texto) return texto;
+  let saida = texto;
+  for (const regra of MASCARAR) {
+    saida = saida.replace(regra.regex, (inteiro, grupo) => {
+      const valor = regra.group ? grupo : inteiro;
+      if (!valor) return inteiro;
+      return inteiro.replace(valor, `${valor.slice(0, 4)}…[segredo omitido]`);
+    });
+  }
+  return saida;
+}
+
+module.exports = { scanSecrets, mascararSegredos, MAX_FILES, MAX_FILE_BYTES };

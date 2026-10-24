@@ -27,15 +27,44 @@ function privateAddress(address) {
       || (a === 203 && b === 0) || a >= 224;
   }
   if (version === 6) {
-    const normalized = address.toLowerCase();
-    if (normalized.startsWith('::ffff:')) return privateAddress(normalized.slice(7));
-    return normalized === '::' || normalized === '::1' || normalized.startsWith('fc')
-      || normalized.startsWith('fd') || normalized.startsWith('fe8')
-      || normalized.startsWith('fe9') || normalized.startsWith('fea')
-      || normalized.startsWith('feb') || normalized.startsWith('ff')
-      || normalized.startsWith('2001:db8');
+    // v0.41.0: comparar prefixos de TEXTO deixava passar IPv4 embutido em IPv6 — NAT64
+    // (64:ff9b::7f00:1 = 127.0.0.1; comum em rede móvel IPv6), IPv4-compatível (::7f00:1),
+    // 6to4 (2002:0a00:0001::) e formas expandidas (0:0:0:0:0:0:0:1). Agora o endereço é
+    // expandido em 8 blocos e o IPv4 embutido passa pela mesma regra do IPv4.
+    const h = blocosIpv6(address);
+    const v4 = (x, y) => `${x >> 8}.${x & 255}.${y >> 8}.${y & 255}`;
+    const zerosAte = (n) => h.slice(0, n).every((v) => v === 0);
+    if (zerosAte(6)) return privateAddress(v4(h[6], h[7])); // ::, ::1, ::a.b.c.d
+    if (zerosAte(5) && h[5] === 0xffff) return privateAddress(v4(h[6], h[7])); // ::ffff:a.b.c.d
+    if (zerosAte(4) && h[4] === 0xffff && h[5] === 0) return privateAddress(v4(h[6], h[7])); // SIIT
+    if (h[0] === 0x64 && h[1] === 0xff9b) {
+      if (h[2] === 1) return true; // 64:ff9b:1::/48, NAT64 de uso local
+      if (h.slice(2, 6).every((v) => v === 0)) return privateAddress(v4(h[6], h[7])); // 64:ff9b::/96
+    }
+    if (h[0] === 0x2002) return privateAddress(v4(h[1], h[2])); // 6to4
+    const p = h[0];
+    return (p & 0xfe00) === 0xfc00 // fc00::/7 (ULA)
+      || (p & 0xffc0) === 0xfe80 // fe80::/10 (link-local)
+      || (p & 0xffc0) === 0xfec0 // fec0::/10 (site-local, obsoleto)
+      || (p & 0xff00) === 0xff00 // ff00::/8 (multicast)
+      || (p === 0x2001 && (h[1] === 0x0db8 || h[1] === 0)); // documentação e Teredo (IPv4 ofuscado)
   }
   return true;
+}
+
+/** "::ffff:1.2.3.4", "fe80::1%eth0", "0:0:0:0:0:0:0:1" -> 8 números de 16 bits. */
+function blocosIpv6(endereco) {
+  let s = String(endereco).toLowerCase();
+  const zona = s.indexOf('%');
+  if (zona >= 0) s = s.slice(0, zona);
+  const m = s.match(/^(.*:)(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (m) s = `${m[1]}${((m[2] << 8) | m[3]).toString(16)}:${((m[4] << 8) | m[5]).toString(16)}`;
+  const temDuplo = s.includes('::');
+  const [cabeca, cauda] = temDuplo ? s.split('::') : [s, ''];
+  const a = cabeca ? cabeca.split(':') : [];
+  const b = temDuplo && cauda ? cauda.split(':') : [];
+  const zeros = temDuplo ? Math.max(0, 8 - a.length - b.length) : 0;
+  return [...a, ...Array(zeros).fill('0'), ...b].slice(0, 8).map((x) => parseInt(x || '0', 16) || 0);
 }
 
 async function ensurePublicTarget(urlString, allowPrivateTargets = false) {
@@ -61,8 +90,10 @@ async function executeHttpCheck(action, { allowPrivateTargets = process.env.ROUT
   const timer = setTimeout(() => controller.abort(), action.timeoutMs);
   const started = Date.now();
   try {
-    const response = await fetch(action.url, {
-      method: 'GET', signal: controller.signal, redirect: 'manual',
+    // v0.41.0: DNS fixado no endereço conferido (src/redeSegura.js); o fetch global resolvia de novo ao
+    // conectar (DNS rebinding). Não segue redirecionamento, como antes (redirect: 'manual').
+    const response = await require('./redeSegura').fetchComDnsFixado(action.url, {
+      signal: controller.signal, permitirPrivado: allowPrivateTargets,
       headers: { 'user-agent': 'gemini-code-routine-monitor/1.0', accept: '*/*' },
     });
     const durationMs = Date.now() - started;
@@ -81,7 +112,7 @@ async function executeHttpCheck(action, { allowPrivateTargets = process.env.ROUT
     return result;
   } catch (err) {
     if (err.result) throw err;
-    const message = err.name === 'AbortError' ? `Timeout após ${action.timeoutMs} ms.` : err.message;
+    const message = err.name === 'AbortError' || controller.signal.aborted ? `Timeout após ${action.timeoutMs} ms.` : err.message;
     const wrapped = new Error(message);
     wrapped.result = { ok: false, url: action.url, durationMs: Date.now() - started, checkedAt: new Date().toISOString(), message };
     throw wrapped;

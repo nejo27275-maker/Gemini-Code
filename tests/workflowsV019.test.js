@@ -107,6 +107,13 @@ test('validarWorkflow: workflow bom passa limpo; mcp__ é aceito; sem steps e JS
   const d = pasta({ 'q.json': '{ quebrado' });
   assert.match(wf.validarArquivo(path.join(d, 'q.json')).erros[0], /não consegui ler o JSON/);
   assert.match(wf.validarWorkflow({ steps: Array.from({ length: 11 }, (_, i) => ({ id: `p${i}`, prompt: 'x' })) }).erros[0], /mais de 10 passos/);
+  // v0.41.0: as ferramentas novas são conhecidas; glob_files (só leitura) pode rodar em paralelo.
+  const novas = wf.validarWorkflow({ description: 'd', steps: [
+    { id: 'a', prompt: 'liste', tools: ['glob_files', 'edit_files', 'web_fetch', 'shell_status'] },
+    { id: 'b', prompt: 'cada {{item}}', each: '{{a}}', paralelo: 2, tools: ['glob_files', 'read_file'] },
+  ] });
+  assert.deepEqual(novas.erros, []);
+  assert.deepEqual(novas.avisos.filter((a) => /não existe|paralelo.*precisa/.test(a)), [], novas.avisos.join('\n'));
 });
 
 test('todos os exemplos que vêm no projeto passam na validação sem ERRO', () => {

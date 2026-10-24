@@ -40,6 +40,10 @@ const { compactar } = require('../src/compact');
 const customCommands = require('../src/customCommands');
 const todoTools = require('../src/tools/todoTools');
 const knowledgeModule = require('../src/knowledge');
+const personalAgents = require('../src/personalAgents');
+const aliadosCommands = require('../src/personalAgentCommands');
+// v0.43.2: a resposta do modelo vai ao terminal sem sequências de controle (OSC 52, ESC[2J...).
+const { paraTerminal } = require('../src/ui/textoSeguro');
 const { INSTRUCAO_MODO_CIENCIA } = require('../src/modoCiencia');
 
 const [, , cmd, ...rest] = process.argv;
@@ -61,6 +65,9 @@ function encerrarComLimpeza() {
 }
 process.on('SIGINT', encerrarComLimpeza);
 process.on('SIGTERM', encerrarComLimpeza);
+// v0.41.0: terminal fechado (SIGHUP) também passa pela limpeza — process.exit dispara o 'exit' que
+// encerra os comandos em segundo plano do run_shell; sem isto o Node saía direto e eles ficavam órfãos.
+process.on('SIGHUP', encerrarComLimpeza);
 
 function printHelp() {
   console.log(`
@@ -69,6 +76,7 @@ gemini-code v${PACKAGE_JSON.version} — agente de terminal com Gemini (estilo C
 Uso:
   gemini-code chat                          Modo conversa interativo com o agente
   gemini-code run [--profile coder|explore|plan|review|test] [--checkpoint] "instrução"  Executa com perfil e salva artefato
+  gemini-code run --json [--imagem foto.png] "instrução"   Saída JSON para scripts/CI; --imagem manda imagem (repetível)
   gemini-code profiles list|show NOME        Lista perfis e permissões reais do executor
   gemini-code sessions list|new|show|use|delete  Gerencia sessões persistentes
   gemini-code checkpoints create|list|restore    Checkpoints locais com restauração segura
@@ -108,7 +116,11 @@ No modo "chat", digite /help para ver os comandos de sessão (/clear, /model, /s
   gemini-code code-ia forget                  Esquece tudo que você ensinou
   gemini-code code-ia reinstall               Refaz o modelo do zero
   gemini-code llamacpp status                 Testa o servidor local sem Ollama
-  gemini-code config set-provider hybrid|llamacpp|gemini|ollama|code-ia   Escolhe IA online/local
+  gemini-code config set-provider hybrid|llamacpp|gemini|openai|ollama|code-ia   Escolhe IA online/local
+  gemini-code config set-openai-key CHAVE | set-openai-model NOME | set-openai-url URL   API compatível com OpenAI (OpenRouter, OpenAI...)
+  gemini-code config set-hybrid-cloud gemini|openai   Qual nuvem o modo hybrid usa
+  gemini-code config negar|permitir "FERRAMENTA(PADRÃO)" | regras | remover-regra REGRA   Regras de permissão
+  gemini-code confianca [status|confiar|negar|esquecer] [PASTA]   Confiança nas instruções do projeto (AGENTS.md...)
   gemini-code config set-llamacpp-url URL      URL do llama.cpp (padrão http://127.0.0.1:8080)
   gemini-code config set-llamacpp-model NOME   Nome usado pelo servidor (padrão local-model)
   gemini-code config set-llamacpp-path CAMINHO Arquivo GGUF local (override opcional)
@@ -122,12 +134,27 @@ No modo "chat", digite /help para ver os comandos de sessão (/clear, /model, /s
   gemini-code config set-fallback-model NOME  Modelo reserva se o principal ficar indisponível (503)
 
   gemini-code skills list                     Lista as skills instaladas
+
+  gemini-code aliados listar                   Aliados: agentes pessoais com instruções, memória e conhecimento
+  gemini-code aliados criar NOME --ia "o que ele faz"   A IA configura; você revisa e confirma
+  gemini-code aliados criar NOME --instrucoes "Você é..." [--iniciador T] [--ferramentas P] [--memoria M]
+  gemini-code aliados chat NOME                Conversa com ele (aliados run NOME "msg": uma pergunta só)
+  gemini-code aliados conhecimento NOME add ARQ   Anexa arquivos de texto à base dele
+  gemini-code aliados ajuda                    Tudo: ver, editar, remover, memoria, exportar, importar
+
   gemini-code agent run caminho/arquivo.json   Roda um workflow de vários passos OU
                                                 abre chat com uma persona pronta
                                                 (ex.: agents/exemplos/revisor-de-codigo.json)
 
   gemini-code cowork server [porta]            Inicia o servidor no PC
-  gemini-code cowork connect <ip> --token X    Conecta do celular ao PC
+  gemini-code cowork connect <ip> --token X    Conecta do celular ao PC (canal cifrado)
+  gemini-code cowork novo-token                Troca o token do cowork (o antigo deixa de valer)
+
+  gemini-code adb dispositivos                 Controla uma Android TV/celular SEU por adb (USB ou Wi-Fi)
+  gemini-code adb conectar <ip[:porta]>        Conecta na TV pela rede (ligue a depuração por rede antes)
+  gemini-code adb info|apps|estado|tela|logcat Lê o aparelho (modelo, apps, app em foco, print, logs)
+  gemini-code adb tecla <cima|baixo|ok|voltar|home|play...>   Navega na TV pelo controle virtual
+  gemini-code adb abrir <pacote> | digitar <texto> | instalar <app.apk> | shell <cmd>   (pedem confirmação)
 
   gemini-code ciencia "pergunta"               Modo ciência: explica em formato fixo (números, comparação, dá pra escapar?)
 
@@ -152,7 +179,7 @@ No modo "chat", digite /help para ver os comandos de sessão (/clear, /model, /s
   gemini-code backups arquivo                  Lista os backups automáticos de um arquivo (mais recente = 1)
   gemini-code backups restore arquivo [N]      Restaura o backup N (padrão 1); o conteúdo atual também vira backup
 
-Pastas de configuração: ~/.gemini-code (config.json, mcp.json, skills/, agents/, workflows/)
+Pastas de configuração: ~/.gemini-code (config.json, mcp.json, skills/, agents/, workflows/, aliados/)
 `);
 }
 
@@ -181,6 +208,9 @@ Comandos disponíveis no chat:
   /agenda listar             lista tudo que está marcado
   /projetos                  lista os projetos registrados (gemini-code projetos add "nome" fora do chat)
   /compact           resume a conversa antiga (sem custo) e mantém só as últimas mensagens inteiras
+  /compact ia        o próprio modelo resume a conversa antiga (perde menos detalhe; custa 1 chamada)
+  /imagem ARQ [texto] manda uma imagem (png/jpg/webp/gif) junto com a pergunta
+  /foto [texto]      tira foto com a câmera do celular (Termux:API) e manda ao agente
   /tarefas           mostra a lista de tarefas que o agente está seguindo (todo_write)
   /rewind [N|lista]  desfaz o que o agente gravou no(s) último(s) N turno(s) (como Ctrl+Z; --force sobrescreve o que você mudou depois)
   /snapshots         fotos automáticas do projeto (git escondido, inclui o que o shell mudou); /snapshots restaurar N volta à foto N
@@ -203,8 +233,18 @@ Comandos disponíveis no chat:
   /workflows retomar <nome>                 continua um workflow que falhou no meio, sem refazer os passos que deram certo
   /workflows limpar historico|<nome>        apaga o histórico, ou descarta a execução interrompida de um workflow
   /commands          lista seus comandos de barra (.md em .gemini-code/commands ou ~/.gemini-code/commands)
+  /aliados           lista seus aliados (agentes pessoais; crie com: gemini-code aliados criar NOME --ia "...")
+  /aliado NOME       a conversa passa a ser com esse aliado (instruções, memória e conhecimento dele); /aliado off volta
+  @NOME mensagem     manda só esta mensagem para o aliado NOME
+  /memoria [esquecer ID]   o que o aliado ativo guardou sobre você
   Ctrl+C             sai
 `;
+
+// Linhas { nivel, texto } dos módulos de comando (src/workflowCommands.js, src/personalAgentCommands.js).
+const CORES_NIVEL = { dim: chalk.dim, erro: chalk.red, aviso: chalk.yellow, ok: chalk.green, texto: (t) => t };
+function imprimirLinhas(linhas) {
+  for (const l of linhas) console.log((CORES_NIVEL[l.nivel] || chalk.dim)(paraTerminal(l.texto)));
+}
 
 // Lê flags simples do tipo "--dia 7 --mes 10" de uma string de comando,
 // devolvendo { texto: 'resto sem as flags', dia, mes, ano, data }.
@@ -229,18 +269,53 @@ function salvarHistorico(history, nomeArg) {
   return arquivo;
 }
 
-async function chatLoop() {
+// v0.41.0: confiança no projeto (src/trust.js). Pergunta uma vez por pasta, só se o projeto traz
+// instruções para agentes (AGENTS.md, CLAUDE.md, .cursorrules, .gemini-code/commands e /subagentes...).
+// Devolve a linha lida quando ela não é resposta (ex.: `echo "pergunta" | gemini-code chat`): o chat a usa
+// como primeira mensagem — antes ela era engolida pela pergunta e o processo saía sem responder.
+async function perguntarConfiancaNoProjeto() {
+  const trust = require('../src/trust');
+  if (loadConfig().confiancaProjeto === 'sempre' || trust.estado() !== null) return null;
+  const instrucoes = trust.instrucoesDoProjeto();
+  if (!instrucoes.length) return null;
+  console.log(chalk.yellow('Este projeto traz instruções para agentes, que entram no prompt do modelo:'));
+  // Nomes de arquivo vêm do repositório (podem trazer ESC, \r...): exibidos sem o terminal interpretar.
+  const { paraExibir } = require('../src/ui/textoSeguro');
+  for (const arq of instrucoes) console.log(chalk.yellow(`  ${paraExibir(path.relative(process.cwd(), arq) || arq)}`));
+  console.log(chalk.yellow('Instruções de um repositório de terceiros podem mandar o agente fazer coisas que você não pediu.'));
+  const linha = String(await ask('Confiar nelas? [s]im / [n]ão — fica salvo para esta pasta: '));
+  const r = linha.trim().toLowerCase();
+  if (r === 's' || r === 'y') { trust.definir(process.cwd(), 'confiar'); console.log(chalk.dim('(confiança salva; desfaça com: gemini-code confianca esquecer)\n')); return null; }
+  if (r === 'n') { trust.definir(process.cwd(), 'negar'); console.log(chalk.dim('(instruções do projeto ignoradas; só o conhecimento global vale. Mude com: gemini-code confianca confiar)\n')); return null; }
+  trust.negarNestaSessao();
+  if (!r) { console.log(chalk.dim('(sem resposta: ignorando as instruções do projeto só nesta execução)\n')); return null; }
+  console.log(chalk.dim('(não é s/n: ignorando as instruções do projeto só nesta execução; o texto segue como sua primeira mensagem)\n'));
+  return linha;
+}
+
+// v0.42.0: `aliados chat NOME` abre este mesmo chat com o agente pessoal já ativo e com as conversas DELE
+// (~/.gemini-code/aliados/NOME/sessoes.json, valem em qualquer pasta). No chat comum, /aliado NOME liga um
+// agente pessoal na conversa atual e @NOME manda só uma mensagem para ele (src/personalAgentCommands.js).
+async function chatLoop({ agente: nomeAgente } = {}) {
+  const aliadosStore = personalAgents.defaultStore;
+  let agenteAtivo = nomeAgente ? aliadosStore.obter(nomeAgente) : null;
+  const sessoes = agenteAtivo ? aliadosStore.sessoes(agenteAtivo.name) : sessions;
   console.log(chalk.bold(`gemini-code v${PACKAGE_JSON.version} — modo conversa. Ctrl+C para sair, /help para comandos.\n`));
   if (require('../src/solo').ativo()) console.log(chalk.green('[solo] code-ia sozinho: nenhuma outra IA (Gemini, llama.cpp, Ollama) é usada.\n'));
+  const primeiraMensagem = await perguntarConfiancaNoProjeto();
   // Item 8 da revisão: usa a MESMA interface de readline que a confirmação
   // de run_shell usa (src/ui/prompt.js), em vez de criar uma própria —
   // evita duas interfaces competindo pelo mesmo stdin.
   const rl = getSharedReadline();
-  let sessaoAtual = sessions.getActive() || sessions.create('Sessão principal');
+  // v0.41.0: sessão da pasta atual (src/sessions.js getActiveFor), não a última de qualquer projeto.
+  let sessaoAtual = agenteAtivo
+    ? sessoes.getActive() || sessoes.create(`Conversa com ${agenteAtivo.name}`)
+    : sessoes.getActiveFor(process.cwd()) || sessoes.create(`Sessão de ${path.basename(process.cwd()) || 'raiz'}`);
   let history = Array.isArray(sessaoAtual.history) ? sessaoAtual.history : [];
   let modeloAtual = sessaoAtual.modelName || undefined; // undefined = usa o padrão do config
   if (history.length) console.log(chalk.dim(`Sessão retomada: ${sessaoAtual.name} (${sessaoAtual.id}) — ${history.length} mensagens no histórico. Use /session new para começar outra.\n`));
   else console.log(chalk.dim(`Sessão persistente: ${sessaoAtual.name} (${sessaoAtual.id}). O histórico será salvo automaticamente.\n`));
+  if (agenteAtivo) { imprimirLinhas(aliadosCommands.boasVindas(agenteAtivo, aliadosStore)); console.log(''); }
   // stdin fechado (Ctrl+D ou entrada redirecionada): encerra limpo em vez de
   // estourar ERR_USE_AFTER_CLOSE na próxima pergunta.
   let fechado = false;
@@ -248,7 +323,7 @@ async function chatLoop() {
   stepApproval.configurar({ ativo: loadConfig().confirmarEscrita === true, perguntar: (q) => (fechado ? Promise.resolve('n') : require('../src/ui/prompt').ask(q)) });
   rl.on('close', () => { fechado = true; });
 
-  const ask = () => fechado ? encerrarComLimpeza() : perguntarColando(rl, chalk.cyan(modoPlano ? 'você [plano]> ' : 'você> '), async (line) => {
+  const tratarLinha = async (line) => {
     const cmd = line.trim();
     if (!cmd) return ask();
 
@@ -256,13 +331,19 @@ async function chatLoop() {
       console.log(CHAT_HELP);
       return ask();
     }
-    if (cmd === '/compact') {
-      const r = compactar(history);
+    if (cmd === '/compact' || cmd === '/compact ia') {
+      // v0.41.0: "/compact ia" pede o resumo ao próprio modelo (1 chamada); sem "ia", resumo local grátis.
+      const comIa = cmd === '/compact ia';
+      const r = comIa
+        ? await require('../src/compact').compactarComModelo(history, { chat: (a) => require('../src/provider').chatWithTools({ ...a, modelName: modeloAtual }) })
+        : compactar(history);
       if (!r.compactou) console.log(chalk.dim('(conversa ainda curta, nada pra compactar)\n'));
       else {
         history = r.history;
-        sessaoAtual = sessions.save(sessaoAtual.id, { history, modelName: modeloAtual });
-        console.log(chalk.dim(`(compactei ${r.removidas} mensagens antigas num resumo; sessão salva)\n`));
+        usage.contextoCompactado();
+        sessaoAtual = sessoes.save(sessaoAtual.id, { history, modelName: modeloAtual });
+        const como = comIa && !r.comModelo ? ' (o modelo não respondeu; usei o resumo local)' : comIa ? ' feito pelo modelo' : '';
+        console.log(chalk.dim(`(compactei ${r.removidas} mensagens antigas num resumo${como}; sessão salva)\n`));
       }
       return ask();
     }
@@ -331,12 +412,21 @@ async function chatLoop() {
     }
     if (cmd === '/workflows' || cmd.startsWith('/workflows ')) {
       // v0.25.0: a lógica dos comandos /workflows mora em src/workflowCommands.js (testável sem abrir o terminal)
-      const cor = { dim: chalk.dim, erro: chalk.red, aviso: chalk.yellow, ok: chalk.green };
       const linhas = await require('../src/workflowCommands').tratar(cmd, { pasta: WORKFLOWS_DIR });
       console.log('');
-      for (const l of linhas) console.log((cor[l.nivel] || chalk.dim)(l.texto));
+      imprimirLinhas(linhas);
       console.log('');
       return ask();
+    }
+    {
+      // v0.42.0: /aliados, /aliado NOME|off e /memoria (agentes pessoais)
+      const g = aliadosCommands.chat(cmd, { agente: agenteAtivo, store: aliadosStore });
+      if (g) {
+        imprimirLinhas(g.linhas);
+        if (g.agente !== undefined) agenteAtivo = g.agente;
+        console.log('');
+        return ask();
+      }
     }
     if (cmd === '/commands') {
       const todos = [...customCommands.carregar({ home: require('../src/config').HOME_DIR }).values()];
@@ -347,7 +437,7 @@ async function chatLoop() {
     }
     if (cmd === '/clear') {
       history = [];
-      sessions.save(sessaoAtual.id, { history, modelName: modeloAtual });
+      sessoes.save(sessaoAtual.id, { history, modelName: modeloAtual });
       console.log(chalk.dim('(histórico limpo e sessão salva)\n'));
       return ask();
     }
@@ -362,7 +452,7 @@ async function chatLoop() {
         try { require('../src/code-ia/install').ensureInstalled({ log: (m) => console.log(chalk.dim(m)) }); }
         catch (err) { console.error(chalk.yellow(`[code-ia] ${err.message}`)); }
       }
-      sessions.save(sessaoAtual.id, { history, modelName: modeloAtual });
+      sessoes.save(sessaoAtual.id, { history, modelName: modeloAtual });
       console.log(chalk.dim(
         cmd === '/codeia' ? 'Agora: code-ia (modelo próprio, local)\n'
           : cmd === '/local' ? `Agora: modelo local llama.cpp (${cfg.llamaCppModel || 'local-model'})\n`
@@ -400,7 +490,7 @@ async function chatLoop() {
         console.log(chalk.dim(`Modelo atual: ${modeloAtual || loadConfig().model} (uso: /model NOME)\n`));
       } else {
         modeloAtual = novoModelo;
-        sessions.save(sessaoAtual.id, { history, modelName: modeloAtual });
+        sessoes.save(sessaoAtual.id, { history, modelName: modeloAtual });
         console.log(chalk.dim(`Modelo trocado para: ${novoModelo}\n`));
       }
       return ask();
@@ -409,7 +499,7 @@ async function chatLoop() {
       const nomeArg = cmd.slice('/save'.length).trim() || undefined;
       try {
         const arquivo = salvarHistorico(history, nomeArg);
-        sessions.save(sessaoAtual.id, { history, modelName: modeloAtual, ...(nomeArg ? { name: nomeArg } : {}) });
+        sessoes.save(sessaoAtual.id, { history, modelName: modeloAtual, ...(nomeArg ? { name: nomeArg } : {}) });
         console.log(chalk.dim(`Histórico salvo em: ${arquivo}\nSessão persistente atualizada: ${sessaoAtual.id}\n`));
       } catch (err) {
         console.error(chalk.red('Erro ao salvar: ' + err.message));
@@ -421,26 +511,26 @@ async function chatLoop() {
       const [sub, ...args] = cmd.slice('/session'.length).trim().split(/\s+/).filter(Boolean);
       try {
         if (sub === 'list' || !sub) {
-          const lista = sessions.list({ limit: 30 });
+          const lista = sessoes.list({ limit: 30 });
           console.log(lista.length ? lista.map((s) => `${s.id === sessaoAtual.id ? '* ' : '  '}${s.id} | ${s.name} | ${s.messageCount} mensagens | ${s.updatedAt}`).join('\n') + '\n' : 'Nenhuma sessão salva.\n');
         } else if (sub === 'new') {
-          sessaoAtual = sessions.create(args.join(' ') || undefined, { modelName: modeloAtual });
+          sessaoAtual = sessoes.create(args.join(' ') || undefined, { modelName: modeloAtual });
           history = [];
           console.log(chalk.dim(`Nova sessão: ${sessaoAtual.name} (${sessaoAtual.id})\n`));
         } else if (sub === 'use' || sub === 'load' || sub === 'resume') {
-          const existente = sessions.get(args[0]);
+          const existente = sessoes.get(args[0]);
           if (!existente) throw new Error('Sessão não encontrada. Use /session list.');
-          sessaoAtual = sessions.setActive(existente.id);
+          sessaoAtual = sessoes.setActive(existente.id);
           history = sessaoAtual.history;
           modeloAtual = sessaoAtual.modelName || undefined;
           console.log(chalk.dim(`Sessão retomada: ${sessaoAtual.name} (${sessaoAtual.id}), ${history.length} mensagens.\n`));
         } else if (sub === 'rename') {
           const nome = args.join(' ');
           if (!nome) throw new Error('Uso: /session rename NOVO_NOME');
-          sessaoAtual = sessions.save(sessaoAtual.id, { name: nome });
+          sessaoAtual = sessoes.save(sessaoAtual.id, { name: nome });
           console.log(chalk.dim(`Sessão renomeada: ${sessaoAtual.name}\n`));
         } else if (sub === 'show') {
-          console.log(JSON.stringify({ ...sessions.get(sessaoAtual.id), history: `[${history.length} mensagens]` }, null, 2));
+          console.log(JSON.stringify({ ...sessoes.get(sessaoAtual.id), history: `[${history.length} mensagens]` }, null, 2));
         } else {
           console.log('Uso: /session list | new [nome] | use ID | rename NOME | show\n');
         }
@@ -498,9 +588,9 @@ async function chatLoop() {
         let streamed = false;
         const { text } = await runOnce(pergunta, {
           extraSystemInstruction: INSTRUCAO_MODO_CIENCIA,
-          onText: (pedaco) => { streamed = true; process.stdout.write(pedaco); },
+          onText: (pedaco) => { streamed = true; process.stdout.write(paraTerminal(pedaco)); },
         });
-        if (!streamed) process.stdout.write(text);
+        if (!streamed) process.stdout.write(paraTerminal(text));
         console.log('\n');
       } catch (err) {
         console.error(chalk.red('Erro: ' + err.message));
@@ -513,12 +603,45 @@ async function chatLoop() {
       const custom = customCommands.resolver(cmd, customCommands.carregar({ home: require('../src/config').HOME_DIR }));
       if (custom) { textoEnviado = custom.texto; console.log(chalk.dim(`(comando /${custom.nome})`)); }
     }
+    // v0.42.0: "@nome mensagem" vai só esta vez para um agente pessoal; numa conversa vazia com um agente,
+    // um número escolhe um dos iniciadores dele.
+    let agenteDoTurno = agenteAtivo;
+    if (!textoDoPlano) {
+      const men = aliadosCommands.mencao(line, aliadosStore);
+      const ini = men ? null : aliadosCommands.iniciadorEscolhido(agenteAtivo, line, history.length === 0);
+      if (men) { agenteDoTurno = men.agente; textoEnviado = men.mensagem; console.log(chalk.dim(`(só esta mensagem vai para o aliado ${men.agente.name})`)); }
+      else if (ini) { textoEnviado = ini; console.log(chalk.dim(`(${ini})`)); }
+    }
+    // v0.41.0: /imagem CAMINHO [pergunta] e /foto [pergunta] (câmera do celular via Termux:API) mandam imagem ao agente.
+    let imagensDoTurno = [];
+    if (cmd.startsWith('/imagem ') || cmd === '/foto' || cmd.startsWith('/foto ')) {
+      try {
+        let arquivo;
+        let resto;
+        if (cmd.startsWith('/imagem ')) {
+          const m = cmd.slice('/imagem '.length).trim().match(/^(?:"([^"]+)"|(\S+))\s*([\s\S]*)$/);
+          arquivo = m && (m[1] || m[2]);
+          resto = m ? m[3] : '';
+        } else {
+          arquivo = path.join(require('os').tmpdir(), `gemini-code-foto-${Date.now()}.jpg`);
+          console.log(chalk.dim('(tirando foto com a câmera...)'));
+          await require('../src/voice/voice').takePhoto(arquivo);
+          resto = cmd.replace(/^\/foto\s*/, '');
+        }
+        imagensDoTurno = [require('../src/imagens').lerImagem(arquivo)];
+        textoEnviado = resto || 'Descreva esta imagem e aponte o que for relevante para o que estamos fazendo.';
+      } catch (err) {
+        console.error(chalk.red('Erro: ' + err.message));
+        return ask();
+      }
+    }
     // v0.15.0: contexto grande = cada chamada fica cara. Compacta sozinho (sem chamar modelo, sem custo).
     if (usage.contextoGrande(loadConfig().autoCompactTokens, { ctxLocal: require('../src/providers/llamacpp').ctxTamanho(loadConfig()) })) {
       const rc = compactar(history);
       if (rc.compactou) {
         history = rc.history;
-        sessaoAtual = sessions.save(sessaoAtual.id, { history, modelName: modeloAtual });
+        usage.contextoCompactado();
+        sessaoAtual = sessoes.save(sessaoAtual.id, { history, modelName: modeloAtual });
         console.log(chalk.dim(`(contexto grande: compactei ${rc.removidas} mensagens antigas sozinho para gastar menos)`));
       }
     }
@@ -526,24 +649,30 @@ async function chatLoop() {
     const autoGit = loadConfig().autoGit !== false;
     if (autoGit) snapshots.tirar({ rotulo: `antes: ${line}` });
     try {
-      process.stdout.write(chalk.green('\ngemini-code> '));
+      // Com agente pessoal: instruções, memória, trechos do conhecimento, ferramentas e modelo dele; o modo
+      // plano só restringe (interseção das ferramentas). O modelo do agente, se definido, vale sobre o /model.
+      const restricao = planMode.opcoes(modoPlano);
+      const turno = agenteDoTurno ? personalAgents.prepararTurno(aliadosStore, agenteDoTurno, textoEnviado, { restricao }) : null;
+      process.stdout.write(chalk.green(`\n${agenteDoTurno ? agenteDoTurno.name : 'gemini-code'}> `));
       let streamed = false;
-      const { text, history: newHistory } = await runOnce(textoEnviado, {
+      const rodar = () => runOnce(textoEnviado, {
         history,
         modelName: modeloAtual,
-        ...planMode.opcoes(modoPlano),
+        imagens: imagensDoTurno,
+        ...(turno ? turno.opcoes : restricao),
         onText: (pedaco) => {
           streamed = true;
-          process.stdout.write(pedaco);
+          process.stdout.write(paraTerminal(pedaco));
         },
       });
+      const { text, history: newHistory } = await (turno ? personalAgents.comAgente(turno.ctx, rodar) : rodar());
       history = newHistory;
-      sessaoAtual = sessions.save(sessaoAtual.id, { history, modelName: modeloAtual });
-      try { artifacts.createArtifact({ title: line.slice(0, 120), type: 'turno-chat', status: 'concluido', summary: text.slice(0, 1000), content: text, taskId: sessaoAtual.id, cwd: process.cwd(), metadata: { sessionId: sessaoAtual.id } }); } catch { /* relatório é best-effort e não pode travar o chat */ }
+      sessaoAtual = sessoes.save(sessaoAtual.id, { history, modelName: modeloAtual });
+      try { artifacts.createArtifact({ title: line.slice(0, 120), type: 'turno-chat', status: 'concluido', summary: text.slice(0, 1000), content: text, taskId: sessaoAtual.id, cwd: process.cwd(), metadata: { sessionId: sessaoAtual.id, ...(agenteDoTurno ? { agentePessoal: agenteDoTurno.name } : {}) } }); } catch { /* relatório é best-effort e não pode travar o chat */ }
       // Se nada foi impresso via streaming (ex.: resposta veio só como
       // functionCalls sem texto acompanhando, ou streaming desabilitado),
       // imprime o texto completo agora.
-      if (!streamed) process.stdout.write(text);
+      if (!streamed) process.stdout.write(paraTerminal(text));
       console.log('\n');
     } catch (err) {
       console.error(chalk.red('Erro: ' + err.message));
@@ -553,8 +682,10 @@ async function chatLoop() {
     if (autoGit) { const f = snapshots.tirar({ rotulo: `depois: ${line}` }); if (f) console.log(chalk.dim(`(foto ${f.curto} salva — /snapshots lista, /snapshots restaurar N volta)`)); }
     if (rw) console.log(chalk.dim(`(${rw.arquivos} arquivo(s) gravado(s) neste turno — /rewind desfaz)\n`));
     ask();
-  });
-  ask();
+  };
+  const rotulo = () => [agenteAtivo && agenteAtivo.name, modoPlano && 'plano'].filter(Boolean).join(' · ');
+  const ask = () => fechado ? encerrarComLimpeza() : perguntarColando(rl, chalk.cyan(rotulo() ? `você [${rotulo()}]> ` : 'você> '), tratarLinha);
+  if (primeiraMensagem) tratarLinha(primeiraMensagem); else ask();
 }
 
 // Comandos que nunca precisam da apiKey (ajuda/versão, e "config" porque os
@@ -563,10 +694,17 @@ async function chatLoop() {
 // "agenda" e "projetos" são só arquivo local (sem API key nenhuma
 // envolvida) — pedir a chave de segurança pra só ver a lista seria atrito
 // à toa.
-const COMANDOS_SEM_DESBLOQUEIO = new Set([undefined, 'help', '--help', 'version', '--version', '-v', 'config', 'agenda', 'projetos', 'backups', 'routines', 'sessions', 'checkpoints', 'artifacts', 'context', 'doctor', 'solo', 'security', 'profiles', 'agents', 'code-ia', 'codeia']);
+const COMANDOS_SEM_DESBLOQUEIO = new Set([undefined, 'help', '--help', 'version', '--version', '-v', 'config', 'confianca', 'trust', 'agenda', 'projetos', 'backups', 'routines', 'sessions', 'checkpoints', 'artifacts', 'context', 'doctor', 'solo', 'security', 'profiles', 'agents', 'code-ia', 'codeia', 'adb']);
+
+// v0.42.0: de "aliados", só conversar (chat/run) e criar com --ia chamam o modelo.
+function aliadosUsaModelo() {
+  const sub = String(rest[0] || '').toLowerCase();
+  return ['chat', 'conversar', 'run', 'perguntar', 'ask'].includes(sub) || rest.includes('--ia') || rest.includes('--ai') || rest.some((a) => /^--(ia|ai)=/.test(a));
+}
 
 async function garantirDesbloqueio() {
   if (COMANDOS_SEM_DESBLOQUEIO.has(cmd)) return;
+  if (COMANDOS_ALIADOS.has(cmd) && !aliadosUsaModelo()) return;
   const cfg = loadConfig();
   if (!security.isLocked(cfg) || security.getSessionApiKey()) return;
 
@@ -599,8 +737,9 @@ function bloquearSeConvidado(mensagem) {
 // Quando o provedor code-ia é selecionado, prepara o modelo pequeno de conhecimento.
 // O padrão é o LLM geral local via llama.cpp; o modelo GGUF é baixado pelo usuário.
 const COMANDOS_COM_MODELO = new Set(['chat', 'run', 'sub', 'agent', 'live', 'voice', 'ciencia']);
+const COMANDOS_ALIADOS = new Set(['aliados', 'aliado']);
 function bootstrapCodeIa() {
-  if (!COMANDOS_COM_MODELO.has(cmd)) return;
+  if (!COMANDOS_COM_MODELO.has(cmd) && !(COMANDOS_ALIADOS.has(cmd) && aliadosUsaModelo())) return;
   if (loadConfig().provider !== 'code-ia' && !require('../src/solo').ativo()) return;
   try {
     require('../src/code-ia/install').ensureInstalled({ log: (m) => console.log(chalk.dim(m)) });
@@ -609,7 +748,14 @@ function bootstrapCodeIa() {
   }
 }
 
+// v0.41.0: run --json — desde o início (inclusive a instalação do code-ia e o desbloqueio), tudo que não é
+// o JSON final vai para o stderr; o JSON sai pelo stdout original, numa linha só.
+const MODO_JSON = cmd === 'run' && rest.includes('--json');
+const escreverStdout = process.stdout.write.bind(process.stdout);
+function escreverJson(obj) { escreverStdout(JSON.stringify(obj) + '\n'); }
+
 async function main() {
+  if (MODO_JSON) process.stdout.write = (...a) => process.stderr.write(...a);
   require('../src/solo').instalarGuarda();
   await garantirDesbloqueio();
   const solo = require('../src/solo');
@@ -647,23 +793,54 @@ async function main() {
     case 'chat':
       return chatLoop();
 
+    case 'confianca':
+    case 'trust': {
+      // v0.41.0: gemini-code confianca [status|confiar|negar|esquecer] [PASTA]
+      const trust = require('../src/trust');
+      const [sub = 'status', pasta = process.cwd()] = rest;
+      if (sub === 'status') {
+        const e = trust.estado(pasta);
+        const inst = trust.instrucoesDoProjeto(pasta);
+        console.log(`Pasta: ${path.resolve(pasta)}\nDecisão: ${e || '(nenhuma — o chat pergunta; o run carrega)'}\nInstruções do projeto: ${inst.length ? inst.map((a) => path.relative(pasta, a) || a).join(', ') : '(nenhuma)'}`);
+        return;
+      }
+      const decisao = { confiar: 'confiar', negar: 'negar', esquecer: null }[sub];
+      if (decisao === undefined) throw new Error('Uso: gemini-code confianca [status|confiar|negar|esquecer] [PASTA]');
+      const alvo = trust.definir(pasta, decisao);
+      if (decisao) { console.log(`${alvo}: ${decisao}.`); return; }
+      // A decisão de uma pasta-mãe continua valendo aqui: dizer qual, em vez de prometer que o chat vai perguntar.
+      const herdada = trust.origemDaDecisao(alvo);
+      console.log(herdada
+        ? `${alvo}: decisão própria apagada, mas continua valendo "${herdada.decisao}" de ${herdada.pasta} (para mudar: gemini-code confianca esquecer ${herdada.pasta}).`
+        : `${alvo}: decisão apagada (o chat vai perguntar de novo).`);
+      return;
+    }
+
     case 'run': {
       const parsed = agentProfiles.parseRunArgs(rest);
       const { profile, createCheckpoint, instruction } = parsed;
-      if (!instruction) throw new Error('Informe uma instrução. Uso: gemini-code run [--profile coder|explore|plan|review|test] [--checkpoint] "instrução"');
-      let checkpoint = null;
-      if (createCheckpoint) {
-        checkpoint = checkpoints.createCheckpoint({ root: process.cwd(), reason: 'before-agent-run', label: `Antes de gemini-code run (${profile.name})` });
-        console.log(chalk.dim(`Checkpoint preventivo criado: ${checkpoint.id} (${checkpoint.fileCount} arquivos).\n`));
+      if (!instruction) throw new Error('Informe uma instrução. Uso: gemini-code run [--profile coder|explore|plan|review|test] [--checkpoint] [--imagem ARQ] [--json] "instrução"');
+      try {
+        const imagens = parsed.imagens.map((arq) => require('../src/imagens').lerImagem(arq));
+        let checkpoint = null;
+        if (createCheckpoint) {
+          checkpoint = checkpoints.createCheckpoint({ root: process.cwd(), reason: 'before-agent-run', label: `Antes de gemini-code run (${profile.name})` });
+          console.log(chalk.dim(`Checkpoint preventivo criado: ${checkpoint.id} (${checkpoint.fileCount} arquivos).\n`));
+        }
+        const { text } = await runOnce(instruction, {
+          allowedTools: profile.tools ? [...profile.tools] : undefined,
+          extraSystemInstruction: profile.instructions,
+          imagens,
+        });
+        if (!parsed.json) console.log(paraTerminal(text));
+        const report = artifacts.createArtifact({ title: instruction.slice(0, 120), type: profile.artifactType, status: 'concluido', summary: text.slice(0, 1000), content: text, cwd: process.cwd(), metadata: { profile: profile.name, allowedTools: profile.tools ? [...profile.tools] : 'session-default', checkpointId: checkpoint && checkpoint.id } });
+        if (parsed.json) {
+          const u = usage.estado();
+          escreverJson({ ok: true, texto: text, perfil: profile.name, artefato: report.id, checkpoint: checkpoint && checkpoint.id, uso: { chamadasNuvem: u.chamadas, chamadasLocais: u.locais, tokensEntrada: u.prompt, tokensSaida: u.saida } });
+        } else console.log(chalk.dim(`\nArtefato salvo: ${report.id} (${report.fileName})`));
+      } finally {
+        toolsIndex.stopMcp();
       }
-      const { text } = await runOnce(instruction, {
-        allowedTools: profile.tools ? [...profile.tools] : undefined,
-        extraSystemInstruction: profile.instructions,
-      });
-      console.log(text);
-      const report = artifacts.createArtifact({ title: instruction.slice(0, 120), type: profile.artifactType, status: 'concluido', summary: text.slice(0, 1000), content: text, cwd: process.cwd(), metadata: { profile: profile.name, allowedTools: profile.tools ? [...profile.tools] : 'session-default', checkpointId: checkpoint && checkpoint.id } });
-      console.log(chalk.dim(`\nArtefato salvo: ${report.id} (${report.fileName})`));
-      toolsIndex.stopMcp();
       return;
     }
 
@@ -681,6 +858,20 @@ async function main() {
         return;
       }
       throw new Error('Uso: gemini-code profiles list | profiles show NOME');
+    }
+
+    case 'aliados':
+    case 'aliado': {
+      // v0.42.0: agentes pessoais (src/personalAgentCommands.js)
+      const r = await aliadosCommands.cli(rest, { mostrar: imprimirLinhas });
+      imprimirLinhas(r.linhas);
+      if (r.abrirChat) return chatLoop({ agente: r.abrirChat });
+      if (r.codigo) process.exitCode = r.codigo;
+      if (['run', 'perguntar', 'ask'].includes(String(rest[0] || '').toLowerCase())) toolsIndex.stopMcp();
+      // Uma pergunta feita no caminho (assistente, confirmação, s/n de ferramenta) deixa a readline segurando o
+      // terminal: sem fechar, o processo só saía com Ctrl+C.
+      require('../src/ui/prompt').closeShared();
+      return;
     }
 
     case 'mcp': {
@@ -771,13 +962,14 @@ async function main() {
         // Nunca imprime segredo em texto puro na tela, mesmo desbloqueado —
         // evita vazar em print/screenshot/log de terminal. Ver src/security.js.
         if (mostrar.apiKey) mostrar.apiKey = security.mascarar(mostrar.apiKey);
+        if (mostrar.openaiApiKey) mostrar.openaiApiKey = security.mascarar(mostrar.openaiApiKey);
         if (mostrar.apiKeyLocked) mostrar.apiKeyLocked = '(protegida por chave mestra — "gemini-code config unlock")';
         if (mostrar.apiKeyLockedGuest) mostrar.apiKeyLockedGuest = '(chave de convidado configurada, acesso limitado)';
         return console.log(JSON.stringify(mostrar, null, 2));
       }
       return console.log(
         'Uso: gemini-code config set-key SUA_CHAVE | set-model NOME | set-fast-model NOME | ' +
-        'set-fallback-model [NOME] | set-wait-quota SEGUNDOS | set-provider hybrid|llamacpp|gemini|ollama|code-ia | ' +
+        'set-fallback-model [NOME] | set-wait-quota SEGUNDOS | set-provider hybrid|llamacpp|gemini|openai|ollama|code-ia | set-openai-key CHAVE | set-openai-model NOME | set-openai-url URL | set-hybrid-cloud gemini|openai | ' +
         'set-llamacpp-url URL | set-llamacpp-model NOME | set-llamacpp-path CAMINHO | set-llamacpp-ctx TOKENS | set-llamacpp-autostart on|off | set-ollama-model NOME | ' +
         'set-ollama-url URL | set-passphrase | unlock | remove-passphrase | ' +
         'set-guest-passphrase | remove-guest-passphrase | show'
@@ -1053,7 +1245,55 @@ async function main() {
         require('../src/cowork/client').connect(ip, port, token);
         return;
       }
-      return console.log('Uso: gemini-code cowork server [porta] | gemini-code cowork connect <ip> --token X [--port P]');
+      if (sub === 'novo-token') {
+        // v0.43.0: o protocolo antigo mandava o token aberto na rede; depois de atualizar os dois lados, troque-o.
+        const token = require('../src/cowork/server').novoToken();
+        console.log(`Token novo do cowork (o anterior não vale mais): ${token}\nReinicie o "cowork server" e use este token no celular.`);
+        return;
+      }
+      return console.log('Uso: gemini-code cowork server [porta] | gemini-code cowork connect <ip> --token X [--port P] | gemini-code cowork novo-token');
+    }
+
+    case 'adb': {
+      // v0.43.0: expõe a ferramenta adb (src/tools/adbTools.js) no terminal — útil para parear a TV uma vez
+      // antes de o agente usá-la, e para quem prefere a linha de comando. As confirmações acontecem na própria
+      // ferramenta (igual ao chat): ações que mudam o aparelho pedem s/n, a menos que adbConfirm:false.
+      const adbTools = require('../src/tools/adbTools');
+      const ALIAS = {
+        devices: 'dispositivos', dispositivos: 'dispositivos', conectar: 'conectar', connect: 'conectar',
+        desconectar: 'desconectar', disconnect: 'desconectar', tcpip: 'tcpip', info: 'info', apps: 'apps',
+        estado: 'estado', tela: 'tela', print: 'tela', screenshot: 'tela', logcat: 'logcat', log: 'logcat',
+        abrir: 'abrir_app', abrir_app: 'abrir_app', fechar: 'fechar_app', fechar_app: 'fechar_app',
+        instalar: 'instalar', install: 'instalar', desinstalar: 'desinstalar', uninstall: 'desinstalar',
+        limpar: 'limpar', tecla: 'tecla', key: 'tecla', digitar: 'digitar', texto: 'digitar',
+        config: 'config', settings: 'config', reiniciar: 'reiniciar', reboot: 'reiniciar', shell: 'shell',
+      };
+      const bruto = rest.slice();
+      let alvoFlag;
+      for (const f of ['--alvo', '-s']) { const i = bruto.indexOf(f); if (i !== -1) { alvoFlag = bruto[i + 1]; bruto.splice(i, 2); } }
+      const [subBruto = 'dispositivos', ...resto] = bruto;
+      const acao = ALIAS[String(subBruto).toLowerCase()];
+      if (!acao) {
+        console.log(`Ação de adb desconhecida: "${subBruto}". Use: ${[...new Set(Object.values(ALIAS))].join(', ')}.`);
+        process.exitCode = 1;
+        return;
+      }
+      const args = { acao };
+      if (alvoFlag) args.alvo = alvoFlag;
+      if (acao === 'conectar' || acao === 'desconectar') { if (resto[0]) args.alvo = resto[0]; }
+      else if (acao === 'tcpip') { if (resto[0]) args.porta = Number(resto[0]); }
+      else if (acao === 'logcat') { if (resto[0]) args.linhas = Number(resto[0]); }
+      else if (acao === 'tela') { if (resto[0]) args.arquivo = resto[0]; }
+      else if (acao === 'instalar') args.arquivo = resto[0];
+      else if (acao === 'abrir_app' || acao === 'fechar_app' || acao === 'desinstalar' || acao === 'limpar') args.app = resto[0];
+      else if (acao === 'tecla') args.tecla = resto[0];
+      else if (acao === 'digitar') args.texto = resto.join(' ');
+      else if (acao === 'config') { args.espaco = resto[0]; args.chave = resto[1]; if (resto.length > 2) args.valor = resto.slice(2).join(' '); }
+      else if (acao === 'shell') args.comando = resto.join(' ');
+      try { console.log(await adbTools.execute('adb', args)); }
+      catch (err) { console.error(chalk.red('Erro: ' + err.message)); process.exitCode = 1; }
+      require('../src/ui/prompt').closeShared();
+      return;
     }
 
     case 'ciencia': {
@@ -1063,7 +1303,7 @@ async function main() {
         return;
       }
       const { text } = await runOnce(pergunta, { extraSystemInstruction: INSTRUCAO_MODO_CIENCIA });
-      console.log(text);
+      console.log(paraTerminal(text));
       toolsIndex.stopMcp();
       return;
     }
@@ -1370,7 +1610,7 @@ async function main() {
       const subagent = require('../src/subagent');
       if (!subagent.TIPOS[tipo]) return console.log(`Tipo desconhecido: "${tipo}". Use: ${Object.keys(subagent.TIPOS).join(', ')}.`);
       const out = await subagent.execute('delegate_task', { task: tarefa, type: tipo }, { allowedPai: security.restringirParaSessao(undefined) });
-      console.log('\n' + out);
+      console.log('\n' + paraTerminal(out));
       toolsIndex.stopMcp();
       return;
     }
@@ -1428,6 +1668,7 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error(chalk.red('Erro fatal: ' + err.message));
+  if (MODO_JSON) escreverJson({ ok: false, erro: err.message });
+  else console.error(chalk.red('Erro fatal: ' + err.message));
   process.exit(1);
 });

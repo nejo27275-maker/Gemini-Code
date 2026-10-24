@@ -3,9 +3,9 @@
 
 const fs = require('fs');
 const path = require('path');
-const { PROTECTED_PATHS } = require('../config');
 const { backupBeforeWrite } = require('./backup');
 const rewind = require('../rewind');
+const { isProtected, isSecret, foraDoProjetoParaConvidado, MSG_SEGREDO } = require('./protectedPaths');
 
 // Achado num teste (set/2026): o agente reescreveu sozinho o config.json
 // (model/fastModel/imageModel) sem o usuário pedir nem confirmar, voltando
@@ -20,36 +20,8 @@ const rewind = require('../rewind');
 // e os tokens. A comparação era por path.resolve, então um symlink de dentro
 // de um repositório clonado (ex.: docs/settings.json -> ~/.gemini-code/config.json)
 // passava direto; agora compara o caminho REAL (symlinks resolvidos, inclusive
-// quebrados, e pastas que são symlink) e o inode (hard link).
-const MAX_SYMLINKS = 40;
-
-function caminhoReal(p, saltos = 0) {
-  const abs = path.resolve(p);
-  try { return fs.realpathSync(abs); } catch { /* não existe ou é symlink quebrado */ }
-  const pai = path.dirname(abs);
-  if (pai === abs || saltos > MAX_SYMLINKS) return abs;
-  const paiReal = caminhoReal(pai, saltos + 1);
-  try {
-    // Symlink quebrado: gravar nele CRIA o alvo (ex.: um hooks.json que ainda não existe).
-    if (fs.lstatSync(abs).isSymbolicLink()) {
-      return caminhoReal(path.resolve(paiReal, fs.readlinkSync(abs)), saltos + 1);
-    }
-  } catch { /* não existe: segue pelo pai */ }
-  return path.join(paiReal, path.basename(abs));
-}
-
-function mesmoInode(a, b) {
-  try {
-    const sa = fs.statSync(a);
-    const sb = fs.statSync(b);
-    return sa.ino !== 0 && sa.dev === sb.dev && sa.ino === sb.ino;
-  } catch { return false; }
-}
-
-function isProtected(p) {
-  const real = caminhoReal(p);
-  return PROTECTED_PATHS.some((prot) => real === caminhoReal(prot) || mesmoInode(real, prot));
-}
+// quebrados, e pastas que são symlink) e o inode (hard link) — src/tools/protectedPaths.js.
+// v0.41.0: read_file também recusa os segredos (SECRET_PATHS).
 
 // Achado num teste (set/2026, itens 1 e 2 da revisão): read_file não tinha
 // limite de tamanho nem tratamento de erro — um arquivo binário grande (ex.:
@@ -149,6 +121,9 @@ async function execute(name, args) {
     case 'read_file': {
       // v0.3.8: path ausente fazia path.resolve lançar um TypeError cru.
       if (typeof args.path !== 'string' || !args.path) return 'Erro: read_file precisa de "path".';
+      if (isSecret(args.path)) return MSG_SEGREDO;
+      const foraR = foraDoProjetoParaConvidado(args.path);
+      if (foraR) return foraR;
       const p = path.resolve(args.path);
       if (!fs.existsSync(p)) return `Erro: arquivo não existe: ${args.path}`;
       const stat = fs.statSync(p);
@@ -174,17 +149,18 @@ async function execute(name, args) {
       }
       return text;
     }
-    case 'write_file':
+    case 'write_file': {
       if (typeof args.path !== 'string' || !args.path) return 'Erro: write_file precisa de "path".';
       // Antes, um `content` ausente gravava a string "undefined" no arquivo.
       if (typeof args.content !== 'string') return 'Erro: write_file precisa de "content" (texto). Nada foi gravado.';
       if (isProtected(args.path)) {
         return (
           'Bloqueado: este arquivo (ou o destino deste link) é configuração protegida do próprio ' +
-          'gemini-code — config.json, mcp.json, hooks.json ou um token de acesso — e não pode ' +
-          'ser sobrescrito por write_file. Para mudar model/fastModel/imageModel/etc, ' +
-          'peça ao usuário para rodar "gemini-code config set-model NOME" (ou o ' +
-          'subcomando equivalente); hooks e MCP só o próprio usuário edita.'
+          'gemini-code — config.json, mcp.json, hooks.json, um token de acesso ou um agente pessoal ' +
+          '(~/.gemini-code/aliados) — e não pode ser sobrescrito por write_file. Para mudar ' +
+          'model/fastModel/imageModel/etc, peça ao usuário para rodar "gemini-code config set-model NOME" ' +
+          '(ou o subcomando equivalente); hooks, MCP e agentes pessoais (gemini-code aliados editar) só o ' +
+          'próprio usuário edita. Para guardar algo na memória de um agente pessoal, use memory_save.'
         );
       }
       fs.mkdirSync(path.dirname(path.resolve(args.path)), { recursive: true });
@@ -194,10 +170,11 @@ async function execute(name, args) {
       return backupW
         ? `Arquivo salvo: ${args.path} (backup do conteúdo anterior em ${backupW})`
         : `Arquivo salvo: ${args.path}`;
+    }
     case 'edit_file': {
       if (typeof args.path !== 'string' || !args.path) return 'Erro: edit_file precisa de "path".';
       if (isProtected(args.path)) {
-        return 'Bloqueado: este arquivo (ou o destino deste link) é configuração protegida do próprio gemini-code (config, MCP, hooks ou token) e não pode ser editado diretamente.';
+        return 'Bloqueado: este arquivo (ou o destino deste link) é configuração protegida do próprio gemini-code (config, MCP, hooks, token ou agente pessoal) e não pode ser editado diretamente.';
       }
       if (typeof args.old_text !== 'string' || args.old_text === '') {
         return 'Erro: old_text não pode ser vazio — informe o trecho exato a substituir.';
@@ -226,6 +203,8 @@ async function execute(name, args) {
     }
     case 'list_dir': {
       const dir = args.path || '.';
+      const foraL = foraDoProjetoParaConvidado(dir);
+      if (foraL) return foraL;
       if (!fs.existsSync(dir)) return `Erro: diretório não existe: ${dir}`;
       if (!fs.statSync(dir).isDirectory()) return `Erro: "${dir}" não é um diretório.`;
       const entries = fs.readdirSync(dir, { withFileTypes: true });

@@ -136,11 +136,12 @@ test('para no limite de passos se o modelo só chamar ferramentas sem nunca fech
 
 test('passa allowedTools adiante pro execute (ferramentas de uma persona)', async () => {
   let recebido;
-  const chatWithTools = async () => respostaTexto('ok');
+  // 1ª resposta pede uma ferramenta (para o execute ser chamado de verdade), a 2ª fecha com texto.
+  let passo = 0;
+  const chamada = { name: 'read_file', args: { path: 'x.txt' }, id: 'c1' };
+  const chatWithTools = async () => (passo++ === 0 ? respostaComChamada([chamada], [{ functionCall: chamada }]) : respostaTexto('ok'));
   const execute = async (name, args, allowedTools) => { recebido = allowedTools; return 'ok'; };
-  // Esse teste não chega a chamar execute (resposta já vem em texto), então
-  // verificamos que getAllDeclarations recebeu a lista, que é o que decide
-  // quais ferramentas o modelo pode pedir.
+  // A lista chega nos dois pontos: getAllDeclarations (o que o modelo pode pedir) e execute (o que pode rodar).
   let allowedRecebidoEmDeclarations;
   const getAllDeclarations = async (allowedTools) => {
     allowedRecebidoEmDeclarations = allowedTools;
@@ -153,6 +154,7 @@ test('passa allowedTools adiante pro execute (ferramentas de uma persona)', asyn
   });
 
   assert.deepEqual(allowedRecebidoEmDeclarations, ['read_file']);
+  assert.deepEqual(recebido, ['read_file']);
 });
 
 test('extraSystemInstruction chega até a chamada ao Gemini', async () => {
@@ -196,7 +198,8 @@ test('buildSystemInstruction inclui a instrução extra só quando ela é passad
   assert.ok(semExtra.includes('gemini-code'));
   assert.ok(!semExtra.includes('regra especial da persona'));
   assert.ok(comExtra.includes('regra especial da persona'));
-  assert.ok(comExtra.startsWith(semExtra));
+  // v0.42.0: o extra entra antes do conhecimento fixo (se houver); fora ele, o texto é o mesmo.
+  assert.equal(comExtra.replace('\n\nregra especial da persona', ''), semExtra);
 });
 
 test('podarHistorico não mexe em conversas curtas', () => {

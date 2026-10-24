@@ -7,6 +7,18 @@
 
 const { spawn } = require('child_process');
 const { loadMcpServers } = require('../config');
+const { paraExibir } = require('../ui/textoSeguro');
+
+// v0.41.0: o servidor MCP (muitas vezes de terceiros) herdava o process.env inteiro, inclusive
+// as chaves do PRÓPRIO gemini-code. Estas saem; o que o servidor precisar vai no "env" dele no
+// mcp.json. Outras variáveis do seu shell (ex.: GITHUB_TOKEN) continuam herdadas de propósito.
+const SEGREDOS_DO_GEMINI_CODE = ['GEMINI_API_KEY', 'GOOGLE_API_KEY', 'GEMINI_CODE_OPENAI_KEY', 'ROUTINE_API_TOKEN'];
+
+function ambienteSemSegredosDoGeminiCode(env = process.env) {
+  const limpo = { ...env };
+  for (const nome of SEGREDOS_DO_GEMINI_CODE) delete limpo[nome];
+  return limpo;
+}
 
 let VERSAO = '0.0.0';
 try { VERSAO = require('../../package.json').version; } catch { /* sem package.json: segue */ }
@@ -47,7 +59,7 @@ class McpConnection {
 
   start() {
     this.proc = spawn(this.cfg.command, this.cfg.args || [], {
-      env: { ...process.env, ...(this.cfg.env || {}) },
+      env: { ...ambienteSemSegredosDoGeminiCode(), ...(this.cfg.env || {}) },
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     this.proc.stdout.on('data', (chunk) => this._onData(chunk));
@@ -141,6 +153,147 @@ class McpConnection {
   }
 }
 
+// ---------------------------------------------------------------------------
+// v0.41.0 — MCP remoto (transporte "Streamable HTTP" da especificação MCP)
+// Antes só havia stdio (servidor local); Claude Code, Codex e Antigravity falam com servidores
+// remotos. No mcp.json: { "url": "https://.../mcp", "headers": { "Authorization": "Bearer ${MEU_TOKEN}" } }
+// ${VAR} vem do ambiente, para o token não ficar escrito no arquivo. Cada pedido é um POST com
+// JSON-RPC; a resposta vem em JSON ou em SSE. OAuth não é suportado (use token no cabeçalho).
+// ---------------------------------------------------------------------------
+
+const PROTOCOLO_HTTP = '2025-06-18';
+
+function expandirVariaveis(valor, env = process.env) {
+  return String(valor).replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (_, nome) => (env[nome] === undefined ? '' : env[nome]));
+}
+
+/** Lê um corpo SSE até achar a resposta JSON-RPC com o `id` pedido. */
+async function respostaDoSse(response, id) {
+  const reader = response.body.getReader();
+  const dec = new TextDecoder();
+  let buf = '';
+  let dados = [];
+  const evento = () => {
+    if (!dados.length) return null;
+    const texto = dados.join('\n');
+    dados = [];
+    try { const msg = JSON.parse(texto); return msg && msg.id === id ? msg : null; } catch { return null; }
+  };
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    const linhas = buf.split(/\r?\n/);
+    buf = linhas.pop();
+    for (const linha of linhas) {
+      if (linha === '') { const msg = evento(); if (msg) { reader.cancel().catch(() => {}); return msg; } } else if (linha.startsWith('data:')) dados.push(linha.slice(5).replace(/^ /, ''));
+    }
+  }
+  if (buf.startsWith('data:')) dados.push(buf.slice(5).replace(/^ /, ''));
+  return evento();
+}
+
+class McpHttpConnection {
+  constructor(name, cfg, { fetchFn = (...a) => fetch(...a) } = {}) {
+    this.name = name;
+    this.cfg = cfg;
+    this.fetchFn = fetchFn;
+    this.nextId = 1;
+    this.sessao = null;
+    this.protocolo = null;
+    this.tools = [];
+  }
+
+  start() {
+    let u;
+    try { u = new URL(this.cfg.url); } catch { throw new Error(`URL inválida no servidor MCP "${this.name}": ${this.cfg.url}`); }
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') throw new Error(`Servidor MCP "${this.name}": só http(s) é aceito.`);
+  }
+
+  _cabecalhos() {
+    const h = { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' };
+    for (const [k, v] of Object.entries(this.cfg.headers || {})) h[k] = expandirVariaveis(v);
+    if (this.sessao) h['Mcp-Session-Id'] = this.sessao;
+    if (this.protocolo) h['MCP-Protocol-Version'] = this.protocolo;
+    return h;
+  }
+
+  // O prazo vale até o CORPO terminar de chegar (JSON ou SSE): antes era limpo quando chegavam os
+  // cabeçalhos, e um servidor que mandasse "200" e parasse travava o agente para sempre.
+  async _comPrazo(timeoutMs, fn) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      return await fn(ctrl);
+    } catch (err) {
+      if (ctrl.signal.aborted) throw new Error(`Tempo esgotado (${timeoutMs}ms) esperando resposta de "${this.name}".`, { cause: err });
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async _post(corpo, ctrl) {
+    try {
+      // redirect: 'manual' — seguir um 307/308 levaria os cabeçalhos do mcp.json (tokens) para outro endereço.
+      const res = await this.fetchFn(this.cfg.url, { method: 'POST', headers: this._cabecalhos(), body: JSON.stringify(corpo), signal: ctrl.signal, redirect: 'manual' });
+      const sessao = res.headers && res.headers.get && res.headers.get('mcp-session-id');
+      if (sessao) this.sessao = sessao;
+      return res;
+    } catch (err) {
+      if (ctrl.signal.aborted) throw err;
+      throw new Error(`Não consegui falar com o servidor MCP "${this.name}" (${err.cause?.code || err.message}).`, { cause: err });
+    }
+  }
+
+  _send(method, params, timeoutMs = 20000) {
+    const id = this.nextId++;
+    return this._comPrazo(timeoutMs, async (ctrl) => {
+      const res = await this._post({ jsonrpc: '2.0', id, method, params }, ctrl);
+      if (res.status >= 300 && res.status < 400) {
+        throw new Error(`Servidor MCP "${this.name}" redirecionou (HTTP ${res.status}) para ${res.headers.get('location') || 'outro endereço'} em "${method}". O gemini-code não segue redirecionamento (os cabeçalhos com token iriam junto): coloque a URL final no mcp.json.`);
+      }
+      if (!res.ok) {
+        const detalhe = await res.text().catch(() => '');
+        throw new Error(`Servidor MCP "${this.name}" respondeu HTTP ${res.status} em "${method}"${res.status === 401 || res.status === 403 ? ' (confira o token em "headers" no mcp.json)' : ''}: ${detalhe.slice(0, 200)}`);
+      }
+      const tipo = (res.headers.get('content-type') || '').toLowerCase();
+      const msg = tipo.includes('text/event-stream') ? await respostaDoSse(res, id) : await res.json().catch((err) => { if (ctrl.signal.aborted) throw err; return null; });
+      if (!msg) throw new Error(`Servidor MCP "${this.name}" não devolveu resposta para "${method}".`);
+      if (msg.error) throw new Error(msg.error.message || JSON.stringify(msg.error));
+      return msg;
+    });
+  }
+
+  async _notify(method, params) {
+    try { await this._comPrazo(10000, (ctrl) => this._post({ jsonrpc: '2.0', method, ...(params ? { params } : {}) }, ctrl)); } catch { /* notificação é best-effort */ }
+  }
+
+  async initialize() {
+    const r = await this._send('initialize', { protocolVersion: PROTOCOLO_HTTP, capabilities: {}, clientInfo: { name: 'gemini-code', version: VERSAO } });
+    this.protocolo = (r.result && r.result.protocolVersion) || PROTOCOLO_HTTP;
+    await this._notify('notifications/initialized');
+    const listed = await this._send('tools/list', {});
+    this.tools = (listed && listed.result && listed.result.tools) || [];
+    return this.tools;
+  }
+
+  async callTool(toolName, args) {
+    const res = await this._send('tools/call', { name: toolName, arguments: args }, 120000);
+    return res && res.result;
+  }
+
+  stop() {
+    // Encerra a sessão no servidor (opcional na especificação); não espera a resposta.
+    if (!this.sessao) return;
+    const h = this._cabecalhos();
+    this.sessao = null;
+    Promise.resolve().then(() => this.fetchFn(this.cfg.url, { method: 'DELETE', headers: h, redirect: 'manual' })).catch(() => {});
+  }
+}
+
+const novaConexao = (name, cfg) => (cfg && cfg.url ? new McpHttpConnection(name, cfg) : new McpConnection(name, cfg));
+
 let connections = null;
 
 // v0.34.0: servidor com "confirmar": ["execute", ...] no mcp.json pede s/n antes de cada ferramenta cujo nome
@@ -161,7 +314,7 @@ async function loadAllMcpTools() {
   if (connections) return connections;
   const servers = Object.entries(lerServidores()).filter(([, cfg]) => !(cfg && cfg.desativado === true));
   const resultados = await Promise.all(servers.map(async ([name, cfg]) => {
-    const conn = new McpConnection(name, cfg);
+    const conn = novaConexao(name, cfg);
     try {
       conn.start();
       await conn.initialize();
@@ -207,7 +360,7 @@ async function execute(fullName, args) {
   const toolName = fullName.slice(`mcp__${serverName}__`.length);
   if (precisaConfirmar(conns[serverName].cfg, toolName)) {
     const resumo = JSON.stringify(args || {}).slice(0, 600);
-    const resp = String(await perguntar(`\n[gemini-code] O servidor "${serverName}" vai executar "${toolName}":\n  ${resumo}\nConfirmar? (s/n) `) || '').trim().toLowerCase();
+    const resp = String(await perguntar(`\n[gemini-code] O servidor "${paraExibir(serverName)}" vai executar "${paraExibir(toolName)}":\n  ${paraExibir(resumo)}\nConfirmar? (s/n) `) || '').trim().toLowerCase();
     if (resp !== 's' && resp !== 'y') return 'Chamada cancelada pelo usuário.';
   }
   const res = await conns[serverName].callTool(toolName, args);
@@ -222,4 +375,7 @@ function stopAll() {
 // Só para testes: injeta conexões falsas e a função de pergunta.
 function _testar({ conexoes, ask, servidores } = {}) { if (conexoes !== undefined) connections = conexoes; if (ask) perguntar = ask; if (servidores) lerServidores = servidores; }
 
-module.exports = { declarationsForGemini, execute, stopAll, McpConnection, formatarResultado, precisaConfirmar, _testar };
+module.exports = {
+  declarationsForGemini, execute, stopAll, McpConnection, McpHttpConnection, novaConexao, expandirVariaveis, formatarResultado,
+  precisaConfirmar, ambienteSemSegredosDoGeminiCode, SEGREDOS_DO_GEMINI_CODE, _testar,
+};

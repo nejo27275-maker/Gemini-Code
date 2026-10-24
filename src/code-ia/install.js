@@ -29,7 +29,7 @@ function learnDir(home = HOME_DIR) { return path.join(codeIaDir(home), 'learn');
 
 function listar(dir, recursivo = false, { codigo = false } = {}) {
   const out = [];
-  let ents = [];
+  let ents;
   try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch { return out; }
   for (const e of ents) {
     const p = path.join(dir, e.name);

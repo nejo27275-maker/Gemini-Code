@@ -1,10 +1,8 @@
 // tests/cowork-server.test.js
-// A parte arriscada do cowork server não é o WebSocket em si (isso é o
-// pacote "ws" fazendo o trabalho pesado) — é a lógica em volta: comparação
-// de token à prova de timing attack, exigir autenticação antes de qualquer
-// tarefa, e validar o campo "prompt". `handleMessage` foi extraído
-// justamente pra testar essa lógica sem precisar abrir uma porta de rede de
-// verdade (ver comentário em src/cowork/server.js).
+// handleMessage trata as mensagens JÁ DECIFRADAS de um cliente autenticado: exigir autenticação antes de
+// qualquer tarefa, validar o campo "prompt" e manter o histórico. Foi extraído para ser testado sem uma
+// porta de rede de verdade (ver comentário em src/cowork/server.js). O aperto de mão cifrado e as
+// proteções da conexão (v0.43.0) estão em tests/coworkCifrado.test.js.
 'use strict';
 
 const test = require('node:test');
@@ -20,7 +18,6 @@ process.env.HOME = homeDir;
 process.env.USERPROFILE = homeDir;
 
 const {
-  tokensBatem,
   localIps,
   getOrCreateToken,
   handleMessage,
@@ -30,19 +27,6 @@ function coletorDeEnvios() {
   const enviados = [];
   return { enviados, send: (obj) => enviados.push(obj) };
 }
-
-test('tokensBatem aceita o token certo e rejeita qualquer outro', () => {
-  assert.equal(tokensBatem('abc123', 'abc123'), true);
-  assert.equal(tokensBatem('abc124', 'abc123'), false);
-  assert.equal(tokensBatem('', 'abc123'), false);
-});
-
-test('tokensBatem não quebra com entrada que não é string', () => {
-  assert.equal(tokensBatem(undefined, 'abc123'), false);
-  assert.equal(tokensBatem(42, 'abc123'), false);
-  assert.equal(tokensBatem(null, 'abc123'), false);
-  assert.equal(tokensBatem({}, 'abc123'), false);
-});
 
 test('localIps devolve uma lista (vazia ou não) sem quebrar', () => {
   const ips = localIps();
@@ -63,34 +47,18 @@ test('handleMessage: JSON inválido responde com erro, sem derrubar a conexão',
   assert.deepEqual(enviados, [{ type: 'error', error: 'JSON inválido' }]);
 });
 
-test('handleMessage: auth com token certo autentica', async () => {
-  const { enviados, send } = coletorDeEnvios();
-  const connState = { authed: false, history: [] };
-  await handleMessage(JSON.stringify({ type: 'auth', token: 'tok-certo' }), connState, { token: 'tok-certo', send });
-  assert.deepEqual(enviados, [{ type: 'auth_result', ok: true }]);
-  assert.equal(connState.authed, true);
-});
-
-test('handleMessage: auth com token errado não autentica', async () => {
-  const { enviados, send } = coletorDeEnvios();
-  const connState = { authed: false, history: [] };
-  await handleMessage(JSON.stringify({ type: 'auth', token: 'chute' }), connState, { token: 'tok-certo', send });
-  assert.deepEqual(enviados, [{ type: 'auth_result', ok: false }]);
-  assert.equal(connState.authed, false);
-});
-
 test('handleMessage: rejeita "task" antes de autenticar', async () => {
   const { enviados, send } = coletorDeEnvios();
   const connState = { authed: false, history: [] };
   await handleMessage(JSON.stringify({ type: 'task', prompt: 'faça algo' }), connState, { token: 'tok', send });
-  assert.deepEqual(enviados, [{ type: 'error', error: 'Não autenticado. Envie {type:"auth", token}.' }]);
+  assert.deepEqual(enviados, [{ type: 'error', error: 'Não autenticado: conclua o aperto de mão cifrado do cowork.' }]);
 });
 
 test('handleMessage: rejeita "reset" antes de autenticar', async () => {
   const { enviados, send } = coletorDeEnvios();
   const connState = { authed: false, history: ['algo'] };
   await handleMessage(JSON.stringify({ type: 'reset' }), connState, { token: 'tok', send });
-  assert.deepEqual(enviados, [{ type: 'error', error: 'Não autenticado. Envie {type:"auth", token}.' }]);
+  assert.deepEqual(enviados, [{ type: 'error', error: 'Não autenticado: conclua o aperto de mão cifrado do cowork.' }]);
   assert.deepEqual(connState.history, ['algo']);
 });
 

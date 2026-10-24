@@ -58,6 +58,10 @@ function checarLimite(limite) {
   if (!avisou && t >= l * 0.8) { avisou = true; console.error(`[custo] ${fmt(t)} de ${fmt(l)} tokens da sessão (80%+).`); }
 }
 
+// v0.41.0: depois de compactar, o tamanho da última chamada (a do resumo, no /compact ia) não vale mais para a
+// conversa: sem isto o auto-compact rodava de novo logo no turno seguinte e apagava o resumo recém-feito.
+function contextoCompactado() { est.ultimoPrompt = 0; }
+
 /** O contexto da última chamada passou do limiar? (0 = desligado) */
 function contextoGrande(limiar, { ctxLocal = 0 } = {}) {
   let l = n(limiar);
@@ -67,4 +71,4 @@ function contextoGrande(limiar, { ctxLocal = 0 } = {}) {
   return est.ultimoPrompt >= l;
 }
 
-module.exports = { registrar, total, estado, zerar, resumo, checarLimite, contextoGrande };
+module.exports = { registrar, total, estado, zerar, resumo, checarLimite, contextoGrande, contextoCompactado };

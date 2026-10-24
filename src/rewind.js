@@ -64,7 +64,8 @@ function finalizarTurno() {
     for (const a of t.arquivos) a.depois = hashDe(a.caminho); // null = arquivo não existe depois
     const pasta = t._pasta || path.join(baseDir, t.id);
     fs.mkdirSync(pasta, { recursive: true });
-    const { _pasta, ...dados } = t;
+    const dados = { ...t };
+    delete dados._pasta;
     fs.writeFileSync(path.join(pasta, 'turno.json'), JSON.stringify(dados, null, 2));
     podar();
     return { id: t.id, arquivos: t.arquivos.length };
@@ -72,7 +73,7 @@ function finalizarTurno() {
 }
 
 function lerTurnos() {
-  let nomes = [];
+  let nomes;
   try { nomes = fs.readdirSync(baseDir).filter((n) => n.startsWith('t_')); } catch { return []; }
   const lista = [];
   for (const n of nomes.sort()) {

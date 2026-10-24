@@ -62,6 +62,13 @@ const declarations = [
 async function execute(name, args) {
   if (name !== 'read_skill') throw new Error(`Ferramenta de skill desconhecida: ${name}`);
   if (typeof args.path !== 'string' || !args.path) return 'Erro: read_skill precisa de "path" (caminho do SKILL.md).';
+  // read_skill lê qualquer caminho: sem isto, era outro jeito de ler os segredos.
+  const { isSecret, foraDoProjetoParaConvidado, MSG_SEGREDO } = require('../tools/protectedPaths');
+  if (isSecret(args.path)) return MSG_SEGREDO;
+  // Convidado: só skills instaladas (~/.gemini-code/skills) ou do projeto.
+  const { SKILLS_DIR } = require('../config');
+  const fora = foraDoProjetoParaConvidado(args.path) && foraDoProjetoParaConvidado(args.path, SKILLS_DIR);
+  if (fora) return fora;
   if (!fs.existsSync(args.path)) return `Erro: skill não encontrada: ${args.path}`;
   return readSkill(args.path);
 }

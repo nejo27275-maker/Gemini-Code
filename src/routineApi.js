@@ -5,9 +5,14 @@ const http = require('http');
 const fs = require('fs');
 const crypto = require('crypto');
 const { HOME_DIR, ROUTINE_API_TOKEN_PATH } = require('./config');
+const { criarLimitador } = require('./limitador');
 
 const TOKEN_PATH = ROUTINE_API_TOKEN_PATH;
 const MAX_BODY_BYTES = 64 * 1024;
+// v0.43.0: contra sobrecarga. Cabeçalhos em até 10 s e a requisição inteira em até 30 s (conexões lentas de
+// propósito, "slowloris", não prendem o servidor); no máximo 128 conexões; depois de 10 tokens errados em
+// 15 min o IP recebe 429 sem nem comparar o token.
+const LIMITES_HTTP = Object.freeze({ headersTimeout: 10000, requestTimeout: 30000, keepAliveTimeout: 5000, maxHeadersCount: 64, maxConnections: 128 });
 
 function getOrCreateToken() {
   if (process.env.ROUTINE_API_TOKEN) {
@@ -63,9 +68,11 @@ async function readJson(req) {
   catch { throw Object.assign(new Error('JSON inválido.'), { statusCode: 400 }); }
 }
 
-function createRoutineApiServer({ store, runner, token = getOrCreateToken().token, rateLimit = 120, rateWindowMs = 60000 } = {}) {
+function createRoutineApiServer({ store, runner, token = getOrCreateToken().token, rateLimit = 120, rateWindowMs = 60000, maxFalhasAuth = 10, janelaFalhasMs = 15 * 60 * 1000 } = {}) {
   if (!store || !runner) throw new Error('A API precisa do armazenamento e do executor de rotinas.');
-  const requestCounts = new Map();
+  // v0.43.0: antes um Map sem teto (um registro por IP, para sempre); agora com janela e memória limitada.
+  const porIp = criarLimitador({ max: rateLimit, janelaMs: rateWindowMs });
+  const falhasAuth = criarLimitador({ max: maxFalhasAuth, janelaMs: janelaFalhasMs });
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
     if (req.method === 'GET' && url.pathname === '/health') {
@@ -74,16 +81,14 @@ function createRoutineApiServer({ store, runner, token = getOrCreateToken().toke
     if (!url.pathname.startsWith('/api/')) return sendJson(res, 404, { error: 'not_found' });
 
     const address = req.socket.remoteAddress || 'unknown';
-    const now = Date.now();
-    const bucket = requestCounts.get(address);
-    if (!bucket || now - bucket.start >= rateWindowMs) requestCounts.set(address, { start: now, count: 1 });
-    else {
-      bucket.count += 1;
-      if (bucket.count > rateLimit) return sendJson(res, 429, { error: 'rate_limit', message: 'Muitas requisições; tente novamente em instantes.' });
+    if (!porIp.registrar(address)) return sendJson(res, 429, { error: 'rate_limit', message: 'Muitas requisições; tente novamente em instantes.' });
+    if (falhasAuth.bloqueado(address)) {
+      return sendJson(res, 429, { error: 'auth_blocked', message: `Muitas tentativas com token errado; tente de novo em ${Math.ceil(falhasAuth.restanteMs(address) / 60000)} min.` });
     }
 
     const auth = req.headers.authorization || '';
     if (!auth.startsWith('Bearer ') || !safeEqual(auth.slice(7), token)) {
+      falhasAuth.registrar(address);
       return sendJson(res, 401, { error: 'unauthorized', message: 'Envie Authorization: Bearer <token>.' });
     }
 
@@ -122,6 +127,7 @@ function createRoutineApiServer({ store, runner, token = getOrCreateToken().toke
       return sendJson(res, status, { error: status === 400 ? 'invalid_request' : 'internal_error', message: err.message });
     }
   });
+  Object.assign(server, LIMITES_HTTP);
   return server;
 }
 
@@ -136,4 +142,4 @@ function startRoutineApi({ store, runner, host = process.env.ROUTINE_API_HOST ||
   return { server, tokenInfo };
 }
 
-module.exports = { TOKEN_PATH, getOrCreateToken, safeEqual, readJson, createRoutineApiServer, startRoutineApi };
+module.exports = { TOKEN_PATH, LIMITES_HTTP, getOrCreateToken, safeEqual, readJson, createRoutineApiServer, startRoutineApi };

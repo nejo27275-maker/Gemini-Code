@@ -46,6 +46,13 @@ Cada arquivo expõe um conjunto de "tools" que o modelo pode chamar durante
 o loop do agente:
 
 - `fileTools.js` — ler, escrever e editar arquivos.
+- `adbTools.js` (v0.43.0) — controla aparelhos Android do usuário (TV, celular) por adb: execFile
+  com lista de argumentos nesta máquina e, para o shell do aparelho (que recebe os argumentos do
+  `adb shell` juntados sem escape), cada argumento entre aspas simples (`noAparelho`). Ações que
+  mudam o aparelho pedem confirmação; as sensíveis (e o shell livre) sempre. Comando `gemini-code adb`
+  e guia `docs/TV_ADB.md`.
+- `../ui/textoSeguro.js` (v0.43.2) — `paraExibir`: todo texto de modelo/arquivo/servidor mostrado numa
+  pergunta de confirmação passa por aqui (controles e direção bidirecional ficam visíveis).
 - `shellTools.js` — rodar comandos de shell, com confirmação do usuário via
   a readline compartilhada (`src/ui/prompt.js`).
 - `searchTools.js` — busca (web e/ou local, conforme configurado).
@@ -67,7 +74,14 @@ o loop do agente:
 - **`src/live/live.js`** — modo "ao vivo" (voz contínua, ver README).
 - **`src/cowork/{client,server}.js`** — o par cliente/servidor do "Gemini
   Cowork": o celular manda instruções pro PC (mesma rede local) e o PC
-  roda o agente com autenticação por token.
+  roda o agente. **`src/cowork/canalSeguro.js`** (v0.43.0) é o protocolo 2:
+  X25519 efêmero + provas HMAC do token nos dois sentidos + AES-256-GCM com
+  contador por direção (o token nunca passa pela rede). `criarConexao` (servidor)
+  e `criarConexaoCliente` não dependem do WebSocket; `startServer`/`connect` só
+  ligam os eventos do `ws` a elas. `admitir` decide antes do aperto de mão
+  (IP bloqueado por tokens errados, teto de conexões).
+- **`src/limitador.js`** (v0.43.0) — contador por chave numa janela de tempo,
+  com memória limitada; usado pelo cowork e pela API de rotinas.
 
 ## Skills e automações
 
@@ -82,6 +96,25 @@ o loop do agente:
     conversa entre passos.
   - **Persona** (`agents/exemplos/`): configuração de um agente (modelo,
     instrução extra, ferramentas permitidas) que abre um chat interativo.
+    `gemini-code aliados importar` transforma uma persona em agente pessoal.
+
+## Agentes pessoais (v0.42.0)
+
+- **`src/personalAgents.js`** — armazenamento em `~/.gemini-code/aliados/<nome>/` (`agente.json`,
+  `conhecimento/`, `memoria.json`, `sessoes.json`), validação da definição, base de conhecimento
+  (trechos de ~1200 caracteres indexados com BM25 e o tokenizador de `src/code-ia/tokenizer.js`,
+  com cache por assinatura dos arquivos), memória e `prepararTurno`, que monta as opções de
+  `runOnce` de cada mensagem (instrução com papel + memória + trechos relevantes, allowlist com as
+  ferramentas do agente, modelo) e o contexto para `comAgente` (um `AsyncLocalStorage`).
+- **`src/tools/personalTools.js`** — `memory_save`, `memory_forget` e `knowledge_search`. As
+  declarações dependem do contexto: fora de uma conversa com agente pessoal a lista é vazia.
+- **`src/personalAgentCommands.js`** — `gemini-code aliados ...` (`cli`) e `/aliados`, `/aliado`,
+  `/memoria`, `@nome` no chat (`chat`, `mencao`), devolvendo linhas `{ nivel, texto }` como
+  `src/workflowCommands.js`. O `chatLoop` do `bin/` recebe `{ agente }` para o `aliados chat`, que usa
+  as sessões do próprio agente em vez das da pasta.
+- A pasta `aliados/` está em `PROTECTED_DIRS` (`src/config.js`): `isProtected` em
+  `src/tools/protectedPaths.js` recusa qualquer caminho real dentro dela e hard links para arquivos
+  de lá.
 
 ## Testes
 
@@ -96,7 +129,8 @@ extra). Cobertura atual:
 | `src/ui/prompt.js` | `prompt.test.js` |
 | `src/voice/voice.js` | `voice.test.js` |
 | `src/live/live.js` (`pareceComandoDeSaida`, `dividirEmFrases`, `runLive`) | `live.test.js` |
-| `src/cowork/server.js` (`tokensBatem`, `localIps`, `getOrCreateToken`, `handleMessage`) | `cowork-server.test.js` |
+| `src/cowork/server.js` (`localIps`, `getOrCreateToken`, `handleMessage`) | `cowork-server.test.js` |
+| canal cifrado do cowork, ataques simulados (homem no meio, PC falso, repetição, adulteração, token errado, inundação, prazo), `src/limitador.js` e limites da API de rotinas (v0.43.0) | `coworkCifrado.test.js` |
 | `src/cowork/client.js` (`handleServerMessage`) | `cowork-client.test.js` |
 | `src/routines.js` (armazenamento, cron, estados e recuperação) | `routines.test.js` |
 | `src/routineRunner.js` (HTTP, retentativas, concorrência e destinos privados) | `routineRunner.test.js` |
@@ -109,6 +143,26 @@ extra). Cobertura atual:
 | ferramentas de arquivo/edição | `editFile.test.js`, `fileToolsAndSearch.test.js`, `touchesProtectedFile.test.js` |
 | Markdown → HTML (slides) | `mdToHtml.test.js` |
 | timeout de MCP | `mcpTimeout.test.js` |
+| allowlist vazia = nenhuma ferramenta (v0.41.0) | `allowlistVazia.test.js` |
+| `SECRET_PATHS`: o modelo não lê API key nem tokens | `leituraDeSegredos.test.js` |
+| convidado só lê dentro do projeto | `convidadoNoProjeto.test.js` |
+| `src/providers/openai.js` (servidor local imitando a API, streaming, loop do agente) | `openaiProvider.test.js` |
+| `src/compact.js` (`enxugarResultadosAntigos`, `/compact ia`) | `contextoLongo.test.js` |
+| `src/permissions.js` (regras negar/permitir) | `permissoes.test.js` |
+| chaves fora do env do MCP, do `actions.log` e da URL | `vazamentoSegredos.test.js` |
+| `src/imagens.js` e `run --json` | `imagensEJson.test.js` |
+| MCP remoto (`McpHttpConnection`) | `mcpHttp.test.js` |
+| `src/trust.js` (confiança no projeto) | `confiancaProjeto.test.js` |
+| sessão por projeto (`getActiveFor`) | `sessaoPorProjeto.test.js` |
+| `run_shell` em segundo plano + `shell_status` | `segundoPlano.test.js` |
+| hooks `UserPromptSubmit`, `SessionStart`, `Stop` | `hooksEventos.test.js` |
+| subagentes do usuário (`.md`) | `subagentesDoUsuario.test.js` |
+| anti-SSRF com IPv6 (`privateAddress`) e DNS rebinding nas rotinas (`src/redeSegura.js`) | `ssrfIpv6.test.js` |
+| `edit_files`, `glob_files`, `web_fetch` (inclusive DNS rebinding, `src/redeSegura.js`) | `multiEditTools.test.js`, `globTools.test.js`, `webTools.test.js` |
+| integração das ferramentas novas (`/passo`, modos restritos, risco de workflow) | `ferramentasIntegradas.test.js` |
+| agentes pessoais: definição, conhecimento, memória, prompt, ferramentas no loop, pasta protegida, comandos e CLI de ponta a ponta (v0.42.0) | `agentesPessoais.test.js` |
+| ferramenta `adb` com um adb falso que junta os argumentos como o real e os roda num `sh` com comandos falsos do aparelho: injeção, confirmação, teclas, alvo, print, erros | `adbTools.test.js` |
+| texto das confirmações (`run_shell`, `/passo`, MCP, adb) sem controles de terminal; texto guardado dos aliados (v0.43.2) | `textoSeguro.test.js` |
 
 `runOnce` (agente), `runWorkflowData`/`runWorkflow`/`runAgentFile`
 (runner) e `runLive` (live) aceitam um argumento opcional `deps` — ex.:
@@ -136,10 +190,10 @@ Termux:API ausente).
 
 ## O que falta (próximos passos)
 
-- Testes de ponta a ponta para `cowork server`/`cowork connect` com um
-  WebSocket real (hoje só a lógica de mensagens é testada, não o transporte
-  em si — precisa do pacote `ws` instalado via `npm install`, que não roda
-  sem rede no ambiente onde esta suíte foi validada).
+- Teste automatizado de `cowork server`/`cowork connect` com um WebSocket real
+  (a suíte testa o protocolo e as conexões inteiras com uma rede em memória; o
+  transporte foi conferido à mão na v0.43.0 com o `ws` embutido no Playwright,
+  porque o pacote `ws` não instala sem rede no ambiente onde a suíte roda).
 - Comandos que geram conteúdo de verdade (`design`, `media`, `run` com uma
   instrução real) continuam sem teste automatizado, já que dependem da API
   do Gemini respondendo de verdade — ficam cobertos apenas na parte de

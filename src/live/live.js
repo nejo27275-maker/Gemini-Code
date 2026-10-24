@@ -15,6 +15,7 @@
 const chalk = require('../terminalColors');
 const voice = require('../voice/voice');
 const { runOnce } = require('../agent');
+const { paraTerminal } = require('../ui/textoSeguro');
 
 const PALAVRAS_DE_SAIDA = ['parar', 'sair', 'encerrar', 'tchau', 'stop'];
 
@@ -88,7 +89,6 @@ async function runLive({ modelName, vozAtiva = true, deps = {} } = {}) {
       const despedida = 'Até mais!';
       console.log(chalk.green('gemini-code: ') + despedida);
       if (vozAtiva) await voiceApi.speak(despedida);
-      rodando = false;
       break;
     }
 
@@ -101,7 +101,7 @@ async function runLive({ modelName, vozAtiva = true, deps = {} } = {}) {
       resposta = `Deu um erro aqui: ${err.message}`;
     }
 
-    console.log(chalk.green('gemini-code: ') + resposta + '\n');
+    console.log(chalk.green('gemini-code: ') + paraTerminal(resposta) + '\n');
 
     if (vozAtiva) {
       for (const bloco of dividirEmFrases(resposta)) {
