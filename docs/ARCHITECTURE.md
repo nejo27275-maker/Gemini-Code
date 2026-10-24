@@ -130,6 +130,7 @@ extra). Cobertura atual:
 | `src/voice/voice.js` | `voice.test.js` |
 | `src/live/live.js` (`pareceComandoDeSaida`, `dividirEmFrases`, `runLive`) | `live.test.js` |
 | `src/cowork/server.js` (`localIps`, `getOrCreateToken`, `handleMessage`) | `cowork-server.test.js` |
+| cowork com WebSocket real (servidor e cliente `ws`): cifra no fio, 4401, HTTP 429/503, mensagem grande, porta ocupada (v0.43.3; pula sem o pacote `ws`) | `coworkWebSocket.test.js` |
 | canal cifrado do cowork, ataques simulados (homem no meio, PC falso, repetição, adulteração, token errado, inundação, prazo), `src/limitador.js` e limites da API de rotinas (v0.43.0) | `coworkCifrado.test.js` |
 | `src/cowork/client.js` (`handleServerMessage`) | `cowork-client.test.js` |
 | `src/routines.js` (armazenamento, cron, estados e recuperação) | `routines.test.js` |
@@ -190,10 +191,9 @@ Termux:API ausente).
 
 ## O que falta (próximos passos)
 
-- Teste automatizado de `cowork server`/`cowork connect` com um WebSocket real
-  (a suíte testa o protocolo e as conexões inteiras com uma rede em memória; o
-  transporte foi conferido à mão na v0.43.0 com o `ws` embutido no Playwright,
-  porque o pacote `ws` não instala sem rede no ambiente onde a suíte roda).
+- O cowork por WebSocket real é testado automaticamente desde a v0.43.3
+  (`tests/coworkWebSocket.test.js`) onde o pacote `ws` está instalado — no CI,
+  sempre; sem ele os testes são pulados com o motivo.
 - Comandos que geram conteúdo de verdade (`design`, `media`, `run` com uma
   instrução real) continuam sem teste automatizado, já que dependem da API
   do Gemini respondendo de verdade — ficam cobertos apenas na parte de
