@@ -67,7 +67,14 @@ o loop do agente:
 - **`src/live/live.js`** — modo "ao vivo" (voz contínua, ver README).
 - **`src/cowork/{client,server}.js`** — o par cliente/servidor do "Gemini
   Cowork": o celular manda instruções pro PC (mesma rede local) e o PC
-  roda o agente com autenticação por token.
+  roda o agente. **`src/cowork/canalSeguro.js`** (v0.43.0) é o protocolo 2:
+  X25519 efêmero + provas HMAC do token nos dois sentidos + AES-256-GCM com
+  contador por direção (o token nunca passa pela rede). `criarConexao` (servidor)
+  e `criarConexaoCliente` não dependem do WebSocket; `startServer`/`connect` só
+  ligam os eventos do `ws` a elas. `admitir` decide antes do aperto de mão
+  (IP bloqueado por tokens errados, teto de conexões).
+- **`src/limitador.js`** (v0.43.0) — contador por chave numa janela de tempo,
+  com memória limitada; usado pelo cowork e pela API de rotinas.
 
 ## Skills e automações
 
@@ -82,11 +89,11 @@ o loop do agente:
     conversa entre passos.
   - **Persona** (`agents/exemplos/`): configuração de um agente (modelo,
     instrução extra, ferramentas permitidas) que abre um chat interativo.
-    `gemini-code gpts importar` transforma uma persona em agente pessoal.
+    `gemini-code aliados importar` transforma uma persona em agente pessoal.
 
 ## Agentes pessoais (v0.42.0)
 
-- **`src/personalAgents.js`** — armazenamento em `~/.gemini-code/gpts/<nome>/` (`agente.json`,
+- **`src/personalAgents.js`** — armazenamento em `~/.gemini-code/aliados/<nome>/` (`agente.json`,
   `conhecimento/`, `memoria.json`, `sessoes.json`), validação da definição, base de conhecimento
   (trechos de ~1200 caracteres indexados com BM25 e o tokenizador de `src/code-ia/tokenizer.js`,
   com cache por assinatura dos arquivos), memória e `prepararTurno`, que monta as opções de
@@ -94,11 +101,11 @@ o loop do agente:
   ferramentas do agente, modelo) e o contexto para `comAgente` (um `AsyncLocalStorage`).
 - **`src/tools/personalTools.js`** — `memory_save`, `memory_forget` e `knowledge_search`. As
   declarações dependem do contexto: fora de uma conversa com agente pessoal a lista é vazia.
-- **`src/personalAgentCommands.js`** — `gemini-code gpts ...` (`cli`) e `/gpts`, `/gpt`,
+- **`src/personalAgentCommands.js`** — `gemini-code aliados ...` (`cli`) e `/aliados`, `/aliado`,
   `/memoria`, `@nome` no chat (`chat`, `mencao`), devolvendo linhas `{ nivel, texto }` como
-  `src/workflowCommands.js`. O `chatLoop` do `bin/` recebe `{ agente }` para o `gpts chat`, que usa
+  `src/workflowCommands.js`. O `chatLoop` do `bin/` recebe `{ agente }` para o `aliados chat`, que usa
   as sessões do próprio agente em vez das da pasta.
-- A pasta `gpts/` está em `PROTECTED_DIRS` (`src/config.js`): `isProtected` em
+- A pasta `aliados/` está em `PROTECTED_DIRS` (`src/config.js`): `isProtected` em
   `src/tools/protectedPaths.js` recusa qualquer caminho real dentro dela e hard links para arquivos
   de lá.
 
@@ -115,7 +122,8 @@ extra). Cobertura atual:
 | `src/ui/prompt.js` | `prompt.test.js` |
 | `src/voice/voice.js` | `voice.test.js` |
 | `src/live/live.js` (`pareceComandoDeSaida`, `dividirEmFrases`, `runLive`) | `live.test.js` |
-| `src/cowork/server.js` (`tokensBatem`, `localIps`, `getOrCreateToken`, `handleMessage`) | `cowork-server.test.js` |
+| `src/cowork/server.js` (`localIps`, `getOrCreateToken`, `handleMessage`) | `cowork-server.test.js` |
+| canal cifrado do cowork, ataques simulados (homem no meio, PC falso, repetição, adulteração, token errado, inundação, prazo), `src/limitador.js` e limites da API de rotinas (v0.43.0) | `coworkCifrado.test.js` |
 | `src/cowork/client.js` (`handleServerMessage`) | `cowork-client.test.js` |
 | `src/routines.js` (armazenamento, cron, estados e recuperação) | `routines.test.js` |
 | `src/routineRunner.js` (HTTP, retentativas, concorrência e destinos privados) | `routineRunner.test.js` |
@@ -173,10 +181,10 @@ Termux:API ausente).
 
 ## O que falta (próximos passos)
 
-- Testes de ponta a ponta para `cowork server`/`cowork connect` com um
-  WebSocket real (hoje só a lógica de mensagens é testada, não o transporte
-  em si — precisa do pacote `ws` instalado via `npm install`, que não roda
-  sem rede no ambiente onde esta suíte foi validada).
+- Teste automatizado de `cowork server`/`cowork connect` com um WebSocket real
+  (a suíte testa o protocolo e as conexões inteiras com uma rede em memória; o
+  transporte foi conferido à mão na v0.43.0 com o `ws` embutido no Playwright,
+  porque o pacote `ws` não instala sem rede no ambiente onde a suíte roda).
 - Comandos que geram conteúdo de verdade (`design`, `media`, `run` com uma
   instrução real) continuam sem teste automatizado, já que dependem da API
   do Gemini respondendo de verdade — ficam cobertos apenas na parte de

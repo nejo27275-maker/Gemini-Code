@@ -18,10 +18,11 @@
 
 ## Protected files
 - `src/config.js` `PROTECTED_PATHS` (config, `mcp.json` and its `.bak`/`.tmp`, `hooks.json`, tokens, `confianca.json`) must stay unwritable by model tools. Any new file under `~/.gemini-code` that defines commands, permissions, trust or credentials belongs in that list.
-- `src/config.js` `PROTECTED_DIRS` (`~/.gemini-code/gpts`: personal agents' instructions, tool lists, memory and conversations) is the same rule for whole folders. A personal agent's memory may only change through `memory_save`/`memory_forget`, which ask the user by default.
+- `src/config.js` `PROTECTED_DIRS` (`~/.gemini-code/aliados`: personal agents' instructions, tool lists, memory and conversations) is the same rule for whole folders. A personal agent's memory may only change through `memory_save`/`memory_forget`, which ask the user by default.
 - `src/config.js` `SECRET_PATHS` (config, `mcp.json` and its `.bak`/`.tmp`, tokens) must stay unreadable by model tools (`read_file`, `search_files`, `read_skill`, image input). Any new file that stores a credential — including backup copies — belongs in that list.
 - Outbound HTTP to a model-chosen URL must go through `src/redeSegura.js` (`fetchComDnsFixado`), which checks the address at connect time; checking DNS first and then calling `fetch` is vulnerable to DNS rebinding.
 - A tool allowlist of `[]` means no tools; only a missing list (`undefined`/`null`) means all. Keep it that way in new callers.
+- Cowork traffic goes only through `src/cowork/canalSeguro.js` (encrypted, mutually authenticated). Never send a token or a task in plaintext over the network, and keep the connection limits in `src/cowork/server.js` (`admitir`, `criarConexao`).
 
 ## Runtime notes
 - Supported Node.js version: >=18; CI currently validates on Node.js 20.

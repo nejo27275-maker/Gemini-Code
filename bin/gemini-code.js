@@ -145,7 +145,8 @@ No modo "chat", digite /help para ver os comandos de sessão (/clear, /model, /s
                                                 (ex.: agents/exemplos/revisor-de-codigo.json)
 
   gemini-code cowork server [porta]            Inicia o servidor no PC
-  gemini-code cowork connect <ip> --token X    Conecta do celular ao PC
+  gemini-code cowork connect <ip> --token X    Conecta do celular ao PC (canal cifrado)
+  gemini-code cowork novo-token                Troca o token do cowork (o antigo deixa de valer)
 
   gemini-code ciencia "pergunta"               Modo ciência: explica em formato fixo (números, comparação, dá pra escapar?)
 
@@ -1234,7 +1235,13 @@ async function main() {
         require('../src/cowork/client').connect(ip, port, token);
         return;
       }
-      return console.log('Uso: gemini-code cowork server [porta] | gemini-code cowork connect <ip> --token X [--port P]');
+      if (sub === 'novo-token') {
+        // v0.43.0: o protocolo antigo mandava o token aberto na rede; depois de atualizar os dois lados, troque-o.
+        const token = require('../src/cowork/server').novoToken();
+        console.log(`Token novo do cowork (o anterior não vale mais): ${token}\nReinicie o "cowork server" e use este token no celular.`);
+        return;
+      }
+      return console.log('Uso: gemini-code cowork server [porta] | gemini-code cowork connect <ip> --token X [--port P] | gemini-code cowork novo-token');
     }
 
     case 'ciencia': {
