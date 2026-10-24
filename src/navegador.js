@@ -25,6 +25,9 @@ const dns = require('dns');
 // Google Chrome primeiro: traz o auxiliar da sandbox; um Chromium baixado à parte pode não conseguir usá-la (Ubuntu 23.10+).
 const NOMES = ['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser', 'chrome', 'microsoft-edge', 'msedge'];
 const PRAZO_COMANDO_MS = 30000;
+// v0.45.0: a PRIMEIRA abertura numa máquina fria (perfil novo, cache de fontes, outros processos disputando a CPU)
+// passou de 20 s num runner do CI; num celular ou PC lento acontece o mesmo. Só a partida ganha mais tempo.
+const PRAZO_INICIO_MS = 60000;
 const PRAZO_CARREGAR_MS = 15000;
 
 // ---------------------------------------------------------------------------
@@ -336,7 +339,7 @@ class Navegador {
     });
 
     try {
-      const { targetId } = await this.enviar('Target.createTarget', { url: 'about:blank' }, { sessao: null, prazoMs: 20000 });
+      const { targetId } = await this.enviar('Target.createTarget', { url: 'about:blank' }, { sessao: null, prazoMs: PRAZO_INICIO_MS });
       this.alvoId = targetId;
       // abas novas (target=_blank, formulário, script) carregariam fora da vista e da aprovação: fecha na hora
       await this.enviar('Target.setDiscoverTargets', { discover: true }, { sessao: null });
