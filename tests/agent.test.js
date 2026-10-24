@@ -196,7 +196,8 @@ test('buildSystemInstruction inclui a instrução extra só quando ela é passad
   assert.ok(semExtra.includes('gemini-code'));
   assert.ok(!semExtra.includes('regra especial da persona'));
   assert.ok(comExtra.includes('regra especial da persona'));
-  assert.ok(comExtra.startsWith(semExtra));
+  // v0.42.0: o extra entra antes do conhecimento fixo (se houver); fora ele, o texto é o mesmo.
+  assert.equal(comExtra.replace('\n\nregra especial da persona', ''), semExtra);
 });
 
 test('podarHistorico não mexe em conversas curtas', () => {

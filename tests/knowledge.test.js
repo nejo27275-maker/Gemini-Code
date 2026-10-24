@@ -28,7 +28,16 @@ test('knowledge add copia .md e vai pro prompt', () => {
   const prompt = buildSystemInstruction('extra da persona', { cwd: proj });
   assert.ok(prompt.includes('fn soma(a, b) => a + b'));
   assert.ok(prompt.includes('Conhecimento fixo'));
-  assert.ok(prompt.endsWith('extra da persona'));
+  // v0.42.0: o extra vem antes do conhecimento — o provedor local corta pelo fim, e o papel do agente
+  // não pode ser o primeiro a sumir (ver compactarSistema em src/providers/llamacpp.js).
+  assert.ok(prompt.indexOf('extra da persona') < prompt.indexOf('Conhecimento fixo'));
+  assert.ok(prompt.endsWith('fn soma(a, b) => a + b'));
+  // compactarSistema primeiro tira parágrafos que o modelo local não usa; o corte é medido depois disso.
+  const { compactarSistema } = require('../src/providers/llamacpp');
+  const enxuto = compactarSistema(prompt, prompt.length - 1);
+  const local = compactarSistema(prompt, enxuto.indexOf('Conhecimento fixo') + 10);
+  assert.ok(local.includes('extra da persona'), 'cortado para caber no contexto local, o extra continua');
+  assert.ok(!local.includes('fn soma'));
 });
 
 test('GEMINI.md do projeto vem antes do conhecimento global', () => {

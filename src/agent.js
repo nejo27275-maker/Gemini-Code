@@ -95,8 +95,10 @@ function buildSystemInstruction(extra, { cwd = process.cwd() } = {}) {
   // "extra" é a instrução adicional de uma persona (agents/*.json,
   // campo "systemInstructionExtra") — antes esse campo existia no JSON de
   // exemplo mas não era lido em lugar nenhum do código.
-  const completo = base + conhecimento;
-  return extra ? `${completo}\n\n${extra}` : completo;
+  // v0.42.0: o extra (persona, perfil, modo plano, agente pessoal) vem ANTES do conhecimento fixo. O provedor
+  // local corta o system pelo fim para caber em contextos pequenos (compactarSistema em src/providers/llamacpp.js):
+  // com o extra no fim, era o papel do agente que sumia primeiro, e não o conhecimento.
+  return extra ? `${base}\n\n${extra}${conhecimento}` : base + conhecimento;
 }
 
 // Item 5 da revisão (set/2026): em sessões longas de chat/cowork, `history`
