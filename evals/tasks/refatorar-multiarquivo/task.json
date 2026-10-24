@@ -1,0 +1,6 @@
+{
+  "titulo": "Refatorar em vários arquivos",
+  "capacidade": "refatoração consistente em vários arquivos",
+  "timeoutSec": 600,
+  "prompt": "Renomeie a função calcTotal para calcularTotalPedido em todo o projeto (definição, exportação e todos os usos em src/). Não mude o comportamento e não altere os testes; npm test precisa continuar passando."
+}

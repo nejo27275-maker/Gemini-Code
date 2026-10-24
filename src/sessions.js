@@ -63,6 +63,19 @@ function createSessionStore({ dataPath = SESSIONS_PATH, clock = () => new Date()
     const found = data.sessions.find((s) => s.id === data.activeId);
     return found ? JSON.parse(JSON.stringify(found)) : null;
   }
+  // v0.41.0: a sessão ativa era global — abrir o chat em outro repositório retomava a conversa
+  // do anterior (com caminhos e decisões de outro projeto). Agora vale a da pasta: a ativa se
+  // for desta pasta, senão a mais recente desta pasta, senão nenhuma (o chat cria uma nova).
+  function getActiveFor(cwd = process.cwd()) {
+    const alvo = path.resolve(cwd);
+    const data = read();
+    const ativa = data.sessions.find((s) => s.id === data.activeId);
+    const escolhida = ativa && ativa.cwd === alvo ? ativa
+      : data.sessions.filter((s) => s.cwd === alvo).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+    if (!escolhida) return null;
+    if (data.activeId !== escolhida.id) { data.activeId = escolhida.id; write(data); }
+    return JSON.parse(JSON.stringify(escolhida));
+  }
   function setActive(id) {
     const data = read();
     if (!data.sessions.some((s) => s.id === id)) throw new Error(`Sessão não encontrada: ${id}`);
@@ -93,7 +106,7 @@ function createSessionStore({ dataPath = SESSIONS_PATH, clock = () => new Date()
     write(data);
     return true;
   }
-  return { create, list, get, getActive, setActive, save, remove, dataPath };
+  return { create, list, get, getActive, getActiveFor, setActive, save, remove, dataPath };
 }
 
 const defaultStore = createSessionStore();

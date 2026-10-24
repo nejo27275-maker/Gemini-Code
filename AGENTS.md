@@ -17,7 +17,10 @@
 7. Capability claims need measurements: use `evals/` (`docs/EVALS.md`). A new eval task needs a hidden checker and a reference solution, and must pass `npm run eval:self-test`. Never report results for agents or models that were not actually run.
 
 ## Protected files
-- `src/config.js` `PROTECTED_PATHS` (config, `mcp.json`, `hooks.json`, tokens) must stay unwritable by model tools. Any new file under `~/.gemini-code` that defines commands, permissions or credentials belongs in that list.
+- `src/config.js` `PROTECTED_PATHS` (config, `mcp.json` and its `.bak`/`.tmp`, `hooks.json`, tokens, `confianca.json`) must stay unwritable by model tools. Any new file under `~/.gemini-code` that defines commands, permissions, trust or credentials belongs in that list.
+- `src/config.js` `SECRET_PATHS` (config, `mcp.json` and its `.bak`/`.tmp`, tokens) must stay unreadable by model tools (`read_file`, `search_files`, `read_skill`, image input). Any new file that stores a credential — including backup copies — belongs in that list.
+- Outbound HTTP to a model-chosen URL must go through `src/redeSegura.js` (`fetchComDnsFixado`), which checks the address at connect time; checking DNS first and then calling `fetch` is vulnerable to DNS rebinding.
+- A tool allowlist of `[]` means no tools; only a missing list (`undefined`/`null`) means all. Keep it that way in new callers.
 
 ## Runtime notes
 - Supported Node.js version: >=18; CI currently validates on Node.js 20.

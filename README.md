@@ -47,6 +47,33 @@ O modelo GGUF é o mesmo, mas os históricos e as memórias do CLI e do app aind
   **na mesma rede local** e manda tarefas para o agente rodar direto no PC
   (arquivos, comandos, tudo), com autenticação por token.
 
+## Novidades da v0.41.0
+
+**Use o mesmo modelo forte dos outros agentes** (provedor `openai`: OpenRouter, OpenAI, Groq, DeepSeek ou qualquer API compatível com OpenAI):
+
+```bash
+gemini-code config set-openai-key SUA_CHAVE          # ou GEMINI_CODE_OPENAI_KEY
+gemini-code config set-openai-model fornecedor/modelo
+gemini-code config set-provider openai               # ou: set-provider hybrid + set-hybrid-cloud openai
+# outra API: gemini-code config set-openai-url https://api.openai.com/v1
+```
+
+No chat, `@openai` ou `openai:MODELO` força esse provedor numa mensagem. O uso conta no `/custo`.
+
+- **Ferramentas novas do agente:** `edit_files` (várias edições em vários arquivos de uma vez, tudo ou nada), `glob_files` (achar arquivos por nome, `**/*.test.js`, respeitando o `.gitignore`) e `web_fetch` (ler uma página; pergunta antes de cada acesso — `webDominiosPermitidos` no config libera domínios — e nunca acessa endereço da rede local).
+- **Comandos em segundo plano:** o agente pode subir `npm run dev` com `run_shell` em segundo plano e acompanhar com `shell_status`; tudo é encerrado quando o gemini-code sai.
+- **Regras de permissão:** `gemini-code config negar "run_shell(git push*)"`, `config permitir "run_shell(npm test*)"`, `config regras`, `config remover-regra REGRA`. "negar" bloqueia sempre; "permitir" só pula a pergunta de comando simples (sem `;`, `&&`, `|`...).
+- **Confiança no projeto:** ao abrir o chat num repositório com `AGENTS.md`, `CLAUDE.md` etc., o gemini-code pergunta uma vez se essas instruções podem entrar. `gemini-code confianca status | confiar | negar | esquecer [PASTA]`.
+- **Hooks** (`~/.gemini-code/hooks.json`): além de `PreToolUse`/`PostToolUse`, agora `UserPromptSubmit`, `SessionStart` e `Stop` (código 2 no Stop faz o agente continuar, até 3 vezes — ex.: "os testes ainda falham").
+- **Seus subagentes:** um `.md` por subagente em `~/.gemini-code/subagentes/` (ou `.gemini-code/subagentes/` do projeto), com `name`, `description`, `tools`, `model` e `max_passos` no cabeçalho.
+- **MCP remoto:** no `mcp.json`, `"meu": { "url": "https://.../mcp", "headers": { "Authorization": "Bearer ${MEU_TOKEN}" } }`.
+- **Imagem:** `gemini-code run --imagem tela.png "o que está errado aqui?"`; no chat, `/imagem ARQ` e `/foto`.
+- **Automação:** `gemini-code run --json "..."` imprime uma linha JSON (`ok`, `texto`, `uso`...) e mais nada no stdout.
+- **Tarefas longas:** resultados antigos de ferramenta são resumidos acima de `contextoMaxChars` (300 000 caracteres); `/compact ia` pede ao modelo um resumo da conversa.
+- **Segurança:** uma lista vazia de ferramentas não libera mais todas; o modelo não lê mais a API key, os tokens nem a cópia `mcp.json.bak` (antes a sessão de convidado lia o token do cowork e virava dona); o convidado só lê a pasta do projeto; o anti-SSRF bloqueia IPv4 privado escondido em IPv6 e conecta no IP que conferiu (sem DNS rebinding); as chaves não vão mais para servidores MCP nem para o `actions.log`. Antes de fechar a versão, uma revisão adversarial achou e reproduziu 22 defeitos nas novidades, todos corrigidos (lista no `CHANGELOG.md`).
+
+**O que não foi medido:** nenhum desses recursos foi rodado aqui com um modelo de verdade, nem comparado com Claude Code, Codex, Antigravity ou Hermes Agent. Para comparar com justiça, use o mesmo modelo nos dois lados (veja "Mesmo modelo, ferramentas diferentes" em `docs/EVALS.md`).
+
 ## Segurança e avaliação (v0.40.0)
 
 - O agente **não consegue** gravar (`write_file`/`edit_file`) o `config.json`, `mcp.json`, `hooks.json` nem os tokens do cowork/rotinas — nem por symlink ou hard link vindo de um repositório clonado. Antes, gravar o `hooks.json` dava a ele comandos rodando sem confirmação. Via `run_shell`, mencionar esses arquivos força confirmação mesmo com `confirmShell: false`.

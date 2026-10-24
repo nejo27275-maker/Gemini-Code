@@ -61,6 +61,9 @@ function encerrarComLimpeza() {
 }
 process.on('SIGINT', encerrarComLimpeza);
 process.on('SIGTERM', encerrarComLimpeza);
+// v0.41.0: terminal fechado (SIGHUP) também passa pela limpeza — process.exit dispara o 'exit' que
+// encerra os comandos em segundo plano do run_shell; sem isto o Node saía direto e eles ficavam órfãos.
+process.on('SIGHUP', encerrarComLimpeza);
 
 function printHelp() {
   console.log(`
@@ -69,6 +72,7 @@ gemini-code v${PACKAGE_JSON.version} — agente de terminal com Gemini (estilo C
 Uso:
   gemini-code chat                          Modo conversa interativo com o agente
   gemini-code run [--profile coder|explore|plan|review|test] [--checkpoint] "instrução"  Executa com perfil e salva artefato
+  gemini-code run --json [--imagem foto.png] "instrução"   Saída JSON para scripts/CI; --imagem manda imagem (repetível)
   gemini-code profiles list|show NOME        Lista perfis e permissões reais do executor
   gemini-code sessions list|new|show|use|delete  Gerencia sessões persistentes
   gemini-code checkpoints create|list|restore    Checkpoints locais com restauração segura
@@ -108,7 +112,11 @@ No modo "chat", digite /help para ver os comandos de sessão (/clear, /model, /s
   gemini-code code-ia forget                  Esquece tudo que você ensinou
   gemini-code code-ia reinstall               Refaz o modelo do zero
   gemini-code llamacpp status                 Testa o servidor local sem Ollama
-  gemini-code config set-provider hybrid|llamacpp|gemini|ollama|code-ia   Escolhe IA online/local
+  gemini-code config set-provider hybrid|llamacpp|gemini|openai|ollama|code-ia   Escolhe IA online/local
+  gemini-code config set-openai-key CHAVE | set-openai-model NOME | set-openai-url URL   API compatível com OpenAI (OpenRouter, OpenAI...)
+  gemini-code config set-hybrid-cloud gemini|openai   Qual nuvem o modo hybrid usa
+  gemini-code config negar|permitir "FERRAMENTA(PADRÃO)" | regras | remover-regra REGRA   Regras de permissão
+  gemini-code confianca [status|confiar|negar|esquecer] [PASTA]   Confiança nas instruções do projeto (AGENTS.md...)
   gemini-code config set-llamacpp-url URL      URL do llama.cpp (padrão http://127.0.0.1:8080)
   gemini-code config set-llamacpp-model NOME   Nome usado pelo servidor (padrão local-model)
   gemini-code config set-llamacpp-path CAMINHO Arquivo GGUF local (override opcional)
@@ -181,6 +189,9 @@ Comandos disponíveis no chat:
   /agenda listar             lista tudo que está marcado
   /projetos                  lista os projetos registrados (gemini-code projetos add "nome" fora do chat)
   /compact           resume a conversa antiga (sem custo) e mantém só as últimas mensagens inteiras
+  /compact ia        o próprio modelo resume a conversa antiga (perde menos detalhe; custa 1 chamada)
+  /imagem ARQ [texto] manda uma imagem (png/jpg/webp/gif) junto com a pergunta
+  /foto [texto]      tira foto com a câmera do celular (Termux:API) e manda ao agente
   /tarefas           mostra a lista de tarefas que o agente está seguindo (todo_write)
   /rewind [N|lista]  desfaz o que o agente gravou no(s) último(s) N turno(s) (como Ctrl+Z; --force sobrescreve o que você mudou depois)
   /snapshots         fotos automáticas do projeto (git escondido, inclui o que o shell mudou); /snapshots restaurar N volta à foto N
@@ -229,14 +240,38 @@ function salvarHistorico(history, nomeArg) {
   return arquivo;
 }
 
+// v0.41.0: confiança no projeto (src/trust.js). Pergunta uma vez por pasta, só se o projeto traz
+// instruções para agentes (AGENTS.md, CLAUDE.md, .cursorrules, .gemini-code/commands e /subagentes...).
+// Devolve a linha lida quando ela não é resposta (ex.: `echo "pergunta" | gemini-code chat`): o chat a usa
+// como primeira mensagem — antes ela era engolida pela pergunta e o processo saía sem responder.
+async function perguntarConfiancaNoProjeto() {
+  const trust = require('../src/trust');
+  if (loadConfig().confiancaProjeto === 'sempre' || trust.estado() !== null) return null;
+  const instrucoes = trust.instrucoesDoProjeto();
+  if (!instrucoes.length) return null;
+  console.log(chalk.yellow('Este projeto traz instruções para agentes, que entram no prompt do modelo:'));
+  for (const arq of instrucoes) console.log(chalk.yellow(`  ${path.relative(process.cwd(), arq) || arq}`));
+  console.log(chalk.yellow('Instruções de um repositório de terceiros podem mandar o agente fazer coisas que você não pediu.'));
+  const linha = String(await ask('Confiar nelas? [s]im / [n]ão — fica salvo para esta pasta: '));
+  const r = linha.trim().toLowerCase();
+  if (r === 's' || r === 'y') { trust.definir(process.cwd(), 'confiar'); console.log(chalk.dim('(confiança salva; desfaça com: gemini-code confianca esquecer)\n')); return null; }
+  if (r === 'n') { trust.definir(process.cwd(), 'negar'); console.log(chalk.dim('(instruções do projeto ignoradas; só o conhecimento global vale. Mude com: gemini-code confianca confiar)\n')); return null; }
+  trust.negarNestaSessao();
+  if (!r) { console.log(chalk.dim('(sem resposta: ignorando as instruções do projeto só nesta execução)\n')); return null; }
+  console.log(chalk.dim('(não é s/n: ignorando as instruções do projeto só nesta execução; o texto segue como sua primeira mensagem)\n'));
+  return linha;
+}
+
 async function chatLoop() {
   console.log(chalk.bold(`gemini-code v${PACKAGE_JSON.version} — modo conversa. Ctrl+C para sair, /help para comandos.\n`));
   if (require('../src/solo').ativo()) console.log(chalk.green('[solo] code-ia sozinho: nenhuma outra IA (Gemini, llama.cpp, Ollama) é usada.\n'));
+  const primeiraMensagem = await perguntarConfiancaNoProjeto();
   // Item 8 da revisão: usa a MESMA interface de readline que a confirmação
   // de run_shell usa (src/ui/prompt.js), em vez de criar uma própria —
   // evita duas interfaces competindo pelo mesmo stdin.
   const rl = getSharedReadline();
-  let sessaoAtual = sessions.getActive() || sessions.create('Sessão principal');
+  // v0.41.0: sessão da pasta atual (src/sessions.js getActiveFor), não a última de qualquer projeto.
+  let sessaoAtual = sessions.getActiveFor(process.cwd()) || sessions.create(`Sessão de ${path.basename(process.cwd()) || 'raiz'}`);
   let history = Array.isArray(sessaoAtual.history) ? sessaoAtual.history : [];
   let modeloAtual = sessaoAtual.modelName || undefined; // undefined = usa o padrão do config
   if (history.length) console.log(chalk.dim(`Sessão retomada: ${sessaoAtual.name} (${sessaoAtual.id}) — ${history.length} mensagens no histórico. Use /session new para começar outra.\n`));
@@ -248,7 +283,7 @@ async function chatLoop() {
   stepApproval.configurar({ ativo: loadConfig().confirmarEscrita === true, perguntar: (q) => (fechado ? Promise.resolve('n') : require('../src/ui/prompt').ask(q)) });
   rl.on('close', () => { fechado = true; });
 
-  const ask = () => fechado ? encerrarComLimpeza() : perguntarColando(rl, chalk.cyan(modoPlano ? 'você [plano]> ' : 'você> '), async (line) => {
+  const tratarLinha = async (line) => {
     const cmd = line.trim();
     if (!cmd) return ask();
 
@@ -256,13 +291,19 @@ async function chatLoop() {
       console.log(CHAT_HELP);
       return ask();
     }
-    if (cmd === '/compact') {
-      const r = compactar(history);
+    if (cmd === '/compact' || cmd === '/compact ia') {
+      // v0.41.0: "/compact ia" pede o resumo ao próprio modelo (1 chamada); sem "ia", resumo local grátis.
+      const comIa = cmd === '/compact ia';
+      const r = comIa
+        ? await require('../src/compact').compactarComModelo(history, { chat: (a) => require('../src/provider').chatWithTools({ ...a, modelName: modeloAtual }) })
+        : compactar(history);
       if (!r.compactou) console.log(chalk.dim('(conversa ainda curta, nada pra compactar)\n'));
       else {
         history = r.history;
+        usage.contextoCompactado();
         sessaoAtual = sessions.save(sessaoAtual.id, { history, modelName: modeloAtual });
-        console.log(chalk.dim(`(compactei ${r.removidas} mensagens antigas num resumo; sessão salva)\n`));
+        const como = comIa && !r.comModelo ? ' (o modelo não respondeu; usei o resumo local)' : comIa ? ' feito pelo modelo' : '';
+        console.log(chalk.dim(`(compactei ${r.removidas} mensagens antigas num resumo${como}; sessão salva)\n`));
       }
       return ask();
     }
@@ -513,11 +554,35 @@ async function chatLoop() {
       const custom = customCommands.resolver(cmd, customCommands.carregar({ home: require('../src/config').HOME_DIR }));
       if (custom) { textoEnviado = custom.texto; console.log(chalk.dim(`(comando /${custom.nome})`)); }
     }
+    // v0.41.0: /imagem CAMINHO [pergunta] e /foto [pergunta] (câmera do celular via Termux:API) mandam imagem ao agente.
+    let imagensDoTurno = [];
+    if (cmd.startsWith('/imagem ') || cmd === '/foto' || cmd.startsWith('/foto ')) {
+      try {
+        let arquivo;
+        let resto;
+        if (cmd.startsWith('/imagem ')) {
+          const m = cmd.slice('/imagem '.length).trim().match(/^(?:"([^"]+)"|(\S+))\s*([\s\S]*)$/);
+          arquivo = m && (m[1] || m[2]);
+          resto = m ? m[3] : '';
+        } else {
+          arquivo = path.join(require('os').tmpdir(), `gemini-code-foto-${Date.now()}.jpg`);
+          console.log(chalk.dim('(tirando foto com a câmera...)'));
+          await require('../src/voice/voice').takePhoto(arquivo);
+          resto = cmd.replace(/^\/foto\s*/, '');
+        }
+        imagensDoTurno = [require('../src/imagens').lerImagem(arquivo)];
+        textoEnviado = resto || 'Descreva esta imagem e aponte o que for relevante para o que estamos fazendo.';
+      } catch (err) {
+        console.error(chalk.red('Erro: ' + err.message));
+        return ask();
+      }
+    }
     // v0.15.0: contexto grande = cada chamada fica cara. Compacta sozinho (sem chamar modelo, sem custo).
     if (usage.contextoGrande(loadConfig().autoCompactTokens, { ctxLocal: require('../src/providers/llamacpp').ctxTamanho(loadConfig()) })) {
       const rc = compactar(history);
       if (rc.compactou) {
         history = rc.history;
+        usage.contextoCompactado();
         sessaoAtual = sessions.save(sessaoAtual.id, { history, modelName: modeloAtual });
         console.log(chalk.dim(`(contexto grande: compactei ${rc.removidas} mensagens antigas sozinho para gastar menos)`));
       }
@@ -531,6 +596,7 @@ async function chatLoop() {
       const { text, history: newHistory } = await runOnce(textoEnviado, {
         history,
         modelName: modeloAtual,
+        imagens: imagensDoTurno,
         ...planMode.opcoes(modoPlano),
         onText: (pedaco) => {
           streamed = true;
@@ -553,8 +619,9 @@ async function chatLoop() {
     if (autoGit) { const f = snapshots.tirar({ rotulo: `depois: ${line}` }); if (f) console.log(chalk.dim(`(foto ${f.curto} salva — /snapshots lista, /snapshots restaurar N volta)`)); }
     if (rw) console.log(chalk.dim(`(${rw.arquivos} arquivo(s) gravado(s) neste turno — /rewind desfaz)\n`));
     ask();
-  });
-  ask();
+  };
+  const ask = () => fechado ? encerrarComLimpeza() : perguntarColando(rl, chalk.cyan(modoPlano ? 'você [plano]> ' : 'você> '), tratarLinha);
+  if (primeiraMensagem) tratarLinha(primeiraMensagem); else ask();
 }
 
 // Comandos que nunca precisam da apiKey (ajuda/versão, e "config" porque os
@@ -563,7 +630,7 @@ async function chatLoop() {
 // "agenda" e "projetos" são só arquivo local (sem API key nenhuma
 // envolvida) — pedir a chave de segurança pra só ver a lista seria atrito
 // à toa.
-const COMANDOS_SEM_DESBLOQUEIO = new Set([undefined, 'help', '--help', 'version', '--version', '-v', 'config', 'agenda', 'projetos', 'backups', 'routines', 'sessions', 'checkpoints', 'artifacts', 'context', 'doctor', 'solo', 'security', 'profiles', 'agents', 'code-ia', 'codeia']);
+const COMANDOS_SEM_DESBLOQUEIO = new Set([undefined, 'help', '--help', 'version', '--version', '-v', 'config', 'confianca', 'trust', 'agenda', 'projetos', 'backups', 'routines', 'sessions', 'checkpoints', 'artifacts', 'context', 'doctor', 'solo', 'security', 'profiles', 'agents', 'code-ia', 'codeia']);
 
 async function garantirDesbloqueio() {
   if (COMANDOS_SEM_DESBLOQUEIO.has(cmd)) return;
@@ -609,7 +676,14 @@ function bootstrapCodeIa() {
   }
 }
 
+// v0.41.0: run --json — desde o início (inclusive a instalação do code-ia e o desbloqueio), tudo que não é
+// o JSON final vai para o stderr; o JSON sai pelo stdout original, numa linha só.
+const MODO_JSON = cmd === 'run' && rest.includes('--json');
+const escreverStdout = process.stdout.write.bind(process.stdout);
+function escreverJson(obj) { escreverStdout(JSON.stringify(obj) + '\n'); }
+
 async function main() {
+  if (MODO_JSON) process.stdout.write = (...a) => process.stderr.write(...a);
   require('../src/solo').instalarGuarda();
   await garantirDesbloqueio();
   const solo = require('../src/solo');
@@ -647,23 +721,54 @@ async function main() {
     case 'chat':
       return chatLoop();
 
+    case 'confianca':
+    case 'trust': {
+      // v0.41.0: gemini-code confianca [status|confiar|negar|esquecer] [PASTA]
+      const trust = require('../src/trust');
+      const [sub = 'status', pasta = process.cwd()] = rest;
+      if (sub === 'status') {
+        const e = trust.estado(pasta);
+        const inst = trust.instrucoesDoProjeto(pasta);
+        console.log(`Pasta: ${path.resolve(pasta)}\nDecisão: ${e || '(nenhuma — o chat pergunta; o run carrega)'}\nInstruções do projeto: ${inst.length ? inst.map((a) => path.relative(pasta, a) || a).join(', ') : '(nenhuma)'}`);
+        return;
+      }
+      const decisao = { confiar: 'confiar', negar: 'negar', esquecer: null }[sub];
+      if (decisao === undefined) throw new Error('Uso: gemini-code confianca [status|confiar|negar|esquecer] [PASTA]');
+      const alvo = trust.definir(pasta, decisao);
+      if (decisao) { console.log(`${alvo}: ${decisao}.`); return; }
+      // A decisão de uma pasta-mãe continua valendo aqui: dizer qual, em vez de prometer que o chat vai perguntar.
+      const herdada = trust.origemDaDecisao(alvo);
+      console.log(herdada
+        ? `${alvo}: decisão própria apagada, mas continua valendo "${herdada.decisao}" de ${herdada.pasta} (para mudar: gemini-code confianca esquecer ${herdada.pasta}).`
+        : `${alvo}: decisão apagada (o chat vai perguntar de novo).`);
+      return;
+    }
+
     case 'run': {
       const parsed = agentProfiles.parseRunArgs(rest);
       const { profile, createCheckpoint, instruction } = parsed;
-      if (!instruction) throw new Error('Informe uma instrução. Uso: gemini-code run [--profile coder|explore|plan|review|test] [--checkpoint] "instrução"');
-      let checkpoint = null;
-      if (createCheckpoint) {
-        checkpoint = checkpoints.createCheckpoint({ root: process.cwd(), reason: 'before-agent-run', label: `Antes de gemini-code run (${profile.name})` });
-        console.log(chalk.dim(`Checkpoint preventivo criado: ${checkpoint.id} (${checkpoint.fileCount} arquivos).\n`));
+      if (!instruction) throw new Error('Informe uma instrução. Uso: gemini-code run [--profile coder|explore|plan|review|test] [--checkpoint] [--imagem ARQ] [--json] "instrução"');
+      try {
+        const imagens = parsed.imagens.map((arq) => require('../src/imagens').lerImagem(arq));
+        let checkpoint = null;
+        if (createCheckpoint) {
+          checkpoint = checkpoints.createCheckpoint({ root: process.cwd(), reason: 'before-agent-run', label: `Antes de gemini-code run (${profile.name})` });
+          console.log(chalk.dim(`Checkpoint preventivo criado: ${checkpoint.id} (${checkpoint.fileCount} arquivos).\n`));
+        }
+        const { text } = await runOnce(instruction, {
+          allowedTools: profile.tools ? [...profile.tools] : undefined,
+          extraSystemInstruction: profile.instructions,
+          imagens,
+        });
+        if (!parsed.json) console.log(text);
+        const report = artifacts.createArtifact({ title: instruction.slice(0, 120), type: profile.artifactType, status: 'concluido', summary: text.slice(0, 1000), content: text, cwd: process.cwd(), metadata: { profile: profile.name, allowedTools: profile.tools ? [...profile.tools] : 'session-default', checkpointId: checkpoint && checkpoint.id } });
+        if (parsed.json) {
+          const u = usage.estado();
+          escreverJson({ ok: true, texto: text, perfil: profile.name, artefato: report.id, checkpoint: checkpoint && checkpoint.id, uso: { chamadasNuvem: u.chamadas, chamadasLocais: u.locais, tokensEntrada: u.prompt, tokensSaida: u.saida } });
+        } else console.log(chalk.dim(`\nArtefato salvo: ${report.id} (${report.fileName})`));
+      } finally {
+        toolsIndex.stopMcp();
       }
-      const { text } = await runOnce(instruction, {
-        allowedTools: profile.tools ? [...profile.tools] : undefined,
-        extraSystemInstruction: profile.instructions,
-      });
-      console.log(text);
-      const report = artifacts.createArtifact({ title: instruction.slice(0, 120), type: profile.artifactType, status: 'concluido', summary: text.slice(0, 1000), content: text, cwd: process.cwd(), metadata: { profile: profile.name, allowedTools: profile.tools ? [...profile.tools] : 'session-default', checkpointId: checkpoint && checkpoint.id } });
-      console.log(chalk.dim(`\nArtefato salvo: ${report.id} (${report.fileName})`));
-      toolsIndex.stopMcp();
       return;
     }
 
@@ -771,13 +876,14 @@ async function main() {
         // Nunca imprime segredo em texto puro na tela, mesmo desbloqueado —
         // evita vazar em print/screenshot/log de terminal. Ver src/security.js.
         if (mostrar.apiKey) mostrar.apiKey = security.mascarar(mostrar.apiKey);
+        if (mostrar.openaiApiKey) mostrar.openaiApiKey = security.mascarar(mostrar.openaiApiKey);
         if (mostrar.apiKeyLocked) mostrar.apiKeyLocked = '(protegida por chave mestra — "gemini-code config unlock")';
         if (mostrar.apiKeyLockedGuest) mostrar.apiKeyLockedGuest = '(chave de convidado configurada, acesso limitado)';
         return console.log(JSON.stringify(mostrar, null, 2));
       }
       return console.log(
         'Uso: gemini-code config set-key SUA_CHAVE | set-model NOME | set-fast-model NOME | ' +
-        'set-fallback-model [NOME] | set-wait-quota SEGUNDOS | set-provider hybrid|llamacpp|gemini|ollama|code-ia | ' +
+        'set-fallback-model [NOME] | set-wait-quota SEGUNDOS | set-provider hybrid|llamacpp|gemini|openai|ollama|code-ia | set-openai-key CHAVE | set-openai-model NOME | set-openai-url URL | set-hybrid-cloud gemini|openai | ' +
         'set-llamacpp-url URL | set-llamacpp-model NOME | set-llamacpp-path CAMINHO | set-llamacpp-ctx TOKENS | set-llamacpp-autostart on|off | set-ollama-model NOME | ' +
         'set-ollama-url URL | set-passphrase | unlock | remove-passphrase | ' +
         'set-guest-passphrase | remove-guest-passphrase | show'
@@ -1428,6 +1534,7 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error(chalk.red('Erro fatal: ' + err.message));
+  if (MODO_JSON) escreverJson({ ok: false, erro: err.message });
+  else console.error(chalk.red('Erro fatal: ' + err.message));
   process.exit(1);
 });

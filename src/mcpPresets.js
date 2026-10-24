@@ -96,9 +96,10 @@ function lerMcp(mcpPath) {
 
 function gravarMcp(mcpPath, dados) {
   fs.mkdirSync(path.dirname(mcpPath), { recursive: true });
-  if (fs.existsSync(mcpPath)) { try { fs.copyFileSync(mcpPath, `${mcpPath}.bak`); } catch { /* sem backup: segue */ } }
+  // v0.41.0: a cópia e o temporário guardam os mesmos tokens do mcp.json — só o dono lê (e o modelo nem isso: SECRET_PATHS).
+  if (fs.existsSync(mcpPath)) { try { fs.copyFileSync(mcpPath, `${mcpPath}.bak`); fs.chmodSync(`${mcpPath}.bak`, 0o600); } catch { /* sem backup: segue */ } }
   const tmp = `${mcpPath}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(dados, null, 2) + '\n', 'utf8');
+  fs.writeFileSync(tmp, JSON.stringify(dados, null, 2) + '\n', { encoding: 'utf8', mode: 0o600 });
   fs.renameSync(tmp, mcpPath);
   try { fs.chmodSync(mcpPath, 0o600); } catch { /* best-effort (pode haver segredos) */ }
 }
@@ -115,9 +116,21 @@ function temNoPath(cmd, pathEnv = process.env.PATH || '') {
   return pathEnv.split(path.delimiter).some((d) => d && exts.some((e) => fs.existsSync(path.join(d, cmd + e))));
 }
 
-function problemas(nome, e, pathEnv) {
+function problemas(nome, e, pathEnv, env = process.env) {
   const r = [];
-  if (!e || typeof e.command !== 'string') return [`${nome}: sem "command".`];
+  // v0.41.0: servidor remoto (Streamable HTTP) — "url" no lugar de "command".
+  if (e && typeof e.url === 'string') {
+    let u = null;
+    try { u = new URL(e.url); } catch { /* inválida */ }
+    if (!u || !['http:', 'https:'].includes(u.protocol)) r.push(`${nome}: "url" inválida (precisa ser http:// ou https://).`);
+    for (const [k, v] of Object.entries(e.headers || {})) {
+      for (const [, variavel] of String(v).matchAll(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g)) {
+        if (env[variavel] === undefined) r.push(`${nome}: cabeçalho ${k} usa \${${variavel}}, que não está definida no ambiente.`);
+      }
+    }
+    return r;
+  }
+  if (!e || typeof e.command !== 'string') return [`${nome}: sem "command" nem "url".`];
   for (const [k, v] of Object.entries(e.env || {})) if (String(v).startsWith(PLACEHOLDER)) r.push(`${nome}: falta preencher ${k}.`);
   if (!temNoPath(e.command, pathEnv)) r.push(`${nome}: comando "${e.command}" não encontrado no PATH.`);
   return r;
@@ -178,12 +191,14 @@ function comando(args, { mcpPath, env = process.env, pathEnv } = {}) {
     const s = lerMcp(mcpPath).mcpServers;
     const nomes = Object.keys(s);
     if (!nomes.length) return 'Nenhum servidor MCP configurado. Veja: gemini-code mcp presets';
-    return nomes.map((n) => `${n}${s[n].desativado === true ? ' [DESLIGADO]' : ''}: ${s[n].command} ${(s[n].args || []).join(' ')}${s[n].env ? `\n    env: ${mascarar(s[n].env)}` : ''}${s[n].confirmar ? `\n    confirma antes de: ${[].concat(s[n].confirmar).join(', ')}` : ''}`).join('\n');
+    // v0.41.0: servidor remoto mostra a URL; valores de cabeçalho (tokens) nunca aparecem.
+    const alvo = (e) => (typeof e.url === 'string' ? `${e.url}${e.headers ? ` (cabeçalhos: ${Object.keys(e.headers).join(', ')})` : ''}` : `${e.command} ${(e.args || []).join(' ')}`);
+    return nomes.map((n) => `${n}${s[n].desativado === true ? ' [DESLIGADO]' : ''}: ${alvo(s[n])}${s[n].env ? `\n    env: ${mascarar(s[n].env)}` : ''}${s[n].confirmar ? `\n    confirma antes de: ${[].concat(s[n].confirmar).join(', ')}` : ''}`).join('\n');
   }
 
   if (sub === 'check' || sub === 'doctor') {
     const s = lerMcp(mcpPath).mcpServers;
-    const todos = Object.entries(s).filter(([, e]) => !(e && e.desativado === true)).flatMap(([n, e]) => problemas(n, e, pathEnv));
+    const todos = Object.entries(s).filter(([, e]) => !(e && e.desativado === true)).flatMap(([n, e]) => problemas(n, e, pathEnv, env));
     return todos.length ? ['Pendências:', ...todos.map((x) => `  ! ${x}`)].join('\n') : `Tudo certo (${Object.keys(s).length} servidor(es); só confere preenchimento e comando no PATH, não conecta).`;
   }
 

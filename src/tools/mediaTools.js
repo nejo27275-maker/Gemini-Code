@@ -16,9 +16,10 @@ async function callLongRunningModel(modelPath, body) {
   const cfg = loadConfig();
   if (!cfg.apiKey) throw new Error('Configure a API key primeiro: gemini-code config set-key SUA_CHAVE');
 
-  const res = await fetch(`${API_BASE}/${modelPath}:predictLongRunning?key=${cfg.apiKey}`, {
+  // v0.41.0: a chave ia na query string (aparece em log de proxy e em mensagem de erro); agora vai no cabeçalho.
+  const res = await fetch(`${API_BASE}/${modelPath}:predictLongRunning`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': cfg.apiKey },
     body: JSON.stringify(body),
   });
   const data = await res.json();
@@ -36,7 +37,7 @@ async function pollOperation(operationName, { intervalMs = 5000, timeoutMs = 5 *
   const cfg = loadConfig();
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
-    const res = await fetch(`${API_BASE}/${operationName}?key=${cfg.apiKey}`);
+    const res = await fetch(`${API_BASE}/${operationName}`, { headers: { 'x-goog-api-key': cfg.apiKey } });
     const data = await res.json();
     if (data.done) return data;
     await new Promise((r) => setTimeout(r, intervalMs));

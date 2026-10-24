@@ -17,19 +17,39 @@ const HISTORY_DIR = path.join(HOME_DIR, 'history');
 const HOOKS_PATH = path.join(HOME_DIR, 'hooks.json');
 const COWORK_TOKEN_PATH = path.join(HOME_DIR, 'cowork-token.txt');
 const ROUTINE_API_TOKEN_PATH = path.join(HOME_DIR, 'routine-api-token.txt');
+const TRUST_PATH = path.join(HOME_DIR, 'confianca.json'); // v0.41.0: src/trust.js
 
 // Arquivos que o modelo nunca pode gravar sozinho (write_file/edit_file) e que
 // forçam confirmação no run_shell. Cada um, se reescrito, dá ao modelo mais
 // poder do que ele já tem: config.json desliga confirmShell; mcp.json e
 // hooks.json definem comandos que rodam sem confirmação; os tokens liberam o
 // agente para quem estiver na rede. O .bak é restaurado automaticamente se o
-// config.json sumir (ver config-manager.js).
+// config.json sumir (ver config-manager.js). confianca.json decide se instruções
+// de um repositório entram no prompt (o modelo não pode se dar confiança).
+// mcp.json.bak/.tmp: cópia e arquivo temporário do `gemini-code mcp add` (src/mcpPresets.js).
 const PROTECTED_PATHS = Object.freeze([
   CONFIG_PATH,
   `${CONFIG_PATH}.bak`,
   `${CONFIG_PATH}.tmp`,
   MCP_PATH,
+  `${MCP_PATH}.bak`,
+  `${MCP_PATH}.tmp`,
   HOOKS_PATH,
+  COWORK_TOKEN_PATH,
+  ROUTINE_API_TOKEN_PATH,
+  TRUST_PATH,
+]);
+
+// v0.41.0: destes o modelo nem LÊ (read_file, search_files, read_skill): guardam a API
+// key em texto puro, segredos de servidores MCP ou tokens que dão o agente inteiro pela
+// rede. Antes a sessão de convidado lia o cowork-token.txt e virava dona pelo cowork.
+const SECRET_PATHS = Object.freeze([
+  CONFIG_PATH,
+  `${CONFIG_PATH}.bak`,
+  `${CONFIG_PATH}.tmp`,
+  MCP_PATH,
+  `${MCP_PATH}.bak`,
+  `${MCP_PATH}.tmp`,
   COWORK_TOKEN_PATH,
   ROUTINE_API_TOKEN_PATH,
 ]);
@@ -55,6 +75,12 @@ const DEFAULT_CONFIG = {
   fallbackModel: '',
   imageModel: 'gemini-2.5-flash-image',
   confirmShell: true,
+  // v0.41.0: regras FERRAMENTA(PADRÃO); "negar" bloqueia sempre, "permitir" dispensa a confirmação de
+  // comandos simples do run_shell. Ver src/permissions.js e "gemini-code config regras".
+  permissoes: { permitir: [], negar: [] },
+  // v0.41.0: 'perguntar' = o chat pergunta uma vez por pasta se confia nas instruções do projeto
+  // (AGENTS.md, CLAUDE.md...); 'sempre' = carrega sem perguntar (comportamento antigo). Ver src/trust.js.
+  confiancaProjeto: 'perguntar',
   shellTimeoutMs: 120000,
   coworkPort: 8765,
   // Item 4 da revisão: streaming da resposta de texto (via SSE) em modos
@@ -75,6 +101,9 @@ const DEFAULT_CONFIG = {
   confirmarEscrita: false,
   // autoCompactTokens: no chat, se o contexto da última chamada passou disso, roda /compact sozinho (grátis) antes do próximo turno. 0 desliga.
   autoCompactTokens: 60000,
+  // v0.41.0: dentro de um pedido longo (muitas ferramentas seguidas), acima disto (caracteres do histórico)
+  // os resultados de ferramenta antigos viram um aviso curto; os 6 mais recentes ficam inteiros. 0 desliga.
+  contextoMaxChars: 300000,
   // --- Modelos locais/online ---
   // 'hybrid' usa llama.cpp local e, se houver chave, Gemini para pedidos mais complexos.
   // O local funciona sem internet depois de baixar um GGUF. Não requer Ollama.
@@ -100,6 +129,19 @@ const DEFAULT_CONFIG = {
   ollamaKeepAlive: '10m',
   ollamaTemperature: 0.6,
   hybridComplexityChars: 600, // pedido maior que isso vai pra nuvem no modo hybrid
+  // --- v0.41.0: API compatível com OpenAI COM chave (OpenRouter, OpenAI, DeepSeek, Groq...) ---
+  // Para usar os mesmos modelos fortes dos outros agentes. provider 'openai' usa sempre; hybridCloud 'openai'
+  // usa no lugar do Gemini como lado nuvem do modo hybrid. A chave fica aqui (0600, ilegível pelo modelo) ou
+  // em GEMINI_CODE_OPENAI_KEY.
+  openaiBaseUrl: 'https://openrouter.ai/api/v1',
+  openaiModel: '',
+  openaiApiKey: '',
+  openaiCtx: 128000, // contexto do modelo escolhido (tokens); só acima disso o histórico é podado
+  openaiMaxTokens: 8192,
+  hybridCloud: 'gemini',
+  // --- v0.41.0: web_fetch ---
+  confirmWeb: true, // pergunta antes de cada acesso; domínios abaixo não perguntam
+  webDominiosPermitidos: [],
   // Orçamento (em caracteres) do conhecimento fixo injetado no prompt — ver src/knowledge.js
   knowledgeMaxChars: 10000,
 };
@@ -232,7 +274,9 @@ module.exports = {
   HOOKS_PATH,
   COWORK_TOKEN_PATH,
   ROUTINE_API_TOKEN_PATH,
+  TRUST_PATH,
   PROTECTED_PATHS,
+  SECRET_PATHS,
   DEFAULT_CONFIG,
   CONFIG_VERSION,
   migrarConfig,

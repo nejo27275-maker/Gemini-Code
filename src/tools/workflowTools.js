@@ -179,7 +179,7 @@ function lerWorkflow(nome) {
     if (x.paralelo !== undefined) {
       const { MAX_PARALELO } = require('../agents/runner');
       if (!(Number.isInteger(x.paralelo) && x.paralelo >= 1 && x.paralelo <= MAX_PARALELO)) throw new Error(`o passo "${x.id}" tem "paralelo" inválido (1 a ${MAX_PARALELO})`);
-      if (x.paralelo > 1 && !paraleloSeguro(x)) throw new Error(`o passo "${x.id}" usa "paralelo" mas precisa de "each" e de "tools" só de leitura (read_file, list_dir, search_files) ou []`);
+      if (x.paralelo > 1 && !paraleloSeguro(x)) throw new Error(`o passo "${x.id}" usa "paralelo" mas precisa de "each" e de "tools" só de leitura (${require('../agents/runner').FERRAMENTAS_LEITURA.join(', ')}) ou []`);
     }
     for (const k of ['when', 'unless']) {
       const c = x[k];
@@ -242,8 +242,8 @@ async function execute(name, args = {}, opts = {}) {
   if (faltam.length) return `Erro: o workflow \"${args.name}\" precisa de: ${faltam.map((v) => `\"${v}\"`).join(', ')}. Chame de novo com vars: {${faltam.map((v) => `${v}: "..."`).join(', ')}}.`;
   if (an.futuras.length) return `Erro: workflow mal montado (${an.futuras.join('; ')}).`;
   const { runOnce } = require('../agent');
-  // ATENÇÃO: na camada de ferramentas uma lista VAZIA significa "todas liberadas". Por isso "nenhuma ferramenta"
-  // (passo com tools: [], ou interseção vazia) é expressa com um nome que não existe: NENHUMA.
+  // Desde a v0.41.0 a camada de ferramentas já trata [] como "nenhuma"; NENHUMA continua valendo para
+  // compatibilidade (passo com tools: [], ou interseção vazia).
   const pai = Array.isArray(opts.allowedPai) && opts.allowedPai.length ? opts.allowedPai.filter((n) => n !== 'run_workflow') : undefined;
   const ferramentasDoPasso = (o) => {
     const doPasso = Array.isArray(o && o.allowedTools) ? o.allowedTools.filter((n) => n !== 'run_workflow') : undefined;
@@ -276,7 +276,8 @@ async function execute(name, args = {}, opts = {}) {
 
 // v0.19.0: validação completa SEM rodar nada (e sem gastar IA): junta TODOS os problemas, não só o primeiro.
 const CAMPOS_PASSO = new Set(['id', 'prompt', 'retry', 'optional', 'model', 'tools', 'when', 'unless', 'keepHistory', 'each', 'maxItens', 'paralelo']);
-const FERRAMENTAS_CONHECIDAS = new Set(['edit_file', 'list_dir', 'read_file', 'run_checks', 'run_shell', 'search_files', 'todo_write', 'write_file']);
+// v0.41.0: + edit_files, glob_files, web_fetch e shell_status (antes eram avisadas como "não existe").
+const FERRAMENTAS_CONHECIDAS = new Set(['edit_file', 'edit_files', 'glob_files', 'list_dir', 'read_file', 'run_checks', 'run_shell', 'search_files', 'shell_status', 'todo_write', 'web_fetch', 'write_file']);
 function validarWorkflow(w) {
   const erros = []; const avisos = [];
   if (!w || typeof w !== 'object' || !Array.isArray(w.steps) || !w.steps.length) return { erros: ['o arquivo não tem "steps" (lista de passos)'], avisos };
@@ -301,7 +302,7 @@ function validarWorkflow(w) {
     if (x.paralelo !== undefined) {
       const { MAX_PARALELO } = require('../agents/runner');
       if (!(Number.isInteger(x.paralelo) && x.paralelo >= 1 && x.paralelo <= MAX_PARALELO)) erros.push(`passo ${nome}: "paralelo" precisa ser de 1 a ${MAX_PARALELO}`);
-      else if (x.paralelo > 1 && !paraleloSeguro(x)) erros.push(`passo ${nome}: "paralelo" exige "each" e "tools" só de leitura (read_file, list_dir, search_files) ou [] (itens em paralelo não podem gravar nem pedir confirmação)`);
+      else if (x.paralelo > 1 && !paraleloSeguro(x)) erros.push(`passo ${nome}: "paralelo" exige "each" e "tools" só de leitura (${require('../agents/runner').FERRAMENTAS_LEITURA.join(', ')}) ou [] (itens em paralelo não podem gravar nem pedir confirmação)`);
       else if (x.paralelo > 1) avisos.push(`passo ${nome}: "paralelo": ${x.paralelo} manda ${x.paralelo} chamadas ao mesmo tempo; se a API reclamar de limite, volte para 1`);
     }
     if (x.maxItens !== undefined && !(Number.isInteger(x.maxItens) && x.maxItens >= 1 && x.maxItens <= 10)) erros.push(`passo ${nome}: "maxItens" precisa ser de 1 a 10`);
@@ -336,7 +337,8 @@ function sanitizarWorkflow(w) {
   }) : [];
   return out;
 }
-const FERRAMENTAS_PERIGOSAS = new Set(['write_file', 'edit_file', 'run_shell']);
+// v0.41.0: + edit_files (grava) e web_fetch (rede: pode levar dados do projeto para fora).
+const FERRAMENTAS_PERIGOSAS = new Set(['write_file', 'edit_file', 'edit_files', 'run_shell', 'web_fetch']);
 function riscosDoWorkflow(w) {
   const r = [];
   for (const x of (w && w.steps) || []) {
@@ -344,7 +346,7 @@ function riscosDoWorkflow(w) {
     if (!Array.isArray(x.tools)) r.push(`passo "${x.id}": sem "tools" (herda TODAS as ferramentas do agente, inclusive gravar arquivo e rodar comando)`);
     else {
       const p = x.tools.filter((n) => FERRAMENTAS_PERIGOSAS.has(n));
-      if (p.length) r.push(`passo "${x.id}": pode usar ${p.join(', ')} (grava arquivo ou roda comando)`);
+      if (p.length) r.push(`passo "${x.id}": pode usar ${p.join(', ')} (grava arquivo, roda comando ou acessa a web)`);
     }
   }
   return r;

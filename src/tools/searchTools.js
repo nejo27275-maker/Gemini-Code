@@ -9,6 +9,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { verificadorDeSegredos, foraDoProjetoParaConvidado } = require('./protectedPaths');
 
 const IGNORAR_DIRS = new Set(['node_modules', '.git', 'dist', 'build', '.cache', 'coverage']);
 const MAX_RESULTADOS = 100;
@@ -61,6 +62,8 @@ async function execute(name, args) {
   if (typeof args.pattern !== 'string' || args.pattern === '') return 'Erro: search_files precisa de "pattern" (texto não vazio).';
 
   const raiz = path.resolve(args.path || '.');
+  const fora = foraDoProjetoParaConvidado(raiz);
+  if (fora) return fora;
   if (!fs.existsSync(raiz)) return `Erro: diretório não existe: ${args.path || '.'}`;
 
   let matcher;
@@ -77,6 +80,7 @@ async function execute(name, args) {
   }
 
   const resultados = [];
+  const ehSegredo = verificadorDeSegredos();
   for (const arquivo of listarArquivos(raiz, !!args.include_hidden)) {
     if (resultados.length >= MAX_RESULTADOS) break;
     if (args.file_glob && !arquivo.endsWith(args.file_glob)) continue;
@@ -88,6 +92,8 @@ async function execute(name, args) {
       continue;
     }
     if (stat.size > MAX_TAMANHO_ARQUIVO) continue;
+    // v0.41.0: buscar dentro de ~/.gemini-code devolvia a linha do token ou da API key.
+    if (ehSegredo(arquivo, stat)) continue;
 
     let conteudo;
     try {

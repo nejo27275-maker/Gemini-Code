@@ -64,11 +64,19 @@ function parseRunArgs(args = []) {
   let profileName = null;
   let createCheckpoint = false;
   let legacyReadOnly = false;
+  let json = false;
+  const imagens = [];
   const instructionParts = [];
   for (let i = 0; i < args.length; i++) {
     const arg = String(args[i]);
     if (arg === '--checkpoint') createCheckpoint = true;
     else if (arg === '--read-only') legacyReadOnly = true;
+    // v0.41.0: --json (saída estruturada para automação/CI) e --imagem ARQUIVO (repetível).
+    else if (arg === '--json') json = true;
+    else if (arg === '--imagem' || arg === '--image') {
+      if (!args[i + 1] || String(args[i + 1]).startsWith('--')) throw new Error(`Informe o arquivo da imagem após ${arg}.`);
+      imagens.push(String(args[++i]));
+    }
     else if (arg === '--profile') {
       if (!args[i + 1] || String(args[i + 1]).startsWith('--')) throw new Error('Informe o nome do perfil após --profile.');
       profileName = String(args[++i]);
@@ -78,7 +86,7 @@ function parseRunArgs(args = []) {
   }
   if (legacyReadOnly && profileName) throw new Error('Use --read-only ou --profile, não os dois juntos.');
   const profile = resolveProfile(profileName || (legacyReadOnly ? 'explore' : 'coder'));
-  return { profile, createCheckpoint, instruction: instructionParts.join(' ').trim(), legacyReadOnly };
+  return { profile, createCheckpoint, instruction: instructionParts.join(' ').trim(), legacyReadOnly, json, imagens };
 }
 
 function listProfiles() {

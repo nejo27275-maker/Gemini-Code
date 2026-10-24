@@ -153,7 +153,8 @@ function getSessionRole() {
  */
 function restringirParaSessao(allowedTools) {
   if (sessionRole !== 'guest') return allowedTools;
-  if (!allowedTools || !allowedTools.length) return GUEST_ALLOWED_TOOLS;
+  // `[]` (nenhuma ferramenta) continua nenhuma; só a ausência de lista vira a do convidado.
+  if (allowedTools == null) return GUEST_ALLOWED_TOOLS;
   return allowedTools.filter((t) => GUEST_ALLOWED_TOOLS.includes(t));
 }
 
