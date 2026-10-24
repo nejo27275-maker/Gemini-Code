@@ -131,11 +131,18 @@ function erroOllama(status, corpo, model, url) {
   return new Error(`[Ollama] erro HTTP ${status} em ${url}: ${msg || 'sem detalhes'}`);
 }
 
-function erroConexao(err, url) {
+// v0.43.4: conectou mas parou de responder (o fetch do Node desiste após 300 s sem cabeçalho ou sem dados) ou
+// caiu no meio da resposta não é "Ollama não instalado": cada caso tem a sua mensagem.
+function erroConexao(err, url, { noMeio = false } = {}) {
+  const codigo = err.cause?.code || err.message;
   const e = new Error(
-    `[Ollama] não consegui conectar em ${url} (${err.cause?.code || err.message}).\n` +
-    'Instale o Ollama no dispositivo/PC, inicie com "ollama serve" e baixe um modelo geral, por exemplo: "ollama pull qwen3:4b-instruct".\n' +
-    'Se estiver no celular e o Ollama rodar em outro PC da mesma rede, defina OLLAMA_HOST=http://IP_DO_PC:11434.' 
+    /^UND_ERR_(HEADERS|BODY)_TIMEOUT$/.test(err.cause?.code || '')
+      ? `[Ollama] ${url} ficou 5 min sem responder (${codigo}). O modelo pode estar carregando ou o aparelho sobrecarregado: confira com "ollama ps".`
+      : noMeio
+        ? `[Ollama] a resposta de ${url} parou no meio (${codigo}). Confira se o Ollama continua rodando: "ollama ps".`
+        : `[Ollama] não consegui conectar em ${url} (${codigo}).\n` +
+          'Instale o Ollama no dispositivo/PC, inicie com "ollama serve" e baixe um modelo geral, por exemplo: "ollama pull qwen3:4b-instruct".\n' +
+          'Se estiver no celular e o Ollama rodar em outro PC da mesma rede, defina OLLAMA_HOST=http://IP_DO_PC:11434.'
   );
   e.rede = true;
   return e;
@@ -146,11 +153,14 @@ async function chatWithTools({ modelName, systemInstruction, history, tools, onT
   const model = modelName || cfg.ollamaModel;
   const url = `${baseUrl(cfg)}/api/chat`;
   const numCtx = Number(cfg.ollamaNumCtx) || 8192;
-  const stream = Boolean(onText) && cfg.enableStreaming !== false;
+  const exibir = Boolean(onText) && cfg.enableStreaming !== false;
 
   const body = {
     model,
-    stream,
+    // v0.43.4: sempre em streaming, mesmo quando nada é exibido (run, cowork, subagentes, workflows). Sem
+    // streaming o Ollama só manda o cabeçalho quando acaba de gerar, e o fetch do Node desiste do cabeçalho
+    // em 300 s: uma resposta longa num celular falhava com "não consegui conectar" e a geração era perdida.
+    stream: true,
     messages: ajustarAoContexto(converterHistorico(history, systemInstruction), numCtx),
     options: { num_ctx: numCtx, temperature: Number.isFinite(cfg.ollamaTemperature) ? cfg.ollamaTemperature : 0.2 },
     keep_alive: cfg.ollamaKeepAlive || '10m',
@@ -176,7 +186,7 @@ async function chatWithTools({ modelName, systemInstruction, history, tools, onT
     const m = chunk.message || {};
     if (m.content) {
       texto += m.content;
-      if (stream && onText) onText(m.content);
+      if (exibir) onText(m.content);
     }
     for (const tc of m.tool_calls || []) {
       let args = tc.function?.arguments || {};
@@ -185,12 +195,14 @@ async function chatWithTools({ modelName, systemInstruction, history, tools, onT
     }
   };
 
-  if (stream) {
+  if (res.body && typeof res.body.getReader === 'function') {
     const reader = res.body.getReader();
     const dec = new TextDecoder('utf8');
     let buf = '';
     while (true) {
-      const { done, value } = await reader.read();
+      let lido;
+      try { lido = await reader.read(); } catch (err) { throw erroConexao(err, baseUrl(cfg), { noMeio: true }); }
+      const { done, value } = lido;
       if (done) break;
       buf += dec.decode(value, { stream: true });
       let i;

@@ -47,7 +47,7 @@ function erroRede(err, url) {
   return error;
 }
 
-async function pedir({ url, headers, body, onText, timeoutMs, stream }) {
+async function pedir({ url, headers, body, onText, timeoutMs }) {
   const ctrl = new AbortController();
   let timer;
   let estourou = false;
@@ -63,9 +63,12 @@ async function pedir({ url, headers, body, onText, timeoutMs, stream }) {
     }
     reiniciar();
     if (!response.ok) throw erroHttp(response.status, await response.json().catch(() => ({})), url);
-    if (stream && response.body && typeof response.body.getReader === 'function') {
+    // resposta inteira em JSON se a API ignorar o "stream"; o resto é SSE
+    const json = /application\/json/i.test(String(response.headers?.get?.('content-type') || ''));
+    if (!json && response.body && typeof response.body.getReader === 'function') {
       const r = await lerStream(response, onText, reiniciar, erroHttp);
-      return { texto: r.texto, calls: r.calls, usage: r.usage, jaEmitiu: true };
+      // sem onText (nada exibido durante a leitura), quem chama ainda entrega o texto inteiro no fim
+      return { texto: r.texto, calls: r.calls, usage: r.usage, jaEmitiu: Boolean(onText) };
     }
     const data = await response.json().catch(() => ({}));
     const message = data.choices?.[0]?.message || {};
@@ -101,9 +104,11 @@ async function chatWithTools({ modelName, systemInstruction, history, tools, onT
   const orcamentoChars = Math.max(20000, (ctxTokens(cfg) - maxResp - toolsTokens - 512) * CHARS_POR_TOKEN);
   const mensagens = ajustarAoContexto(converterHistorico(history, systemInstruction || '', { imagens: true }), orcamentoChars);
 
-  const stream = Boolean(onText) && cfg.enableStreaming !== false;
-  const body = { model: modelo, messages: mensagens, max_tokens: maxResp, stream };
-  if (stream) body.stream_options = { include_usage: true };
+  // v0.43.4: sempre em streaming, mesmo quando nada é exibido (run, cowork, subagentes, workflows). Sem
+  // streaming a resposta só chegava inteira no fim, e o openaiTimeoutMs, que é de inatividade, virava limite
+  // da geração toda (um modelo que pensa muito passava dele).
+  const exibir = Boolean(onText) && cfg.enableStreaming !== false;
+  const body = { model: modelo, messages: mensagens, max_tokens: maxResp, stream: true, stream_options: { include_usage: true } };
   if (Number.isFinite(cfg.openaiTemperature)) body.temperature = cfg.openaiTemperature;
   if (declarations.length) body.tools = declarations;
   const headers = {
@@ -114,7 +119,7 @@ async function chatWithTools({ modelName, systemInstruction, history, tools, onT
     'X-Title': 'gemini-code',
   };
 
-  const r = await pedir({ url, headers, body, onText, timeoutMs: Number(cfg.openaiTimeoutMs) || 300000, stream });
+  const r = await pedir({ url, headers, body, onText: exibir ? onText : undefined, timeoutMs: Number(cfg.openaiTimeoutMs) || 300000 });
 
   const parts = [];
   if (r.texto) parts.push({ text: r.texto });

@@ -31,8 +31,10 @@ const servidor = http.createServer((req, res) => {
     const r = resposta(ultimoPedido);
     if (r.sse) {
       res.writeHead(200, { 'content-type': 'text/event-stream' });
-      for (const ev of r.sse) res.write(`data: ${JSON.stringify(ev)}\n\n`);
-      res.end('data: [DONE]\n\n');
+      const eventos = [...r.sse.map((ev) => `data: ${JSON.stringify(ev)}\n\n`), 'data: [DONE]\n\n'];
+      if (!r.intervaloMs) { res.end(eventos.join('')); return; }
+      // um evento por vez, como um modelo que demora a escrever
+      const tique = setInterval(() => { const ev = eventos.shift(); if (eventos.length) res.write(ev); else { clearInterval(tique); res.end(ev); } }, r.intervaloMs);
       return;
     }
     res.writeHead(r.status, { 'content-type': 'application/json' });
@@ -87,6 +89,24 @@ test('streaming: junta texto e tool_calls em pedaços e registra o usage do últ
   assert.equal(pedacos.join(''), 'Vou ler.');
   assert.deepEqual(r.functionCalls(), [{ name: 'read_file', args: { path: 'c.txt' }, id: 'c9' }]);
   assert.equal(usage.total(), 15);
+});
+
+// v0.43.4: sem onText (run, cowork, subagentes) o pedido ia sem streaming e o openaiTimeoutMs, que é de
+// inatividade, virava limite da resposta inteira.
+test('sem onText: pedido em streaming, e resposta mais longa que o timeout de inatividade termina', async () => {
+  config.saveConfig({ openaiBaseUrl: base(), openaiApiKey: CHAVE, openaiModel: 'm', openaiTimeoutMs: 300 });
+  resposta = () => ({ intervaloMs: 120, sse: [
+    { choices: [{ delta: { content: 'pensando ' } }] },
+    { choices: [{ delta: { content: 'devagar' } }] },
+    { choices: [], usage: { prompt_tokens: 5, completion_tokens: 2, total_tokens: 7 } },
+  ] });
+  usage.zerar();
+  try {
+    const r = await openai.chatWithTools({ history: [{ role: 'user', parts: [{ text: 'oi' }] }], tools: [] });
+    assert.equal(ultimoPedido.body.stream, true);
+    assert.equal(r.text(), 'pensando devagar');
+    assert.equal(usage.total(), 7);
+  } finally { config.saveConfig({ openaiTimeoutMs: undefined }); }
 });
 
 test('erros: 401 explica a chave; 429/5xx são transitórios; sem chave é recuperável', async () => {

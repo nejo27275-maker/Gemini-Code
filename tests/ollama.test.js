@@ -10,6 +10,11 @@ const path = require('path');
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'gc-ollama-'));
 process.env.HOME = home;
 delete process.env.OLLAMA_HOST;
+const fetchReal = global.fetch;
+const escreverCfg = (extra = {}) => {
+  fs.mkdirSync(path.join(home, '.gemini-code'), { recursive: true });
+  fs.writeFileSync(path.join(home, '.gemini-code', 'config.json'), JSON.stringify({ configVersion: 99, ...extra }));
+};
 
 const ollama = require('../src/providers/ollama');
 
@@ -114,6 +119,58 @@ test('modelo não instalado: manda dar ollama pull', async () => {
 test('modelo sem suporte a tools: mensagem explica o que trocar', async () => {
   global.fetch = async () => json({ error: 'registry.ollama.ai/x does not support tools' }, false, 400);
   await assert.rejects(() => ollama.chatWithTools({ history: [], tools: TOOLS }), /não suporta ferramentas/);
+});
+
+// v0.43.4: sem quem exiba os pedaços (run, cowork, subagentes, workflows) o pedido ia com stream:false; o
+// Ollama só manda o cabeçalho ao terminar de gerar e o fetch do Node desiste em 300 s.
+test('sem onText o pedido continua em streaming e o texto chega inteiro', async () => {
+  let corpo;
+  global.fetch = async (url, init) => { corpo = JSON.parse(init.body); return ndjson([{ message: { content: 'resposta ' } }, { message: { content: 'longa' } }, { done: true, message: { content: '' } }]); };
+  const r = await ollama.chatWithTools({ history: [{ role: 'user', parts: [{ text: 'oi' }] }] });
+  assert.equal(corpo.stream, true);
+  assert.equal(r.text(), 'resposta longa');
+});
+
+test('enableStreaming:false: pedido em streaming, mas nenhum pedaço é exibido', async () => {
+  escreverCfg({ enableStreaming: false });
+  global.fetch = async () => ndjson([{ message: { content: 'em ' } }, { message: { content: 'partes' } }, { done: true }]);
+  const pedacos = [];
+  try {
+    const r = await ollama.chatWithTools({ history: [{ role: 'user', parts: [{ text: 'oi' }] }], onText: (t) => pedacos.push(t) });
+    assert.deepEqual(pedacos, []);
+    assert.equal(r.text(), 'em partes');
+  } finally { escreverCfg(); }
+});
+
+test('Ollama que conecta mas fica 5 min calado: diz isso, e não "instale o Ollama"', async () => {
+  global.fetch = async () => { const e = new TypeError('fetch failed'); e.cause = { code: 'UND_ERR_HEADERS_TIMEOUT' }; throw e; };
+  await assert.rejects(
+    () => ollama.chatWithTools({ history: [] }),
+    (e) => /5 min sem responder/.test(e.message) && /ollama ps/.test(e.message) && !/Instale/.test(e.message) && e.rede === true
+  );
+});
+
+test('servidor HTTP real: NDJSON em pedaços chega inteiro; conexão que cai no meio vira erro claro', async (t) => {
+  const http = require('http');
+  let cair = false;
+  const srv = http.createServer((req, res) => {
+    req.resume();
+    req.on('end', () => {
+      res.writeHead(200, { 'Content-Type': 'application/x-ndjson' });
+      res.write(JSON.stringify({ message: { content: 'come' } }) + '\n');
+      if (cair) { setTimeout(() => res.socket.destroy(), 30); return; }
+      setTimeout(() => res.end(JSON.stringify({ message: { content: 'ço e fim' }, done: true }) + '\n'), 30);
+    });
+  });
+  await new Promise((ok) => srv.listen(0, '127.0.0.1', ok));
+  t.after(() => { delete process.env.OLLAMA_HOST; return new Promise((ok) => srv.close(ok)); });
+  global.fetch = fetchReal;
+  process.env.OLLAMA_HOST = `127.0.0.1:${srv.address().port}`;
+  const pergunta = { history: [{ role: 'user', parts: [{ text: 'oi' }] }] };
+
+  assert.equal((await ollama.chatWithTools(pergunta)).text(), 'começo e fim');
+  cair = true;
+  await assert.rejects(() => ollama.chatWithTools(pergunta), (e) => /parou no meio/.test(e.message) && e.rede === true);
 });
 
 test('OLLAMA_HOST sem esquema vira http://', () => {
