@@ -9,6 +9,8 @@ const webTools = require('./webTools');
 const shellTools = require('./shellTools');
 // v0.43.0: controlar aparelhos Android do usuário (TV, celular) por adb.
 const adbTools = require('./adbTools');
+// v0.44.0: navegador de verdade (Chrome/Chromium sem janela) controlado pelo agente.
+const browserTools = require('./browserTools');
 const searchTools = require('./searchTools');
 const checkTools = require('./checkTools');
 const mcpClient = require('./mcpClient');
@@ -42,6 +44,7 @@ async function getAllDeclarations(allowedNames) {
     ...webTools.declarations,
     ...shellTools.declarations,
     ...adbTools.declarations,
+    ...browserTools.declarations,
     ...searchTools.declarations,
     ...checkTools.declarations,
     ...todoTools.declarations,
@@ -65,6 +68,7 @@ async function execute(name, args, allowedNames) {
   if (webTools.declarations.some((d) => d.name === name)) return webTools.execute(name, args);
   if (shellTools.declarations.some((d) => d.name === name)) return shellTools.execute(name, args);
   if (adbTools.declarations.some((d) => d.name === name)) return adbTools.execute(name, args);
+  if (browserTools.declarations.some((d) => d.name === name)) return browserTools.execute(name, args);
   if (searchTools.declarations.some((d) => d.name === name)) return searchTools.execute(name, args);
   if (checkTools.declarations.some((d) => d.name === name)) return checkTools.execute(name, args);
   if (todoTools.declarations.some((d) => d.name === name)) return todoTools.execute(name, args);
@@ -80,7 +84,7 @@ async function execute(name, args, allowedNames) {
 function nomesNativos() {
   return [
     fileTools, multiEditTools, globTools, webTools, shellTools, searchTools,
-    checkTools, todoTools, workflowTools, skillLoader, subagent, adbTools,
+    checkTools, todoTools, workflowTools, skillLoader, subagent, adbTools, browserTools,
   ].flatMap((m) => m.declarations.map((d) => d.name)).concat(personalTools.NOMES);
 }
 

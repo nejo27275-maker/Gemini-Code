@@ -4,10 +4,9 @@
 
 const path = require('path');
 const crypto = require('crypto');
-const { HOME_DIR } = require('./config');
+const { HOME_DIR, ROUTINES_PATH } = require('./config');
 const { lerJson, escreverJson } = require('./jsonStore');
 
-const ROUTINES_PATH = path.join(HOME_DIR, 'routines.json');
 const EXECUTIONS_PATH = path.join(HOME_DIR, 'routine-executions.json');
 const DEFAULT_TIMEZONE = 'America/Recife';
 const STATUSES = Object.freeze({
@@ -127,10 +126,32 @@ function parseDuration(value) {
   return number * multiplier;
 }
 
+// v0.44.0: rotina "agente" — o agente faz uma tarefa sozinho no horário marcado. Ninguém está olhando: toda
+// confirmação vira "não" (src/ui/prompt.js), então o que roda sem perguntar é só o que já roda sem perguntar no
+// chat (leitura, ou o que o usuário liberou com regras "permitir"). Por padrão, só ferramentas de leitura.
+const FERRAMENTAS_ROTINA_PADRAO = Object.freeze(['read_file', 'list_dir', 'search_files', 'glob_files']);
+
+function validarAcaoAgente(action) {
+  const { semControlesInvisiveis } = require('./ui/textoSeguro');
+  const prompt = typeof action.prompt === 'string' ? semControlesInvisiveis(action.prompt).trim() : '';
+  if (!prompt || prompt.length > 8000) throw new Error('A rotina de agente precisa de um pedido (prompt) com até 8000 caracteres.');
+  const ferramentas = action.ferramentas === undefined ? [...FERRAMENTAS_ROTINA_PADRAO] : action.ferramentas;
+  if (!Array.isArray(ferramentas) || ferramentas.length > 40 || ferramentas.some((t) => typeof t !== 'string')) {
+    throw new Error('ferramentas precisa ser uma lista de nomes (vazia = nenhuma ferramenta).');
+  }
+  const nativas = require('./tools').nomesNativos();
+  const desconhecida = ferramentas.find((t) => !nativas.includes(t) && !/^mcp__[\w-]+__[\w-]+$/.test(t));
+  if (desconhecida) throw new Error(`Ferramenta desconhecida: ${desconhecida}. Disponíveis: ${nativas.join(', ')} (e as mcp__servidor__ferramenta).`);
+  const maxPassos = action.maxPassos === undefined ? 20 : Number(action.maxPassos);
+  if (!Number.isInteger(maxPassos) || maxPassos < 1 || maxPassos > 60) throw new Error('maxPassos precisa ser um inteiro entre 1 e 60.');
+  return { type: 'agente', prompt, ferramentas: [...new Set(ferramentas)], maxPassos, notificar: action.notificar === true };
+}
+
 function validarAcao(action) {
   if (!action || typeof action !== 'object' || Array.isArray(action)) throw new Error('A rotina precisa de uma ação válida.');
+  if (action.type === 'agente') return validarAcaoAgente(action);
   if (action.type !== 'http-check') {
-    throw new Error('Nesta versão, a ação automática disponível é http-check. Outras ações precisam de executor próprio e revisão de permissões.');
+    throw new Error('Ação inválida. Use http-check (verificar um site) ou agente (o agente faz uma tarefa sozinho).');
   }
   let url;
   try { url = new URL(action.url); } catch { throw new Error('URL inválida para a ação http-check.'); }
@@ -204,7 +225,7 @@ function createRoutineStore({ dataPath = ROUTINES_PATH, executionsPath = EXECUTI
     if (trigger.type === 'cron') nextRunAt = nextCronDate(trigger.expression, now, trigger.timezone);
     const routine = {
       id, name, description: String(input.description || '').trim().slice(0, 1000),
-      category: String(input.category || 'monitoramento').trim().slice(0, 60) || 'monitoramento',
+      category: String(input.category || (action.type === 'agente' ? 'agente' : 'monitoramento')).trim().slice(0, 60) || 'monitoramento',
       priority: ['baixa', 'normal', 'alta', 'critica'].includes(input.priority) ? input.priority : 'normal',
       trigger, action, status: STATUSES.DRAFT, createdAt: nowIso, updatedAt: nowIso,
       nextRunAt, lastRunAt: null, lastResult: null, lastCronSlotKey: null,
@@ -352,6 +373,6 @@ function createRoutineStore({ dataPath = ROUTINES_PATH, executionsPath = EXECUTI
 const defaultStore = createRoutineStore();
 module.exports = {
   ROUTINES_PATH, EXECUTIONS_PATH, DEFAULT_TIMEZONE, STATUSES, VALID_STATUSES,
-  parseDuration, parseCron, cronMatches, nextCronDate, validarGatilho, validarAcao, createRoutineStore,
+  parseDuration, parseCron, cronMatches, nextCronDate, validarGatilho, validarAcao, createRoutineStore, FERRAMENTAS_ROTINA_PADRAO,
   ...defaultStore,
 };

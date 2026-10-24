@@ -24,6 +24,8 @@ const SETTERS = {
   // v0.43.0: ADB (controlar TV/celular do usuário).
   'set-adb-path': { campo: 'adbPath', ok: (v) => `Caminho do adb definido: ${v}`, uso: 'gemini-code config set-adb-path /caminho/do/adb' },
   'set-adb-serial': { campo: 'adbSerial', ok: (v) => `Aparelho adb padrão definido: ${v}`, uso: 'gemini-code config set-adb-serial SERIAL_OU_IP[:PORTA]' },
+  // v0.44.0: navegador do agente.
+  'set-navegador-path': { campo: 'navegadorPath', ok: (v) => `Navegador do agente: ${v}`, uso: 'gemini-code config set-navegador-path /caminho/do/chrome' },
 };
 
 /** @returns {string|null} texto para mostrar, ou null se `sub` não é daqui. */
@@ -35,6 +37,11 @@ function aplicar(sub, args, saveConfig) {
     if (s.url && !urlValida(a[0])) return `Endereço inválido: "${a[0]}" (precisa começar com http:// ou https://).\nUso: ${s.uso}`;
     saveConfig({ [s.campo]: a[0] });
     return s.ok(a[0]);
+  }
+  if (sub === 'set-navegador-local') {
+    if (!['on', 'off'].includes(a[0])) return 'Uso: gemini-code config set-navegador-local on|off   (on: o navegador do agente abre 127.0.0.1/localhost; o resto da rede local continua bloqueado)';
+    saveConfig({ navegadorPermitirLocal: a[0] === 'on' });
+    return a[0] === 'on' ? 'O navegador do agente agora abre 127.0.0.1/localhost (para testar o seu app). O resto da rede local continua bloqueado.' : 'O navegador do agente voltou a bloquear 127.0.0.1/localhost.';
   }
   if (sub === 'set-fallback-model') {
     saveConfig({ fallbackModel: a[0] || '' });

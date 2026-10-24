@@ -19,6 +19,7 @@ const COWORK_TOKEN_PATH = path.join(HOME_DIR, 'cowork-token.txt');
 const ROUTINE_API_TOKEN_PATH = path.join(HOME_DIR, 'routine-api-token.txt');
 const TRUST_PATH = path.join(HOME_DIR, 'confianca.json'); // v0.41.0: src/trust.js
 const ALIADOS_DIR = path.join(HOME_DIR, 'aliados'); // v0.42.0: agentes pessoais (src/personalAgents.js)
+const ROUTINES_PATH = path.join(HOME_DIR, 'routines.json'); // v0.44.0: em PROTECTED_PATHS (rotinas de agente)
 
 // Arquivos que o modelo nunca pode gravar sozinho (write_file/edit_file) e que
 // forçam confirmação no run_shell. Cada um, se reescrito, dá ao modelo mais
@@ -39,6 +40,9 @@ const PROTECTED_PATHS = Object.freeze([
   COWORK_TOKEN_PATH,
   ROUTINE_API_TOKEN_PATH,
   TRUST_PATH,
+  // v0.44.0: uma rotina pode rodar o agente sozinho, com o pedido e as ferramentas escritos aqui. Se o modelo
+  // gravasse este arquivo, agendaria a si mesmo para depois, sem ninguém olhando.
+  ROUTINES_PATH,
 ]);
 
 // v0.42.0: pastas inteiras que o modelo não grava. Cada agente pessoal (aliados/<nome>/) guarda as
@@ -159,6 +163,11 @@ const DEFAULT_CONFIG = {
   adbSerial: '',
   adbPorta: 5555,
   adbConfirm: true,
+  // v0.44.0: navegador do agente (ferramenta "browser", src/navegador.js). navegadorPath: Chrome/Chromium/Edge
+  // (vazio = procura sozinho); navegadorPermitirLocal: deixa abrir 127.0.0.1/localhost (testar o próprio app) —
+  // o resto da rede local continua bloqueado. Sites novos seguem confirmWeb/webDominiosPermitidos.
+  navegadorPath: '',
+  navegadorPermitirLocal: false,
   // v0.42.0: orçamento por mensagem dos trechos da base de conhecimento de um agente pessoal (src/personalAgents.js)
   aliadosConhecimentoMaxChars: 8000,
 };
@@ -292,6 +301,7 @@ module.exports = {
   ROUTINE_API_TOKEN_PATH,
   TRUST_PATH,
   ALIADOS_DIR,
+  ROUTINES_PATH,
   PROTECTED_PATHS,
   PROTECTED_DIRS,
   SECRET_PATHS,

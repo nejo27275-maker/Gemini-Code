@@ -166,6 +166,8 @@ No modo "chat", digite /help para ver os comandos de sessão (/clear, /model, /s
 
   gemini-code routines list                     Lista rotinas persistentes
   gemini-code routines create --name N --url URL (--every 5m | --at ISO | --cron '*/5 * * * *')
+  gemini-code routines create --name N --prompt "TAREFA" [--ferramentas a,b] [--passos 20] [--notificar] (--every|--at|--cron)
+                                                O agente faz a tarefa sozinho no horário (sem perguntar nada)
   gemini-code routines activate ID              Autoriza a execução automática de um rascunho
   gemini-code routines pause ID | resume ID     Pausa ou retoma uma rotina
   gemini-code routines run ID                   Executa uma verificação agora
@@ -1367,11 +1369,12 @@ async function main() {
       try {
         if (sub === 'list' || sub === 'listar' || !sub) {
           const list = artifacts.listArtifacts({ limit: Number(args[0] || 30) });
-          console.log(list.length ? list.map((a) => `${a.id} | ${a.status} | ${a.type} | ${a.title} | ${a.createdAt}`).join('\n') : 'Nenhum artefato salvo.');
+          console.log(list.length ? list.map((a) => paraTerminal(`${a.id} | ${a.status} | ${a.type} | ${a.title} | ${a.createdAt}`)).join('\n') : 'Nenhum artefato salvo.');
         } else if (sub === 'show' || sub === 'ver') {
           const item = artifacts.readArtifact(args[0]);
           if (!item) throw new Error('Artefato não encontrado.');
-          console.log(`# ${item.title}\nID: ${item.id}\nTipo: ${item.type} | Estado: ${item.status}\nCriado: ${item.createdAt}\nSHA-256: ${item.sha256}\n\n${item.content}`);
+          // v0.44.0: guarda respostas do modelo (rotinas de agente): passa pelo filtro do terminal
+          console.log(paraTerminal(`# ${item.title}\nID: ${item.id}\nTipo: ${item.type} | Estado: ${item.status}\nCriado: ${item.createdAt}\nSHA-256: ${item.sha256}\n\n${item.content}`));
         } else {
           console.log('Uso: artifacts list [limite] | artifacts show ID');
         }
@@ -1443,6 +1446,8 @@ async function main() {
       const bins = ['git', 'claude', 'codex', 'agy', 'hermes', 'kimi', 'kimi-code', 'higgsfield', 'ollama', 'docker'].map((name) => { const binPath = which(name); return { name, available: !!binPath, path: binPath }; });
       const report = { node: process.version, platform: process.platform, cwd: process.cwd(), provider: cfg.provider, model: cfg.model, ollamaModel: cfg.ollamaModel, codeIa: (() => { try { const i = require('../src/code-ia/install'); return { instalado: fs.existsSync(i.modelPath()), arquivo: i.modelPath() }; } catch { return { instalado: false }; } })(), modoSolo: require('../src/solo').ativo(cfg), geminiKeyConfigured: Boolean(cfg.apiKey), llamaCpp: (() => { const srv = require('../src/localServer'); const c = srv.caminhos(); const l = require('../src/providers/llamacpp'); let livreMB = null; try { const st = fs.statfsSync(require('os').homedir()); livreMB = Math.round((st.bavail * st.bsize) / 1048576); } catch { /* sem statfs */ } return { servidorBinario: fs.existsSync(c.servidor), modeloGGUF: fs.existsSync(c.modelo), ctx: l.ctxTamanho(cfg), autoStart: cfg.llamaCppAutoStart === true, pid: srv.lerPid(), espacoLivreMB: livreMB }; })(), integrations: bins,
         // v0.43.3: ferramentas que dependem de algo fora do projeto: o adb (TV/celular) e o pacote ws (cowork).
+        // v0.44.0: navegador do agente (ferramenta browser)
+        navegador: (() => { const p = require('../src/navegador').acharNavegador({ caminho: cfg.navegadorPath || '' }); return { encontrado: Boolean(p), caminho: p || cfg.navegadorPath || null, abreLocalhost: cfg.navegadorPermitirLocal === true }; })(),
         adb: (() => { const p = cfg.adbPath || 'adb'; const achado = p.includes('/') || p.includes('\\') ? (fs.existsSync(p) ? p : null) : which(p); return { encontrado: Boolean(achado), caminho: achado || p, aparelhoPadrao: cfg.adbSerial || null, confirmar: cfg.adbConfirm !== false }; })(),
         cowork: (() => { try { require.resolve('ws'); return { ws: true }; } catch { return { ws: false, dica: 'rode npm install na pasta do gemini-code' }; } })(),
         note: 'A presença de um executável só indica disponibilidade local; não comprova login, acesso à nuvem ou que a ferramenta funcione corretamente.' };
@@ -1458,7 +1463,7 @@ async function main() {
           const item = items[i];
           if (item.startsWith('--')) {
             const key = item.slice(2);
-            if (['yes'].includes(key)) flags[key] = true;
+            if (['yes', 'notificar'].includes(key)) flags[key] = true;
             else if (i + 1 < items.length && !items[i + 1].startsWith('--')) flags[key] = items[++i];
             else throw new Error(`Informe um valor para --${key}.`);
           } else if (!flags._) flags._ = [item];
@@ -1466,7 +1471,7 @@ async function main() {
         }
         return flags;
       };
-      const fmt = (r) => `${r.id} | ${r.status} | ${r.name} | ${r.trigger.type}${r.nextRunAt ? ` | próxima: ${r.nextRunAt}` : ''}`;
+      const fmt = (r) => `${r.id} | ${r.status} | ${r.name} | ${r.action.type === 'agente' ? 'agente' : 'http-check'} | ${r.trigger.type}${r.nextRunAt ? ` | próxima: ${r.nextRunAt}` : ''}`;
       try {
         if (sub === 'list' || sub === 'listar') {
           const lista = routines.list();
@@ -1477,23 +1482,31 @@ async function main() {
           const flags = parseFlags(args);
           const name = flags.name;
           const url = flags.url;
+          const pedido = flags.prompt;
           const timezone = flags.timezone || routines.DEFAULT_TIMEZONE;
           const triggers = ['every', 'at', 'cron'].filter((k) => flags[k] !== undefined);
-          if (!name || !url || triggers.length !== 1) {
+          if (!name || (!url === !pedido) || triggers.length !== 1) {
             console.log("Uso: gemini-code routines create --name \"Meu site\" --url https://exemplo.com (--every 5m | --at 2026-10-11T08:00:00-03:00 | --cron '*/5 * * * *') [--timezone America/Recife]");
+            console.log("  ou: gemini-code routines create --name \"Resumo\" --prompt \"resuma os TODO do projeto\" [--ferramentas read_file,list_dir] [--passos 20] [--notificar] --cron '0 8 * * 1-5'");
+            console.log('      (agente: sem ninguém olhando, o que pediria confirmação é recusado; padrão só leitura: ' + routines.FERRAMENTAS_ROTINA_PADRAO.join(', ') + ')');
             return;
           }
           let trigger;
           if (flags.every !== undefined) trigger = { type: 'interval', intervalMs: routines.parseDuration(flags.every), timezone };
           if (flags.at !== undefined) trigger = { type: 'once', runAt: flags.at, timezone };
           if (flags.cron !== undefined) trigger = { type: 'cron', expression: flags.cron, timezone };
+          const ferramentas = flags.ferramentas === undefined ? undefined
+            : ['nenhuma', 'none', ''].includes(String(flags.ferramentas).trim()) ? [] : String(flags.ferramentas).split(',').map((t) => t.trim()).filter(Boolean);
           const routine = routines.create({
-            name, description: flags.description || '', category: flags.category || 'monitoramento',
+            name, description: flags.description || '', category: flags.category,
             priority: flags.priority || 'normal', trigger,
-            action: { type: 'http-check', url, timeoutMs: flags.timeout ? routines.parseDuration(flags.timeout) : 10000,
-              expectedStatus: flags['expected-status'] ? Number(flags['expected-status']) : undefined },
+            action: pedido
+              ? { type: 'agente', prompt: pedido, ferramentas, maxPassos: flags.passos === undefined ? undefined : Number(flags.passos), notificar: flags.notificar === true }
+              : { type: 'http-check', url, timeoutMs: flags.timeout ? routines.parseDuration(flags.timeout) : 10000,
+                expectedStatus: flags['expected-status'] ? Number(flags['expected-status']) : undefined },
             missedPolicy: flags['missed-policy'] || 'skip',
           });
+          if (routine.action.type === 'agente') console.log(`Ferramentas do agente nesta rotina: ${routine.action.ferramentas.length ? routine.action.ferramentas.join(', ') : '(nenhuma)'}; sem ninguém olhando, o que pediria confirmação é recusado.`);
           console.log(`Rotina criada como rascunho (não executa automaticamente até ser ativada):\n${fmt(routine)}\nAtive com: gemini-code routines activate ${routine.id}`);
           return;
         }
@@ -1526,7 +1539,9 @@ async function main() {
           const flags = parseFlags(args);
           const id = flags._ && flags._[0];
           const execs = routines.executions({ routineId: id, limit: flags.limit || 30 });
-          console.log(execs.length ? execs.map((e) => `${e.id} | ${e.status} | ${e.startedAt} | ${e.routineName} | ${e.error || (e.result && e.result.message) || ''}`).join('\n') : 'Nenhuma execução registrada.');
+          // a resposta de uma rotina de agente é texto do modelo: passa pelo filtro do terminal
+          const resumo = (e) => e.error || (e.result && (e.result.resposta ? `${e.result.resposta.split('\n')[0].slice(0, 160)}${e.result.artefato ? ` (completo: gemini-code artifacts show ${e.result.artefato})` : ''}` : e.result.message)) || '';
+          console.log(execs.length ? execs.map((e) => paraTerminal(`${e.id} | ${e.status} | ${e.startedAt} | ${e.routineName} | ${resumo(e)}`)).join('\n') : 'Nenhuma execução registrada.');
           return;
         }
         if (sub === 'remove' || sub === 'remover') {
@@ -1563,7 +1578,7 @@ async function main() {
           console.log(JSON.stringify({ runtime: 'local-process', scheduler: 'not running unless `routines service` is active', storage: routines.ROUTINES_PATH, count: all.length, counts }, null, 2));
           return;
         }
-        console.log('Uso: gemini-code routines list | create --name N --url URL (--every 5m | --at ISO | --cron CRON) | activate ID | pause ID | resume ID | run ID | logs [ID] | remove ID --yes | service | status');
+        console.log('Uso: gemini-code routines list | create --name N (--url URL | --prompt TAREFA) (--every 5m | --at ISO | --cron CRON) | activate ID | pause ID | resume ID | run ID | logs [ID] | remove ID --yes | service | status');
       } catch (err) {
         console.error(chalk.red('Erro: ' + err.message));
         process.exitCode = 1;

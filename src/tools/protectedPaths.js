@@ -108,9 +108,20 @@ function foraDoProjetoParaConvidado(p, raiz = process.cwd()) {
   return `Bloqueado: a sessão de convidado só lê arquivos dentro do projeto (${base}).`;
 }
 
+/**
+ * v0.44.0: caminho para gravar um .png NOVO pedido pelo modelo (print do adb e do navegador): só `.png` e
+ * nunca dentro das áreas protegidas do gemini-code. Quem grava usa a flag 'wx' (não sobrescreve nada).
+ */
+function destinoPngNovo(arquivo, prefixo = 'tela') {
+  const destino = path.resolve(String(arquivo || `${prefixo}-${new Date().toISOString().replace(/[:.]/g, '-')}.png`));
+  if (path.extname(destino).toLowerCase() !== '.png') throw new Error('o print precisa ser salvo num arquivo .png.');
+  if (isProtected(destino) || isSecret(destino)) throw new Error('esse caminho é protegido do gemini-code; escolha outro lugar para o print.');
+  return destino;
+}
+
 const MSG_SEGREDO =
   'Bloqueado: este arquivo (ou o destino deste link) guarda segredos do próprio gemini-code ' +
   '(API key, segredos de MCP ou token de acesso) e não pode ser lido por ferramentas do modelo. ' +
   'Para ver a configuração, peça ao usuário para rodar "gemini-code config show" (mostra mascarado).';
 
-module.exports = { caminhoReal, mesmoInode, isProtected, isSecret, dentroDePastaProtegida, verificadorDeSegredos, foraDoProjetoParaConvidado, MSG_SEGREDO };
+module.exports = { caminhoReal, mesmoInode, isProtected, isSecret, dentroDePastaProtegida, verificadorDeSegredos, foraDoProjetoParaConvidado, destinoPngNovo, MSG_SEGREDO };

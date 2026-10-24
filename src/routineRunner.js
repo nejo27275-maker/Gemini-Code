@@ -119,7 +119,80 @@ async function executeHttpCheck(action, { allowPrivateTargets = process.env.ROUT
   } finally { clearTimeout(timer); }
 }
 
-function createRoutineRunner({ store, maxRetries = 2, baseRetryMs = 500, now = () => new Date(), allowPrivateTargets = process.env.ROUTINE_ALLOW_PRIVATE_TARGETS === '1' } = {}) {
+// ---------------------------------------------------------------------------
+// v0.44.0: ação "agente" — o agente faz uma tarefa sozinho no horário marcado
+// ---------------------------------------------------------------------------
+
+const INSTRUCAO_ROTINA = 'TAREFA AGENDADA: ninguém está olhando o terminal. Não faça perguntas ao usuário; ações que pediriam ' +
+  'confirmação serão recusadas automaticamente — siga sem elas ou explique o que faltou. Termine com um resumo curto e ' +
+  'objetivo do resultado (é o que o usuário vai ler na notificação e no histórico).';
+
+/**
+ * Notificação do sistema, se houver como: termux-notification (Android/Termux), notify-send (Linux) ou
+ * osascript (macOS). Texto vai sempre como argumento (execFile, nunca shell; no macOS o texto entra pelo
+ * argv do script, não dentro do código AppleScript). Devolve 'enviada' ou 'indisponível'.
+ */
+function notificarSistema(titulo, texto, { execFileFn = require('child_process').execFile, plataforma = process.platform } = {}) {
+  const { semControlesInvisiveis } = require('./ui/textoSeguro');
+  // título nunca começa com "-" (não vira opção do comando; no osascript é o 1º argumento depois do script)
+  const t = semControlesInvisiveis(String(titulo)).replace(/\s+/g, ' ').replace(/^-+/, '').slice(0, 100) || 'gemini-code';
+  const c = semControlesInvisiveis(String(texto)).slice(0, 500);
+  const comando = plataforma === 'android' ? ['termux-notification', ['--title', t, '--content', c]]
+    : plataforma === 'linux' ? ['notify-send', ['--', t, c]]
+      : plataforma === 'darwin' ? ['osascript', ['-e', 'on run argv', '-e', 'display notification (item 2 of argv) with title (item 1 of argv)', '-e', 'end run', t, c]]
+        : null;
+  if (!comando) return Promise.resolve('indisponível');
+  return new Promise((resolve) => {
+    try { execFileFn(comando[0], comando[1], { timeout: 10000 }, (err) => resolve(err ? 'indisponível' : 'enviada')); }
+    catch { resolve('indisponível'); }
+  });
+}
+
+let agentesRodando = 0;
+
+async function executeAgente(routine, {
+  runOnceFn = (...a) => require('./agent').runOnce(...a),
+  notificarFn = notificarSistema,
+  criarArtefato = (o) => require('./artifacts').createArtifact(o),
+} = {}) {
+  const { semControlesInvisiveis } = require('./ui/textoSeguro');
+  const action = routine.action;
+  const liberar = require('./ui/prompt').suspenderPerguntas();
+  agentesRodando++;
+  const started = Date.now();
+  try {
+    let resposta;
+    try {
+      const r = await runOnceFn(action.prompt, { history: [], allowedTools: action.ferramentas, maxSteps: action.maxPassos, extraSystemInstruction: INSTRUCAO_ROTINA });
+      resposta = semControlesInvisiveis(String((r && r.text) || '')).trim() || '(o agente terminou sem texto)';
+    } catch (err) {
+      const wrapped = new Error(`O agente falhou: ${err && err.message ? err.message : err}`);
+      wrapped.result = { ok: false, message: wrapped.message, durationMs: Date.now() - started, checkedAt: new Date().toISOString() };
+      if (action.notificar) wrapped.result.notificacao = await notificarFn(`gemini-code: ${routine.name} falhou`, wrapped.message);
+      throw wrapped;
+    }
+    let artefato = null;
+    try {
+      artefato = criarArtefato({
+        title: `Rotina: ${routine.name}`, type: 'rotina', summary: resposta.slice(0, 1200),
+        content: `# ${routine.name}\n\n${new Date().toISOString()}\n\n## Pedido\n\n${action.prompt}\n\n## Resultado\n\n${resposta}\n`,
+        metadata: { routineId: routine.id },
+      });
+    } catch { /* sem artefato, o resultado ainda fica no histórico */ }
+    const result = {
+      ok: true, message: 'O agente concluiu a tarefa.', resposta: resposta.slice(0, 4000),
+      artefato: artefato ? artefato.id : null, durationMs: Date.now() - started, checkedAt: new Date().toISOString(),
+    };
+    if (action.notificar) result.notificacao = await notificarFn(`gemini-code: ${routine.name}`, resposta);
+    return result;
+  } finally {
+    liberar();
+    // o navegador do agente é um só por processo: fecha quando a última rotina de agente termina
+    if (--agentesRodando === 0) { try { await require('./tools/browserTools').encerrar(); } catch { /* já fechado */ } }
+  }
+}
+
+function createRoutineRunner({ store, maxRetries = 2, baseRetryMs = 500, now = () => new Date(), allowPrivateTargets = process.env.ROUTINE_ALLOW_PRIVATE_TARGETS === '1', agente = {} } = {}) {
   if (!store) throw new Error('O executor precisa de um armazenamento de rotinas.');
   const inFlight = new Set();
 
@@ -138,9 +211,12 @@ function createRoutineRunner({ store, maxRetries = 2, baseRetryMs = 500, now = (
     try {
       let result;
       let lastError;
-      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      // O agente não repete sozinho: cada tentativa gasta tokens e pode refazer ações.
+      const tentativas = routine.action.type === 'agente' ? 0 : maxRetries;
+      for (let attempt = 0; attempt <= tentativas; attempt++) {
         try {
           if (routine.action.type === 'http-check') result = await executeHttpCheck(routine.action, { allowPrivateTargets });
+          else if (routine.action.type === 'agente') result = await executeAgente(routine, agente);
           else throw new Error(`Executor não implementado: ${routine.action.type}`);
           execution.attempts.push({ number: attempt + 1, ok: true, finishedAt: now().toISOString() });
           break;
@@ -148,7 +224,7 @@ function createRoutineRunner({ store, maxRetries = 2, baseRetryMs = 500, now = (
           lastError = err;
           execution.attempts.push({ number: attempt + 1, ok: false, error: err.message, finishedAt: now().toISOString() });
           // Falha HTTP ou timeout pode ser transitória; retentativa limitada.
-          if (attempt < maxRetries) await new Promise((resolve) => setTimeout(resolve, baseRetryMs * (2 ** attempt)));
+          if (attempt < tentativas) await new Promise((resolve) => setTimeout(resolve, baseRetryMs * (2 ** attempt)));
         }
       }
       if (lastError && !result) {
@@ -224,4 +300,4 @@ function createRoutineRunner({ store, maxRetries = 2, baseRetryMs = 500, now = (
   return { execute, tick, start, inFlight };
 }
 
-module.exports = { createRoutineRunner, executeHttpCheck, ensurePublicTarget, privateAddress, zonedMinuteKey };
+module.exports = { createRoutineRunner, executeHttpCheck, executeAgente, notificarSistema, ensurePublicTarget, privateAddress, zonedMinuteKey, INSTRUCAO_ROTINA };

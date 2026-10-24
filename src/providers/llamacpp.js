@@ -113,7 +113,7 @@ function ctxTamanho(cfg) {
 
 const ESSENCIAIS = new Set(['read_file', 'write_file', 'edit_file', 'list_dir', 'run_shell', 'search_files', 'run_checks']);
 // Ordem de descarte quando as ferramentas não cabem (primeiro as menos úteis para um modelo pequeno).
-const DESCARTE = ['delegate_task', 'run_workflow', 'todo_write', 'read_skill'];
+const DESCARTE = ['browser', 'delegate_task', 'run_workflow', 'todo_write', 'read_skill'];
 
 function encurtar(texto, max) {
   const t = String(texto || '').replace(/\s+/g, ' ').trim();

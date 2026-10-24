@@ -27,6 +27,18 @@ let rl = null;
 let semEntrada = false;
 const AVISO_SEM_ENTRADA = '[sem resposta: a entrada (stdin) foi encerrada — tratado como "não"]\n';
 
+// v0.44.0: uma rotina de agente (src/routineRunner.js) roda sem ninguém olhando, mesmo quando o serviço foi
+// aberto num terminal de verdade. Enquanto houver uma rodando, toda pergunta vira "não" na hora, sem ler o
+// stdin — senão a tarefa travava esperando, ou alguém passando pelo terminal aprovava algo que não pediu.
+let suspensas = 0;
+const AVISO_ROTINA = '[rotina agendada: ninguém para responder — tratado como "não"]\n';
+/** Suspende as perguntas; devolve a função que desfaz (pode ser chamada mais de uma vez). */
+function suspenderPerguntas() {
+  suspensas++;
+  let desfeito = false;
+  return () => { if (!desfeito) { desfeito = true; suspensas--; } };
+}
+
 function getShared() {
   if (!rl) {
     const atual = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -42,8 +54,8 @@ function getShared() {
 /** Pergunta algo e devolve a resposta (trim), usando a interface compartilhada. */
 function ask(question) {
   return new Promise((resolve) => {
-    if (semEntrada) {
-      process.stdout.write(`${question}\n${AVISO_SEM_ENTRADA}`);
+    if (suspensas > 0 || semEntrada) {
+      process.stdout.write(`${question}\n${suspensas > 0 ? AVISO_ROTINA : AVISO_SEM_ENTRADA}`);
       return resolve('');
     }
     const atual = getShared();
@@ -106,4 +118,4 @@ function closeShared() {
   }
 }
 
-module.exports = { getShared, ask, closeShared, perguntarColando };
+module.exports = { getShared, ask, closeShared, perguntarColando, suspenderPerguntas };

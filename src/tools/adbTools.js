@@ -127,13 +127,7 @@ function comAlvo(alvo, resto) {
 }
 
 /** Destino do print: .png novo, fora dos arquivos e pastas protegidos. @returns {string} caminho absoluto */
-function destinoDoPrint(arquivo) {
-  const { isProtected, isSecret } = require('./protectedPaths');
-  const destino = path.resolve(String(arquivo || `tela-${new Date().toISOString().replace(/[:.]/g, '-')}.png`));
-  if (path.extname(destino).toLowerCase() !== '.png') throw new Error('o print precisa ser salvo num arquivo .png.');
-  if (isProtected(destino) || isSecret(destino)) throw new Error('esse caminho é protegido do gemini-code; escolha outro lugar para o print.');
-  return destino;
-}
+const destinoDoPrint = (arquivo) => require('./protectedPaths').destinoPngNovo(arquivo, 'tela');
 
 // ---------------------------------------------------------------------------
 // Execução

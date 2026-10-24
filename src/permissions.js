@@ -31,6 +31,8 @@ const CAMPOS_CAMINHO = new Set(['read_file', 'write_file', 'edit_file', 'list_di
 function alvos(nome, args = {}) {
   if (nome === 'run_shell') return [String(args.command || '')];
   if (nome === 'web_fetch') return urls(args.url);
+  // v0.44.0: no navegador, as regras olham a URL (ex.: "negar": ["browser(*banco*)"]); sem URL, a chamada inteira.
+  if (nome === 'browser') return args.url ? urls(args.url) : [JSON.stringify(args)];
   if (nome === 'edit_files' && Array.isArray(args.edits)) return args.edits.flatMap((e) => caminhos(e && e.path));
   if (CAMPOS_CAMINHO.has(nome)) return caminhos(args.path || '.');
   return [JSON.stringify(args)];
