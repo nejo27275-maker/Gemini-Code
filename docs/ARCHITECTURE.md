@@ -33,6 +33,12 @@ documento é sobre como o código por trás disso está organizado.
   (`/v1/chat/completions`) do `llama-server`, sem Ollama.
 - **`src/providers/ollama.js`** — cliente opcional de compatibilidade com Ollama
   (`/api/chat`, streaming NDJSON) para instalações antigas.
+- **`src/navegador.js`** — navegador do agente (v0.44.0): Chrome/Chromium/Edge sem
+  janela, comandado pelo protocolo DevTools por um pipe (sem porta aberta), perfil
+  temporário e todo o tráfego por um proxy que confere o endereço na hora de conectar.
+  A ferramenta que o modelo usa é `src/tools/browserTools.js` (`browser`).
+- **`src/routineRunner.js`** — executor das rotinas: `http-check` e, desde a v0.44.0,
+  `agente` (o agente roda sozinho; `src/ui/prompt.js` responde "não" a toda confirmação).
 - Os provedores `llamacpp`, `ollama` e `openai` pedem **sempre** em streaming; o
   `onText` só decide se os pedaços aparecem enquanto chegam. Assim o tempo limite de
   cada um vale para inatividade, e não para a resposta inteira, também no `run`, no
@@ -152,6 +158,8 @@ extra). Cobertura atual:
 | `SECRET_PATHS`: o modelo não lê API key nem tokens | `leituraDeSegredos.test.js` |
 | convidado só lê dentro do projeto | `convidadoNoProjeto.test.js` |
 | `src/providers/openai.js` (servidor local imitando a API, streaming, loop do agente) | `openaiProvider.test.js` |
+| navegador do agente: proxy bloqueando a rede local (IP, nome, IPv6), aprovação por site, regras, e com Chrome/Chromium real: página em JavaScript, clique, redirecionamento, formulário, lista, alerta, outro site barrado, print, perfil apagado (v0.44.0; a parte real pula sem navegador) | `navegador.test.js` |
+| rotina de agente: validação, execução, sem repetir, perguntas viram "não" (run_shell de ponta a ponta não roda), routines.json protegido, notificação, CLI (v0.44.0) | `rotinaAgente.test.js` |
 | resposta mais longa que o tempo limite de inatividade termina sem `onText`; Ollama calado ou que cai no meio (servidores HTTP reais, v0.43.4) | `llamacppV037.test.js`, `ollama.test.js`, `openaiProvider.test.js` |
 | `src/compact.js` (`enxugarResultadosAntigos`, `/compact ia`) | `contextoLongo.test.js` |
 | `src/permissions.js` (regras negar/permitir) | `permissoes.test.js` |

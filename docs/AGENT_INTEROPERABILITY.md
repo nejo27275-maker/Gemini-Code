@@ -10,7 +10,7 @@ Gemini Code borrows design ideas from public documentation for several agentic d
 | Project context conventions | Implemented | `src/knowledge.js` reads `AGENTS.md`, `GEMINI.md`, `CLAUDE.md`, `.hermes.md`, `SOUL.md`, `.cursorrules`, `CODEX.md`, `ANTIGRAVITY.md`, `KIMI.md`, `KIMI_CODE.md`, and `SYSTEM.md` when present |
 | Workspace checkpoints | Implemented | `src/checkpoints.js`, SHA-256 manifest, bounded snapshots and explicit restore confirmation |
 | Result artifacts | Implemented | `src/artifacts.js`, report listing and integrity validation |
-| Routine scheduling | Implemented locally | Persistent routine JSON + local service; cloud requires deployment |
+| Routine scheduling | Implemented locally | Persistent routine JSON + local service; actions `http-check` and `agente` (v0.44.0: the agent runs a task unattended, confirmations answered "no", read-only tools by default, optional system notification); cloud requires deployment |
 | Bounded task profiles | Implemented | `gemini-code profiles list|show`; `run --profile coder|explore|plan|review|test`, with actual tool allowlists for limited profiles |
 | Named subagent roles | Implemented | Portuguese roles plus `explore`, `plan`, `reviewer`, and `coder`; one delegation level, isolated context |
 | Kimi-style project context | Implemented | Also reads `KIMI.md`, `KIMI_CODE.md`, and `SYSTEM.md` if present |
@@ -23,7 +23,8 @@ Gemini Code borrows design ideas from public documentation for several agentic d
 | Kimi-style bounded workflow Skill | Implemented | `skills/kimi-agent-workflow/SKILL.md`; explore/plan/coder/reviewer procedure and isolation limits |
 | Claude/Codex/Hermes/Antigravity/Kimi SDK integrations | Not implemented | CLI detection is diagnostic only; no external sessions, account logins, or agent APIs are invoked |
 | Higgsfield generation | Not connected | Official CLI/Skills setup is documented; install/login/generation are not run automatically and require explicit authorization |
-| Browser-use agent and visual recording | Not implemented | Would require an explicit browser adapter and its own security policy |
+| Browser agent | Implemented (v0.44.0) | `browser` tool: local Chrome/Chromium/Edge over a CDP pipe, temporary profile, all traffic through a proxy that blocks the local network at connect time, per-site approval; see `src/navegador.js` |
+| Visual recording of browser sessions | Not implemented | Screenshots only (`browser` action `print`) |
 | True cloud orchestration across providers | Not implemented | Requires deployed workers, credentials, billing choices and a persistent runtime |
 
 ## Design references

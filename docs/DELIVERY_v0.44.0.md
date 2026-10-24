@@ -1,0 +1,6 @@
+# Entrega v0.44.0 — navegador de verdade e rotinas que rodam o agente
+
+- Ferramenta `browser` (`src/navegador.js`, `src/tools/browserTools.js`): Chrome/Chromium/Edge sem janela comandado por pipe; lê páginas feitas em JavaScript, clica, digita, rola, volta, print. Todo o tráfego por um proxy que bloqueia a rede local na hora de conectar; aprovação por site (regras do `web_fetch`); outro site por clique é barrado; abas novas fechadas; perfil temporário apagado ao fechar.
+- Rotinas com agente (`routines create --prompt`): roda sozinho no horário, confirmações viram "não", ferramentas de leitura por padrão, sem repetição automática, resposta em histórico e artefato, notificação opcional (Termux/Linux/macOS). `routines.json` protegido contra gravação pelo modelo.
+- `artifacts` e `routines logs` com filtro de terminal; `doctor` mostra o navegador; `config set-navegador-path` e `set-navegador-local on|off`.
+- Testes: 802 (801 passando, 1 pulado como root) no Node 20 e 22 com `ws`; 19 novos, 5 deles com Chromium real. Os scripts de leitura rodam num mundo isolado (a página não falsifica o que o agente lê). Não testado: sites reais, Termux, modelo de verdade, notificação no macOS.

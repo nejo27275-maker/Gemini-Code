@@ -1,3 +1,30 @@
+## 0.44.0 — navegador de verdade e rotinas que rodam o agente
+
+Base: `main` depois da mesclagem do PR #6. Fecha as duas lacunas apontadas na comparação com Claude Code, Codex, Antigravity e Hermes: o agente só **lia** páginas (`web_fetch`) e as rotinas só **verificavam um site** (`http-check`).
+
+**Novo: ferramenta `browser` — um navegador de verdade para o agente** (`src/navegador.js`, `src/tools/browserTools.js`). Chrome/Chromium/Edge sem janela: abre um site, lê a página já montada (inclusive as feitas em JavaScript, que o `web_fetch` não vê), lista os elementos numerados, clica, digita (campo, lista de opções, Enter para enviar), rola, volta e tira print. No chat basta pedir ("abre o site X e veja o preço", "testa o login do meu app em localhost:3000"). Segurança:
+
+- **Sem porta de depuração**: o navegador é comandado por um pipe (`--remote-debugging-pipe`), então nenhuma página fala com ele por trás do agente.
+- **Rede local bloqueada na hora de conectar**: todo o tráfego do navegador (até o de `127.0.0.1`) passa por um proxy do gemini-code que resolve o nome e confere o endereço no momento da conexão, com a mesma regra do `web_fetch` (sem a brecha de DNS rebinding). `config set-navegador-local on` libera só o loopback, para testar o próprio app.
+- **Aprovação por site**: abrir um site novo pergunta (mesmas regras do `web_fetch`: `confirmWeb`, `webDominiosPermitidos`, `negar`/`permitir` com o nome `browser`). Dentro do site aprovado o agente age sem perguntar a cada clique; ir para **outro** site por clique, formulário, redirecionamento ou script é barrado até ele pedir com "abrir". Abas novas abertas pela página são fechadas na hora.
+- **A página não engana a leitura**: os scripts do gemini-code rodam num mundo isolado (como os de uma extensão). Achado na revisão antes de fechar a versão: com eles no contexto da página, um site trocava `Element.prototype.getAttribute` e o agente lia "Cancelar pagamento" no botão que confirmava — agora há teste para isso.
+- **Perfil temporário**: sem as contas e os cookies do usuário; apagado ao fechar (e na saída do programa). Downloads recusados; alertas da página dispensados (e contados ao agente); só `http`/`https`; o modelo nunca manda JavaScript — só rodam os scripts fixos do gemini-code; valor de campo de senha não vai para o modelo.
+- `gemini-code doctor` mostra o navegador encontrado; `config set-navegador-path` aponta um.
+
+**Novo: rotinas com agente** (`gemini-code routines create --prompt "TAREFA" ... --cron '0 8 * * 1-5'`). O agente faz a tarefa sozinho no horário marcado:
+
+- **Ninguém está olhando**: enquanto a rotina roda, toda confirmação vira "não" na hora, sem ler o terminal (mesmo com o serviço aberto num terminal de verdade). Conferido de ponta a ponta: o modelo pede `run_shell`, a pergunta é respondida "não" e o comando não roda.
+- Ferramentas **só de leitura** por padrão (`read_file`, `list_dir`, `search_files`, `glob_files`); `--ferramentas a,b` escolhe outras (ou `nenhuma`), `--passos N` limita os passos. Não repete sozinho em caso de falha (cada tentativa gasta tokens e refaria ações).
+- A resposta fica no histórico (`routines logs`) e num artefato (`artifacts show ID`); `--notificar` avisa pelo `termux-notification` (Android), `notify-send` (Linux) ou notificação do macOS — o texto vai sempre como argumento, nunca dentro de um comando.
+- **`routines.json` entrou em `PROTECTED_PATHS`**: se o modelo pudesse gravá-lo, agendaria a si mesmo para depois, sem ninguém olhando.
+- A API de rotinas (localhost, com token) aceita a mesma ação.
+
+**Também:** `artifacts show`/`list` e `routines logs` passam o texto pelo filtro do terminal (agora guardam respostas do modelo); o print do adb e o do navegador usam o mesmo auxiliar (`destinoPngNovo`: só `.png` novo, fora das áreas protegidas); em modelo local com contexto curto, `browser` é a primeira ferramenta a sair quando não cabem todas.
+
+Testes: 802 (801 passando, 1 pulado por rodar como root) no Node 20.20 e no 22.22, com o `ws`. Novos: `tests/navegador.test.js` (10 — proxy bloqueando IP local, nome que resolve para ele, IPv6 e metadados de nuvem; e, com um **Chromium de verdade** contra servidores locais, página em JavaScript, clique, redirecionamento, formulário, lista, alerta, aba nova, outro site barrado, rede local barrada mesmo com o "sim", regra `negar`, página tentando falsificar a leitura, print e perfil apagado; a parte com navegador pula se não houver um) e `tests/rotinaAgente.test.js` (9). ESLint 10.1.0: 0 problemas.
+
+**Limites:** não testado contra sites reais da internet (este ambiente não tem saída direta), nem no Termux, nem com um modelo de verdade decidindo os cliques — os testes simulam o modelo. O navegador ignora `HTTPS_PROXY` (rede que exige proxy de saída não funciona). Aprovar um site confia nele: o JavaScript da página recebe o que o agente digitar ali. As rotinas rodam enquanto `routines service` estiver ativo (é local, não nuvem); notificação no macOS não foi testada.
+
 ## 0.43.4 — resposta longa não cai mais no tempo limite, e CI no Node 24
 
 Base: `main` depois da mesclagem do PR #5.

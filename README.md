@@ -52,6 +52,41 @@ O modelo GGUF é o mesmo, mas os históricos e as memórias do CLI e do app aind
 - **ADB** (`gemini-code adb ...`): controla uma Android TV, celular ou tablet SEUS
   por USB ou Wi-Fi — ver/abrir/instalar apps, navegar na TV pelo controle, ajustar
   configurações, print e logs. Veja `docs/TV_ADB.md`.
+- **Navegador** (ferramenta `browser`): o agente usa um Chrome/Chromium de verdade,
+  sem janela — abre sites, lê páginas feitas em JavaScript, clica, preenche
+  formulários e tira print.
+- **Rotinas com agente** (`gemini-code routines create --prompt ...`): o agente
+  faz uma tarefa sozinho no horário marcado e avisa por notificação.
+
+## Navegador e rotinas com agente — v0.44.0
+
+**Navegador.** No chat, peça normalmente ("abre o site X e veja o preço", "testa o login do meu app em localhost:3000"). O agente usa a ferramenta `browser`: abre a página num Chrome/Chromium/Edge sem janela, recebe o texto e os elementos numerados (`[3] campo "Buscar"`), clica e digita pelo número, e pode salvar um print. Diferente do `web_fetch`, enxerga páginas montadas por JavaScript.
+
+```bash
+gemini-code doctor                          # "navegador": encontrado e caminho
+gemini-code config set-navegador-path /caminho/do/chrome   # se não achar sozinho
+gemini-code config set-navegador-local on   # deixa abrir 127.0.0.1/localhost (testar seu app)
+```
+
+- Abrir um site novo **pergunta** (como o `web_fetch`; `webDominiosPermitidos` e as regras `negar`/`permitir` valem com o nome `browser`, ex.: `config negar "browser(*banco*)"`). Dentro de um site aprovado, o agente clica sem perguntar a cada passo; ir para **outro** site por clique, formulário ou redirecionamento é barrado até ele pedir com "abrir".
+- **Rede local bloqueada**: todo o tráfego do navegador passa por um proxy do gemini-code que confere o endereço na hora de conectar (sem a brecha de DNS rebinding). `set-navegador-local on` libera só o loopback.
+- **Perfil temporário**: o agente não usa as suas contas nem os seus cookies, e o perfil é apagado ao fechar. Downloads recusados; alertas da página dispensados; só `http`/`https` (nada de `file://`).
+- O navegador é controlado por um pipe, sem porta de depuração aberta. Instalação: Debian/Ubuntu `apt install chromium`, macOS `brew install --cask chromium`, Windows: Chrome ou Edge.
+
+**Rotinas com agente.** Além de verificar um site (`--url`), uma rotina pode mandar o agente fazer uma tarefa:
+
+```bash
+gemini-code routines create --name "TODOs" --prompt "liste os TODO do projeto ~/app e resuma" \
+  --cron '0 8 * * 1-5' --notificar            # dias úteis às 8h, com notificação
+gemini-code routines activate ID              # rascunho só roda depois de ativado
+gemini-code routines service                  # o agendador (precisa ficar rodando)
+gemini-code routines logs                     # resultado de cada execução
+```
+
+- **Ninguém está olhando**: toda confirmação vira "não" na hora (o `run_shell` pede confirmação → não roda), mesmo com o serviço aberto num terminal. Só roda sozinho o que já roda sem perguntar no chat.
+- Ferramentas: por padrão **só leitura** (`read_file`, `list_dir`, `search_files`, `glob_files`); escolha outras com `--ferramentas a,b` (ou `nenhuma`). `--passos N` limita os passos (padrão 20). O agente não repete sozinho se falhar.
+- A resposta fica no histórico e num artefato (`gemini-code artifacts show ID`); `--notificar` avisa pelo Termux:API (`termux-notification`), `notify-send` (Linux) ou notificação do macOS.
+- O `~/.gemini-code/routines.json` é protegido: o modelo não consegue agendar a si mesmo.
 
 ## Controlar a TV e outros aparelhos (ADB) — v0.43.0
 
@@ -468,11 +503,11 @@ gemini-code routines create --name "Site" --url https://example.com --every 5m -
 ```
 
 Comandos de gerenciamento: `routines list`, `show ID`, `activate ID`, `pause ID`,
-`resume ID`, `run ID`, `logs [ID]`, `status` e `remove ID --yes`. No estado atual,
-o executor automático implementado é `http-check` (GET com timeout, status HTTP,
-retentativas limitadas e histórico). Não há execução genérica de shell ou de
-prompts de IA por rotina, para evitar transformar uma definição de rotina em
-execução privilegiada não revisada.
+`resume ID`, `run ID`, `logs [ID]`, `status` e `remove ID --yes`. Há dois executores:
+`http-check` (GET com timeout, status HTTP, retentativas limitadas e histórico) e,
+desde a v0.44.0, `agente` (`--prompt`: o agente faz a tarefa sozinho, sem nenhuma
+confirmação — o que pediria uma é recusado —, com ferramentas de leitura por padrão;
+veja "Navegador e rotinas com agente"). Não há execução de shell direta por rotina.
 
 ### API HTTP autenticada
 
@@ -535,9 +570,10 @@ rede interna confiável, `ROUTINE_ALLOW_PRIVATE_TARGETS=1` desativa essa barreir
 e deve ser usado somente de forma consciente. O
 processo deve ficar ativo; a persistência do JSON, sozinha, não executa tarefas.
 
-A implantação cloud, alertas via mensagem, webhooks com assinatura, eventos de
-GitHub, workers externos, painel visual, rotinas genéricas de IA/shell e um modo
-offline híbrido ainda não estão conectados neste módulo. O projeto original
+A implantação cloud, alertas via mensageiros (Telegram etc.), webhooks com assinatura,
+eventos de GitHub, workers externos, painel visual, shell direto por rotina e um modo
+offline híbrido ainda não estão conectados neste módulo (a notificação do sistema,
+v0.44.0, é local). O projeto original
 continua oferecendo Ollama offline e Cowork em rede local, mas essas capacidades
 não equivalem a um serviço cloud permanente.
 
