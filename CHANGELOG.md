@@ -57,6 +57,7 @@ Testes: 906 no Node 20.20 e 22.22, com o bubblewrap real (905 passando, 1 pulado
 **CI:**
 - **1ª rodada:** 906 testes, 903 passando, nos Node 20, 22 e 24. Os 3 pulados eram os testes de mídia, porque a máquina do GitHub não tem ImageMagick nem ffmpeg.
 - **Mudança:** agora o CI instala os dois e define `GEMINI_CODE_EXIGIR_MIDIA=1`, que faz esses testes falharem em vez de pular.
+- **2ª rodada (commit 0e76c7f):** 906/906 nos Node 20, 22 e 24, nenhum pulado; ESLint 0 problemas no Node 22.
 
 **Limites:**
 - Nada com IA de verdade foi testado aqui, porque este ambiente não tem chave nem rede para o Google: gerar/editar imagem, descrever, Veo e analisar foto.

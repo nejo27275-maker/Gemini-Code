@@ -11,6 +11,7 @@
 - **Ferramentas sob demanda:** `saude_*`, `camera`, `video` e `compras` só entram num aliado que as use ou com `config ferramentas-extras`.
 - **Corrigido:** skills com `description: >` (bloco YAML) chegavam ao agente como ">".
 - **Testes:** 906 no Node 20 e no 22, com a sandbox real; 905 passam e 1 é pulado como root. ImageMagick e ffmpeg rodaram de verdade. As páginas de saúde, do site e do app foram abertas num Chromium. ESLint 0 problemas.
+- **CI:** 906/906 nos Node 20, 22 e 24, nenhum pulado. O CI agora instala ImageMagick e ffmpeg, e com `GEMINI_CODE_EXIGIR_MIDIA=1` os testes de mídia falham em vez de pular.
 - **Não testado aqui:**
   - IA de verdade (este ambiente não tem chave nem acesso ao Google): gerar/editar imagem, descrever, Veo e analisar foto;
   - câmera real: os testes usam uma câmera simulada;
