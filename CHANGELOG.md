@@ -30,7 +30,7 @@ Base: o branch da 0.45.0 (ainda sem PR). Cada ferramenta foi chamada com argumen
 
 **Perfis e subagentes só leitura** (`explore`, `plan`, `review`, explorador...) ganharam o `glob_files`, que também só lê; ele ganhou a trava de convidado.
 
-Testes: 871 no Node 20.20 e no 22.22, com a sandbox real (870 passando, 1 pulado por rodar como root). Novos: `tests/buscaV0451.test.js` (6), `tests/schemaGemini.test.js` (5), `tests/skillsV0451.test.js` (4), `tests/argumentos.test.js` (3) e mais em `sandbox`, `areaTrabalho`, `routineApi` e `webTools`. ESLint 10.1.0: 0 problemas.
+Testes: 871 no Node 20.20 e no 22.22, com a sandbox real (870 passando, 1 pulado por rodar como root). Novos: `tests/buscaV0451.test.js` (6), `tests/schemaGemini.test.js` (5), `tests/skillsV0451.test.js` (4), `tests/argumentos.test.js` (3) e mais em `sandbox`, `areaTrabalho`, `routineApi` e `webTools`. ESLint 10.1.0: 0 problemas. No CI (Node 20, 22 e 24, com bubblewrap, usuário comum): 871 de 871, com os testes de fuga reais rodando.
 
 **Limites:** a tradução do esquema para o Gemini foi testada contra esquemas no formato do zod e do pydantic, não contra a API do Google de verdade (este ambiente não tem chave).
 
