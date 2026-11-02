@@ -91,6 +91,21 @@ gemini-code adb logcat 300                    # últimas 300 linhas de log
 gemini-code adb shell "dumpsys battery"       # comando livre no aparelho (pede confirmação)
 ```
 
+## TV lenta? O melhorador (v0.46.0)
+
+```bash
+gemini-code tv diagnostico      # memória livre, armazenamento, animações e os apps que mais pesam (só lê)
+gemini-code tv otimizar         # pergunta passo a passo: animações 0,5x, limpar cache, fechar apps em segundo plano
+gemini-code tv otimizar --tudo  # oferece os três passos mesmo que o diagnóstico não peça
+gemini-code tv desfazer         # animações de volta em 1x
+```
+
+O que cada passo faz, de verdade: **animações em 0,5x** deixam a navegação muito mais ágil (é a mudança que mais se
+sente); **limpar o cache** libera espaço quando o armazenamento passa de 80% (os apps refazem o cache aos poucos);
+**fechar apps em segundo plano** libera memória. Os apps que mais ocupam aparecem no diagnóstico, para **você**
+decidir o que desinstalar — o melhorador nunca desinstala nada. No chat, o aliado da TV usa as ações `diagnostico` e
+`otimizar` da ferramenta adb, que perguntam a cada passo.
+
 ## Automatizar a TV (rotinas, sem IA)
 
 Comandos para a TV num horário, sem gastar nada de IA e sem precisar de internet (só a rede local):

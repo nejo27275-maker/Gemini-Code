@@ -480,19 +480,22 @@ async function generateText({ prompt, modelName }) {
  * retorna erro claro — trate isso na camada de cima. Migrada para `fetch`
  * pelo mesmo motivo de generateText (item 14 da revisão).
  */
-async function generateImage({ prompt, modelName }) {
+async function generateImage({ prompt, modelName, imagens = [] }) {
   const cfg = loadConfig();
   exigirApiKey(cfg);
   const model = modelName || cfg.imageModel;
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
+  // v0.46.0: `imagens` ([{ inlineData }], de src/imagens.js) entram antes do texto: é assim que se pede para
+  // EDITAR uma foto ("melhore a nitidez", "tire o fundo") no modelo de imagem do Gemini.
+  const partesPedido = [...imagens.map((i) => ({ inlineData: i.inlineData })), { text: prompt }];
   const res = await fetchComRetry(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'x-goog-api-key': cfg.apiKey,
     },
-    body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }] }),
+    body: JSON.stringify({ contents: [{ role: 'user', parts: partesPedido }], generationConfig: { responseModalities: ['TEXT', 'IMAGE'] } }),
   });
 
   const data = await res.json().catch(() => ({}));
@@ -503,9 +506,11 @@ async function generateImage({ prompt, modelName }) {
   const parts = data?.candidates?.[0]?.content?.parts || [];
   const imagePart = parts.find((p) => p.inlineData);
   if (!imagePart) {
+    // v0.46.0: quando o modelo recusa ou só comenta, o motivo vem em texto — mostra (antes sumia)
+    const explicacao = parts.filter((p) => typeof p.text === 'string').map((p) => p.text).join(' ').replace(/\s+/g, ' ').trim().slice(0, 400);
     throw new Error(
-      'O modelo não retornou imagem. Verifique se sua conta tem acesso a geração ' +
-      'de imagem (Imagen/Gemini image) no Google AI Studio.'
+      'O modelo não retornou imagem.' + (explicacao ? ` Ele disse: "${explicacao}"` : ' Verifique se sua conta tem acesso a geração ' +
+      'de imagem (Imagen/Gemini image) no Google AI Studio.')
     );
   }
   return imagePart.inlineData; // { mimeType, data (base64) }

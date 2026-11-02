@@ -1,3 +1,64 @@
+## 0.46.0 — saúde, compras do mês, imagem, vídeo, câmera, TV e criar site/app
+
+Base: o branch da 0.45.1 (ainda sem PR).
+
+**Novo: assistente de saúde** (`src/saude.js`, guia `docs/SAUDE.md`). Não é médico: não diagnostica nem receita.
+- **Diário:** pressão ("13 por 8" vira 130/80), glicemia (jejum/depois de comer), peso (com IMC), temperatura, saturação, batimentos, sintomas e remédios tomados.
+- **Faixas de referência:** cada anotação é comparada com faixas para adultos (SBC 2020, SBD, OMS), testadas nos limites.
+- **Triagem de emergência por regras fixas, antes da IA:** dor no peito, sinais de AVC, falta de ar, desmaio, convulsão, sangramento, suicídio (CVV 188), intoxicação (0800 722 6001)... O aviso aparece na hora, e o modelo é instruído a começar por ele.
+- **Remédios:** cada horário vira uma rotina nova do tipo **lembrete**.
+- **Página para a consulta:** com gráficos e sem nada carregado da internet.
+- **Aliado `saude`:** é o único que lê o diário.
+- **Dados protegidos:** os dados ficam numa pasta que as ferramentas de arquivo do agente não leem nem gravam (`SECRET_DIRS`, novo).
+
+**Novo: rotina "lembrete"** — só uma notificação no horário (`routines create --lembrete "Pagar a luz" --cron ...`), sem IA.
+
+**Novo: compras do mês + iFood** (`src/compras.js`).
+- **Lista:** separada por seção do mercado (acento não atrapalha: "maca" acha "maçã"), com frequência mensal/quinzenal/semanal, preços e orçamento.
+- **`compras ifood`:** copia a lista e abre o iFood. **O pedido e o pagamento são feitos no app:** o iFood não tem uma forma oficial para pedidos de fora, e o gemini-code não paga nem guarda senha ou cartão.
+
+**Novo: imagem** (`src/imagem.js`, ferramenta `imagem` no chat).
+- **Gerar e editar com IA:** o modelo de imagem do Gemini agora recebe a foto de entrada.
+- **Melhorar:** sem IA pelo ImageMagick (nitidez, contraste, cor, ruído; `--ampliar` até 4x) ou com IA.
+- **Descrever:** responde perguntas sobre uma imagem do disco (ex.: um print de erro).
+- **Confirmação:** gerar com IA pergunta antes (cota).
+- **Saída:** sempre um arquivo novo.
+
+**Novo: vídeo e câmera** (`src/video.js`, `src/camera.js`).
+- **Vídeo:**
+  - melhorar (menos ruído, nitidez, cor, estabilizar) e slideshow de fotos com música, pelo ffmpeg no aparelho;
+  - gerar com IA (Veo).
+- **Câmera:**
+  - foto pelo Termux:API ou webcam;
+  - analisar (foto + IA);
+  - **vigiar**: câmera de segurança que compara as fotos sem IA e avisa por notificação.
+- **No chat:** as ferramentas `camera` (pergunta **toda** vez) e `video` ficam num aliado com o preset `midia`.
+- **Corrigido:**
+  - `media video` gravava sempre `video.mp4` (o segundo vídeo apagava o primeiro);
+  - só aceitava o vídeo dentro da resposta; agora também baixa pelo endereço da API — a chave só vai para o endereço do Google.
+
+**Novo: melhorador de TV** (`gemini-code tv diagnostico|otimizar|desfazer`, ações `diagnostico`/`otimizar` da ferramenta adb).
+- **Diagnóstico (só lê):** memória, armazenamento, animações e os apps que mais pesam.
+- **Otimizar (pergunta a cada passo, sempre):** animações 0,5x, limpar cache dos apps, fechar apps em segundo plano.
+- **Nunca desinstala nada.**
+
+**Novo: criar site e app** (`gemini-code criar site|app NOME`, skill `criar-site-e-app`).
+- **Site:** responsivo e acessível, com modo escuro.
+- **App (PWA):** instala no celular e funciona offline; vem com uma lista que salva no aparelho.
+- **`criar servir`:** servidor só em 127.0.0.1, sem sair da pasta (`..`, `%2e%2e`, link), sem arquivos com ponto; pedido malformado recebe 400.
+- **Teste no Chromium:** o service worker registra, e um texto `<img onerror>` digitado no app não executa.
+
+**Ferramentas sob demanda:** `saude_*`, `camera`, `video` e `compras` só entram quando um aliado as usa (presets `saude`, `midia`, `compras`) ou com `config ferramentas-extras`. O chat comum não paga tokens por elas nem vê dados de saúde.
+
+**Corrigido: skills com descrição em bloco YAML** (`description: >`) apareciam só como ">" — a `engenharia-agente`, que vem no projeto, chegava assim ao agente.
+
+Testes: 906 no Node 20.20 e 22.22, com o bubblewrap real (905 passando, 1 pulado por rodar como root). Novos: `saude` (9), `lembrete` (3), `imagem` (6), `cameraVideo` (6), `tvOtimizar` (5), `criadorCompras` (6). ImageMagick e ffmpeg rodaram de verdade nos testes; as páginas (saúde, site, app) foram abertas num Chromium de verdade. ESLint 10.1.0: 0 problemas.
+
+**Limites:**
+- Nada com IA de verdade foi testado aqui, porque este ambiente não tem chave nem rede para o Google: gerar/editar imagem, descrever, Veo e analisar foto.
+- A câmera foi testada com câmera simulada (não há webcam aqui); a TV, com o adb falso.
+- As faixas de saúde são para adultos.
+
 ## 0.45.1 — caça aos bugs: todas as ferramentas revisadas
 
 Base: o branch da 0.45.0 (ainda sem PR). Cada ferramenta foi chamada com argumentos ruins (faltando, nulos, do tipo errado, gigantes, com byte nulo — 1.248 chamadas) e cada comando do terminal com argumentos vazios e errados (672); depois, revisão do código de cada uma. O que apareceu:

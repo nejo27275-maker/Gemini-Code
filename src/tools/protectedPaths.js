@@ -8,7 +8,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { PROTECTED_PATHS, PROTECTED_DIRS, SECRET_PATHS } = require('../config');
+const { PROTECTED_PATHS, PROTECTED_DIRS, SECRET_PATHS, SECRET_DIRS } = require('../config');
 
 const MAX_SYMLINKS = 40;
 
@@ -76,8 +76,8 @@ function dentroDePastaProtegida(p, pastas = PROTECTED_DIRS) {
 
 /** O modelo não pode GRAVAR (config, mcp.json, hooks.json, tokens, agentes pessoais). */
 const isProtected = (p) => bateCom(PROTECTED_PATHS, p) || dentroDePastaProtegida(p);
-/** O modelo não pode nem LER (API key, segredos de MCP, tokens). */
-const isSecret = (p) => bateCom(SECRET_PATHS, p);
+/** O modelo não pode nem LER (API key, segredos de MCP, tokens; v0.46.0: a pasta dos dados de saúde). */
+const isSecret = (p) => bateCom(SECRET_PATHS, p) || dentroDePastaProtegida(p, SECRET_DIRS);
 
 /**
  * Para varreduras (search_files): calcula UMA vez os inodes dos segredos que existem e
@@ -89,7 +89,11 @@ function verificadorDeSegredos() {
   for (const p of SECRET_PATHS) {
     try { const s = fs.statSync(p); if (s.ino) inodes.add(`${s.dev}:${s.ino}`); } catch { /* não existe */ }
   }
-  return (arquivo, stat) => (stat && stat.ino ? inodes.has(`${stat.dev}:${stat.ino}`) : isSecret(arquivo));
+  // v0.46.0: os arquivos das pastas secretas (saúde) também — pelo caminho e pelo inode (link de fora para dentro)
+  const pastas = SECRET_DIRS.map((d) => caminhoReal(d));
+  for (const k of inodesDasPastas(pastas)) inodes.add(k);
+  const naPasta = (arquivo) => { const r = path.resolve(arquivo); return pastas.some((d) => r === d || r.startsWith(d + path.sep)); };
+  return (arquivo, stat) => naPasta(arquivo) || (stat && stat.ino ? inodes.has(`${stat.dev}:${stat.ino}`) : isSecret(arquivo));
 }
 
 /**

@@ -45,13 +45,21 @@ function criarAdbFalso() {
 
   // Comandos falsos do aparelho: registram nome + argumentos (separados por TAB) e respondem o básico.
   const REGISTRA = 'printf \'%s\' "${0##*/}" >> "$LOG"; for x in "$@"; do printf \'\\t%s\' "$x" >> "$LOG"; done; printf \'\\n\' >> "$LOG"';
+  // v0.46.0: respostas de uma TV com pouca memória e disco quase cheio (diagnóstico/otimizar da TV)
+  const MEMINFO = 'MemTotal:        2000000 kB\\nMemFree:          100000 kB\\nMemAvailable:     300000 kB\\n';
+  const DF = 'Filesystem      1K-blocks    Used Available Use%% Mounted on\\n/dev/block/dm-5   8000000 7200000    800000  90%% /data\\n'; // %% por causa do printf
+  const DUMPSYS_MEM = 'Total PSS by process:\\n    350,123K: com.netflix.ninja (pid 1234 / activities)\\n    210,000K: com.google.android.youtube.tv (pid 2222)\\n     90,000K: system (pid 1000)\\n\\nTotal PSS by OOM adjustment:\\n';
+  const DISKSTATS = 'Package Names: ["com.netflix.ninja","com.google.android.youtube.tv","com.app.pequeno"]\\nApp Sizes: [100000000,200000000,1000]\\nApp Data Sizes: [900000000,50000000,1000]\\nCache Sizes: [300000000,700000000,10]\\n';
   const stubs = {
-    input: '', reboot: '', settings: '', rm: '',
+    input: '', reboot: '', rm: '',
+    settings: 'if [ "$1" = get ]; then printf \'1.0\\n\'; fi',
     am: 'case "$*" in *nao-abre*) printf \'Error: Activity not started, unable to resolve Intent\\n\';; start*) printf \'Starting: Intent { act=android.intent.action.VIEW }\\n\';; esac',
     getprop: 'printf \'[ro.product.brand]: [Sony]\\n[ro.product.model]: [BRAVIA]\\n[ro.build.version.release]: [11]\\n[ro.build.version.sdk]: [30]\\n[ro.build.characteristics]: [tv]\\n\'',
     pm: 'if [ "$1" = list ]; then printf \'package:com.spotify.tv.android\\npackage:com.netflix.ninja\\n\'; fi',
     monkey: 'if [ "$2" = com.nao.existe ]; then printf \'** No activities found to run, monkey aborted.\\n\'; else printf \'Events injected: 1\\n\'; fi',
-    dumpsys: 'printf \'  mResumedActivity: ActivityRecord{1a2b u0 com.netflix.ninja/.MainActivity t12}\\n\'',
+    dumpsys: `case "$1" in meminfo) printf '${DUMPSYS_MEM}';; diskstats) printf '${DISKSTATS}';; *) printf '  mResumedActivity: ActivityRecord{1a2b u0 com.netflix.ninja/.MainActivity t12}\\n';; esac`,
+    cat: `if [ "$1" = /proc/meminfo ]; then printf '${MEMINFO}'; fi`,
+    df: `printf '${DF}'`,
   };
   for (const [nome, resposta] of Object.entries(stubs)) {
     fs.writeFileSync(path.join(STUBS, nome), `#!/bin/sh\n${REGISTRA}\n${resposta}\n`);

@@ -58,6 +58,61 @@ O modelo GGUF é o mesmo, mas os históricos e as memórias do CLI e do app aind
   formulários e tira print.
 - **Rotinas com agente** (`gemini-code routines create --prompt ...`): o agente
   faz uma tarefa sozinho no horário marcado e avisa por notificação.
+- **Saúde, compras, imagem, vídeo, câmera, TV e criar site/app** (v0.46.0): veja abaixo.
+
+## Saúde, compras, imagem, vídeo, câmera, TV e sites — v0.46.0
+
+**Assistente de saúde** (não é médico; guia: [`docs/SAUDE.md`](docs/SAUDE.md)): diário de pressão, glicemia, peso, temperatura, saturação, batimentos, sintomas e remédios, com as faixas de referência; **triagem de emergência por regras fixas**, antes da IA (dor no peito, AVC, falta de ar... → SAMU 192); lembrete dos remédios no horário; página com gráficos para levar à consulta; e o aliado `saude` — o único que lê o diário.
+
+```bash
+gemini-code saude anotar pressao 13x8
+gemini-code saude remedio add "Losartana" --horarios 08:00,20:00 --dose 50mg
+gemini-code saude pagina --abrir
+gemini-code saude aliado && gemini-code aliados chat saude
+```
+
+**Compras do mês + iFood**: a lista por seção do mercado, com frequência (mensal, quinzenal, semanal), gasto estimado e orçamento. `compras ifood` copia a lista e abre o iFood — **o pedido e o pagamento você confirma no app**: o iFood não tem uma forma oficial para fazer pedidos de fora, e o gemini-code nunca paga nada sozinho nem guarda senha ou cartão.
+
+```bash
+gemini-code compras add "arroz 5kg" --qtd 2 --preco 27,90
+gemini-code compras add "maçã" --qtd 6 --freq semanal
+gemini-code compras orcamento 800
+gemini-code compras mes
+gemini-code compras ifood
+```
+
+**Imagem, vídeo e câmera**:
+
+```bash
+gemini-code imagem melhorar foto.jpg                  # sem IA (ImageMagick): mais nítida, cores e contraste; --ampliar 2
+gemini-code imagem melhorar foto.jpg --modo ia        # com o modelo de imagem do Gemini
+gemini-code imagem editar foto.jpg "tire o fundo"     # com IA
+gemini-code imagem gerar "um gato astronauta"         # com IA
+gemini-code video melhorar video.mp4 --estabilizar    # ffmpeg, no aparelho
+gemini-code video slideshow f1.jpg f2.jpg --musica m.mp3
+gemini-code camera analisar "tem leite na geladeira?" # foto + IA
+gemini-code camera vigiar --notificar                 # câmera de segurança: avisa quando algo muda (compara sem IA)
+```
+
+No chat, a ferramenta `imagem` cria, edita, melhora e descreve imagens (gerar com IA pergunta antes, porque gasta a cota da sua chave). Câmera e vídeo ficam num aliado criador: `gemini-code aliados criar criador --ferramentas midia --instrucoes "..."` — a câmera **pergunta toda vez**.
+
+**Melhorador de TV** (por adb, pergunta a cada passo; nada é desinstalado sozinho):
+
+```bash
+gemini-code tv diagnostico      # memória, armazenamento, animações e os apps que mais pesam
+gemini-code tv otimizar         # animações em 0,5x, limpar cache dos apps, fechar apps em segundo plano
+gemini-code tv desfazer         # animações de volta em 1x
+```
+
+**Criar site e app** (pontos de partida prontos, sem IA; depois o agente personaliza):
+
+```bash
+gemini-code criar site padaria --titulo "Padaria do Zé"
+gemini-code criar app meus-gastos --titulo "Meus Gastos"   # PWA: instala no celular e funciona offline
+gemini-code criar servir meus-gastos                       # http://127.0.0.1:8080 (só neste aparelho)
+```
+
+No Termux: `pkg install imagemagick ffmpeg termux-api` (e o app Termux:API) para tudo isso funcionar no celular.
 
 ## Sandbox do shell — v0.45.0
 

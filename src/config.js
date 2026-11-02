@@ -20,6 +20,9 @@ const ROUTINE_API_TOKEN_PATH = path.join(HOME_DIR, 'routine-api-token.txt');
 const TRUST_PATH = path.join(HOME_DIR, 'confianca.json'); // v0.41.0: src/trust.js
 const ALIADOS_DIR = path.join(HOME_DIR, 'aliados'); // v0.42.0: agentes pessoais (src/personalAgents.js)
 const ROUTINES_PATH = path.join(HOME_DIR, 'routines.json'); // v0.44.0: em PROTECTED_PATHS (rotinas de agente)
+// v0.46.0: dados de saúde (src/saude.js) — pessoais e sensíveis: só pelas ferramentas saude_*, nunca por read_file etc.
+const SAUDE_DIR = path.join(HOME_DIR, 'saude');
+const SAUDE_PATH = path.join(SAUDE_DIR, 'saude.json');
 
 // Arquivos que o modelo nunca pode gravar sozinho (write_file/edit_file) e que
 // forçam confirmação no run_shell. Cada um, se reescrito, dá ao modelo mais
@@ -49,7 +52,11 @@ const PROTECTED_PATHS = Object.freeze([
 // instruções e as ferramentas que ele recebe, a memória que entra no prompt de toda conversa com ele
 // e o histórico. Se o modelo pudesse gravar ali, plantaria instruções ou se daria ferramentas para as
 // próximas sessões; a memória só muda pela ferramenta memory_save (que pergunta ao usuário por padrão).
-const PROTECTED_DIRS = Object.freeze([ALIADOS_DIR]);
+const PROTECTED_DIRS = Object.freeze([ALIADOS_DIR, SAUDE_DIR]);
+
+// v0.46.0: pastas inteiras que o modelo nem LÊ pelas ferramentas de arquivo (read_file, search_files, read_skill,
+// imagem): dados de saúde. O aliado de saúde lê pelas ferramentas saude_*, que só existem para ele.
+const SECRET_DIRS = Object.freeze([SAUDE_DIR]);
 
 // v0.41.0: destes o modelo nem LÊ (read_file, search_files, read_skill): guardam a API
 // key em texto puro, segredos de servidores MCP ou tokens que dão o agente inteiro pela
@@ -176,6 +183,10 @@ const DEFAULT_CONFIG = {
   // o resto da rede local continua bloqueado. Sites novos seguem confirmWeb/webDominiosPermitidos.
   navegadorPath: '',
   navegadorPermitirLocal: false,
+  // v0.46.0: confirmarMidia — a ferramenta imagem/vídeo pergunta antes de gerar com IA (gasta a cota da chave).
+  // ferramentasExtras — ferramentas "sob demanda" (saude_*, compras, camera, video) ligadas também no chat comum.
+  confirmarMidia: true,
+  ferramentasExtras: [],
   // v0.42.0: orçamento por mensagem dos trechos da base de conhecimento de um agente pessoal (src/personalAgents.js)
   aliadosConhecimentoMaxChars: 8000,
 };
@@ -310,9 +321,12 @@ module.exports = {
   TRUST_PATH,
   ALIADOS_DIR,
   ROUTINES_PATH,
+  SAUDE_DIR,
+  SAUDE_PATH,
   PROTECTED_PATHS,
   PROTECTED_DIRS,
   SECRET_PATHS,
+  SECRET_DIRS,
   DEFAULT_CONFIG,
   CONFIG_VERSION,
   migrarConfig,

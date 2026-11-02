@@ -15,10 +15,23 @@ function parseFrontMatter(content) {
   const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
   if (!match) return { meta: {}, body: content };
   const meta = {};
-  for (const line of match[1].split(/\r?\n/)) {
+  const linhas = match[1].split(/\r?\n/);
+  for (let i = 0; i < linhas.length; i++) {
+    const line = linhas[i];
+    if (/^\s/.test(line)) continue; // continuação de um bloco já lido
     const idx = line.indexOf(':');
     if (idx === -1) continue;
-    meta[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
+    let valor = line.slice(idx + 1).trim();
+    // v0.46.0: bloco do YAML ("description: >" ou "|", com as linhas seguintes recuadas) — antes a descrição
+    // virava só ">" e o agente não sabia para que servia a skill (engenharia-agente vinha assim)
+    if (/^[>|][+-]?$/.test(valor)) {
+      const bloco = [];
+      while (i + 1 < linhas.length && (/^\s+\S/.test(linhas[i + 1]) || linhas[i + 1].trim() === '')) bloco.push(linhas[++i].trim());
+      valor = valor.startsWith('|') ? bloco.join('\n').trim() : bloco.join(' ').replace(/\s+/g, ' ').trim();
+    } else if (/^(["']).*\1$/.test(valor)) {
+      valor = valor.slice(1, -1);
+    }
+    meta[line.slice(0, idx).trim()] = valor;
   }
   return { meta, body: content.slice(match[0].length) };
 }

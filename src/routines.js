@@ -199,12 +199,26 @@ function validarAcaoAdb(action) {
   return { type: 'adb', ...(alvo ? { alvo } : {}), passos, notificar: action.notificar === true };
 }
 
+// v0.46.0: rotina "lembrete" — só uma notificação no horário (remédio, conta, compromisso). Sem IA, sem rede, sem
+// nada rodando no aparelho: o texto vai como argumento para o termux-notification/notify-send/osascript.
+const MAX_TITULO_LEMBRETE = 80;
+const MAX_TEXTO_LEMBRETE = 500;
+
+function validarAcaoLembrete(action) {
+  const { semControlesInvisiveis } = require('./ui/textoSeguro');
+  const texto = typeof action.texto === 'string' ? semControlesInvisiveis(action.texto).trim() : '';
+  if (!texto || texto.length > MAX_TEXTO_LEMBRETE) throw new Error(`O lembrete precisa de um texto com até ${MAX_TEXTO_LEMBRETE} caracteres.`);
+  const titulo = typeof action.titulo === 'string' ? semControlesInvisiveis(action.titulo).trim().slice(0, MAX_TITULO_LEMBRETE) : '';
+  return { type: 'lembrete', titulo: titulo || 'Lembrete', texto };
+}
+
 function validarAcao(action) {
   if (!action || typeof action !== 'object' || Array.isArray(action)) throw new Error('A rotina precisa de uma ação válida.');
   if (action.type === 'agente') return validarAcaoAgente(action);
   if (action.type === 'adb') return validarAcaoAdb(action);
+  if (action.type === 'lembrete') return validarAcaoLembrete(action);
   if (action.type !== 'http-check') {
-    throw new Error('Ação inválida. Use http-check (verificar um site), agente (o agente faz uma tarefa sozinho) ou adb (comandos para a TV/celular).');
+    throw new Error('Ação inválida. Use http-check (verificar um site), agente (o agente faz uma tarefa sozinho), adb (comandos para a TV/celular) ou lembrete (uma notificação no horário).');
   }
   let url;
   try { url = new URL(action.url); } catch { throw new Error('URL inválida para a ação http-check.'); }
@@ -278,7 +292,7 @@ function createRoutineStore({ dataPath = ROUTINES_PATH, executionsPath = EXECUTI
     if (trigger.type === 'cron') nextRunAt = nextCronDate(trigger.expression, now, trigger.timezone);
     const routine = {
       id, name, description: String(input.description || '').trim().slice(0, 1000),
-      category: String(input.category || ({ agente: 'agente', adb: 'aparelho' }[action.type] || 'monitoramento')).trim().slice(0, 60) || 'monitoramento',
+      category: String(input.category || ({ agente: 'agente', adb: 'aparelho', lembrete: 'lembrete' }[action.type] || 'monitoramento')).trim().slice(0, 60) || 'monitoramento',
       priority: ['baixa', 'normal', 'alta', 'critica'].includes(input.priority) ? input.priority : 'normal',
       trigger, action, status: STATUSES.DRAFT, createdAt: nowIso, updatedAt: nowIso,
       nextRunAt, lastRunAt: null, lastResult: null, lastCronSlotKey: null,

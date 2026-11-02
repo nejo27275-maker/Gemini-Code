@@ -42,6 +42,14 @@ documento é sobre como o código por trás disso está organizado.
   invisíveis, sem rede, `/tmp` descartável) e o filtro seccomp (BPF montado em JS) que nega
   socket `AF_UNIX`, io_uring e o chaveiro do kernel. `src/tools/shellTools.js` decide quando
   usar: o que roda sem uma pessoa aprovar na hora vai para a sandbox. Guia: `docs/SANDBOX.md`.
+- **v0.46.0** — `src/saude.js` + `src/saudeCommands.js` (assistente de saúde: diário, faixas de
+  referência, triagem de emergência por regras, remédios com lembrete, página para a consulta; guia
+  `docs/SAUDE.md`), `src/compras.js` + `src/comprasCommands.js` (lista do mês e a ponte para o iFood),
+  `src/imagem.js` (gerar/editar/melhorar/descrever; ImageMagick ou Gemini), `src/video.js` (ffmpeg e Veo),
+  `src/camera.js` (Termux:API/webcam e vigia), `src/tvOtimizar.js` (diagnóstico e otimização da TV),
+  `src/criador.js` (site/app PWA e o servidor local), `src/schemaGemini.js` (v0.45.1) e `src/abrir.js`
+  (abrir arquivo/link e copiar). Ferramentas novas: `imagem` (sempre) e, sob demanda, `saude_*`,
+  `camera`, `video` e `compras` (só quando a lista de ferramentas de um aliado as cita).
 - **`src/routineRunner.js`** — executor das rotinas: `http-check` e, desde a v0.44.0,
   `agente` (o agente roda sozinho; `src/ui/prompt.js` responde "não" a toda confirmação).
 - Os provedores `llamacpp`, `ollama` e `openai` pedem **sempre** em streaming; o
@@ -182,6 +190,12 @@ extra). Cobertura atual:
 | esquema JSON (zod/pydantic) → subconjunto do Gemini; nomes MCP dentro das regras e de volta ao servidor certo (v0.45.1) | `schemaGemini.test.js` |
 | argumentos em texto JSON dos provedores: conserto e erro claro (v0.45.1) | `argumentos.test.js` |
 | `read_skill` por pasta e por nome; SKILL.md ilegível (v0.45.1) | `skillsV0451.test.js` |
+| saúde: leitura dos valores, faixas nos limites, triagem com e sem acento, diário 0600, página sem script, privacidade (read_file/search/imagem), ferramentas só no aliado, remédios com lembrete (v0.46.0) | `saude.test.js` |
+| rotina lembrete (v0.46.0) | `lembrete.test.js` |
+| imagem: argumentos do ImageMagick, melhorar de verdade, IA com foto de entrada, descrever, travas, ferramenta (v0.46.0) | `imagem.test.js` |
+| câmera e vídeo: fotografar por sistema, vigia com ImageMagick de verdade, ffmpeg de verdade (melhorar, slideshow), ferramentas (v0.46.0) | `cameraVideo.test.js` |
+| melhorador de TV com o adb falso: diagnóstico só lê, otimizar pergunta cada passo (v0.46.0) | `tvOtimizar.test.js` |
+| criar site/app, servidor local (fuga de pasta, 400), compras e iFood, skill com descrição em bloco YAML (v0.46.0) | `criadorCompras.test.js` |
 | hooks `UserPromptSubmit`, `SessionStart`, `Stop` | `hooksEventos.test.js` |
 | subagentes do usuário (`.md`) | `subagentesDoUsuario.test.js` |
 | anti-SSRF com IPv6 (`privateAddress`) e DNS rebinding nas rotinas (`src/redeSegura.js`) | `ssrfIpv6.test.js` |

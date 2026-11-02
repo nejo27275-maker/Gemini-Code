@@ -243,7 +243,22 @@ async function executeAdb(routine, {
   return result;
 }
 
-function createRoutineRunner({ store, maxRetries = 2, baseRetryMs = 500, now = () => new Date(), allowPrivateTargets = process.env.ROUTINE_ALLOW_PRIVATE_TARGETS === '1', agente = {}, adb = {} } = {}) {
+// ---------------------------------------------------------------------------
+// v0.46.0: ação "lembrete" — só a notificação (remédio, conta, compromisso). Sem notificação disponível, a
+// execução falha (e aparece em "routines logs"): um lembrete que ninguém vê não lembrou nada.
+// ---------------------------------------------------------------------------
+async function executeLembrete(routine, { notificarFn = notificarSistema, log = (m) => console.log(m) } = {}) {
+  const { paraTerminal } = require('./ui/textoSeguro');
+  const action = require('./routines').validarAcao(routine.action);
+  const started = Date.now();
+  log(`[lembrete] ${paraTerminal(action.titulo)}: ${paraTerminal(action.texto)}`);
+  const notificacao = await notificarFn(action.titulo, action.texto);
+  const result = { ok: notificacao === 'enviada', message: notificacao === 'enviada' ? 'Lembrete enviado.' : 'Não deu para mostrar a notificação (no celular: instale o Termux:API — pkg install termux-api).', notificacao, durationMs: Date.now() - started, checkedAt: new Date().toISOString() };
+  if (!result.ok) throw Object.assign(new Error(result.message), { result });
+  return result;
+}
+
+function createRoutineRunner({ store, maxRetries = 2, baseRetryMs = 500, now = () => new Date(), allowPrivateTargets = process.env.ROUTINE_ALLOW_PRIVATE_TARGETS === '1', agente = {}, adb = {}, lembrete = {} } = {}) {
   if (!store) throw new Error('O executor precisa de um armazenamento de rotinas.');
   const inFlight = new Set();
 
@@ -270,6 +285,7 @@ function createRoutineRunner({ store, maxRetries = 2, baseRetryMs = 500, now = (
           if (routine.action.type === 'http-check') result = await executeHttpCheck(routine.action, { allowPrivateTargets });
           else if (routine.action.type === 'agente') result = await executeAgente(routine, agente);
           else if (routine.action.type === 'adb') result = await executeAdb(routine, adb);
+          else if (routine.action.type === 'lembrete') result = await executeLembrete(routine, lembrete);
           else throw new Error(`Executor não implementado: ${routine.action.type}`);
           execution.attempts.push({ number: attempt + 1, ok: true, finishedAt: now().toISOString() });
           break;
@@ -353,4 +369,4 @@ function createRoutineRunner({ store, maxRetries = 2, baseRetryMs = 500, now = (
   return { execute, tick, start, inFlight };
 }
 
-module.exports = { createRoutineRunner, executeHttpCheck, executeAgente, executeAdb, notificarSistema, ensurePublicTarget, privateAddress, zonedMinuteKey, INSTRUCAO_ROTINA };
+module.exports = { createRoutineRunner, executeHttpCheck, executeAgente, executeAdb, executeLembrete, notificarSistema, ensurePublicTarget, privateAddress, zonedMinuteKey, INSTRUCAO_ROTINA };

@@ -78,6 +78,25 @@ function aplicar(sub, args, saveConfig) {
     if (!atuais.includes(dir)) saveConfig({ pastasGravaveis: [...atuais, dir] });
     return `Pasta liberada: ${dir} — o agente grava ali sem perguntar (write_file e a sandbox do run_shell).`;
   }
+  // v0.46.0: ferramentas sob demanda (saude_*, compras, camera, video) também no chat comum
+  if (sub === 'ferramentas-extras') {
+    const disponiveis = require('./tools').nomesSobDemanda();
+    const bruto = a.join(',').trim();
+    if (!bruto) {
+      const atuais = require('./config').loadConfig().ferramentasExtras || [];
+      return `Ferramentas extras no chat comum: ${atuais.length ? atuais.join(', ') : '(nenhuma)'}\nDisponíveis: ${disponiveis.join(', ')}\nUso: gemini-code config ferramentas-extras compras,video   (ou "nenhuma")`;
+    }
+    const lista = ['nenhuma', 'none'].includes(bruto.toLowerCase()) ? [] : [...new Set(bruto.split(/[\s,]+/).filter(Boolean))];
+    const desconhecida = lista.find((n) => !disponiveis.includes(n));
+    if (desconhecida) return `Ferramenta "${desconhecida}" não é sob demanda. Disponíveis: ${disponiveis.join(', ')}`;
+    saveConfig({ ferramentasExtras: lista });
+    return lista.length ? `No chat comum agora: ${lista.join(', ')}${lista.some((n) => n.startsWith('saude_')) ? ' (ATENÇÃO: o chat comum passa a ler o seu diário de saúde)' : ''}` : 'Ferramentas extras desligadas: elas só aparecem nos aliados que as usam.';
+  }
+  if (sub === 'set-confirmar-midia') {
+    if (!['on', 'off'].includes(a[0])) return 'Uso: gemini-code config set-confirmar-midia on|off   (on: pergunta antes de gerar imagem/vídeo com IA — gasta a cota da chave)';
+    saveConfig({ confirmarMidia: a[0] === 'on' });
+    return a[0] === 'on' ? 'Gerar imagem/vídeo com IA volta a perguntar antes.' : 'Gerar imagem/vídeo com IA não pergunta mais (a câmera continua perguntando sempre).';
+  }
   if (sub === 'set-confirmar-fora') {
     if (!['on', 'off'].includes(a[0])) return 'Uso: gemini-code config set-confirmar-fora on|off   (on: write_file/edit_file perguntam antes de gravar fora da pasta do projeto)';
     saveConfig({ confirmarForaDoProjeto: a[0] === 'on' });

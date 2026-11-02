@@ -44,6 +44,9 @@ const DESCRICAO_PRESETS = {
   leitura: 'lê arquivos e pastas do computador',
   pesquisa: 'leitura + abre páginas web (pergunta antes de cada acesso, se confirmWeb)',
   tv: 'controla a TV/celular por adb e acha o que tocar na web (navegador), com as confirmações de sempre',
+  saude: 'diário de saúde (anota e consulta medições, sintomas e remédios; só este aliado lê) + web para conferir fontes',
+  midia: 'cria e melhora imagens e vídeos, e usa a câmera (pergunta toda vez) + web',
+  compras: 'cuida da lista de compras do mês (não compra nem paga) + web',
   completo: 'todas as ferramentas da sessão (grava arquivos e roda comandos, com as confirmações de sempre)',
 };
 
@@ -360,9 +363,10 @@ async function cli(args = [], deps = {}) {
       if (!mensagem) return falha(L('erro', `Uso: gemini-code aliados run ${nome} "mensagem"`));
       const agente = store.obter(nome);
       const run = deps.runOnce || require('./agent').runOnce;
-      const { opcoes, ctx } = personalAgents.prepararTurno(store, agente, mensagem, { perguntar: deps.perguntar });
+      const { opcoes, ctx, alerta } = personalAgents.prepararTurno(store, agente, mensagem, { perguntar: deps.perguntar });
       const r = await personalAgents.comAgente(ctx, () => run(mensagem, { history: [], ...opcoes }));
-      return ok(L('texto', r.text));
+      // v0.46.0: aliado de saúde — o aviso de emergência (regras fixas) vem antes da resposta
+      return ok(...(alerta ? [L('erro', alerta)] : []), L('texto', r.text));
     }
 
     if (sub === 'conhecimento') {

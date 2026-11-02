@@ -54,7 +54,10 @@ const ESPACOS_CONFIG = new Set(['system', 'secure', 'global']);
 
 // Ações que só LEEM o aparelho (não pedem confirmação). "tela" grava nesta máquina, mas só um .png NOVO,
 // fora das áreas protegidas (destinoDoPrint) — como criar um arquivo novo, que também não pergunta.
-const SO_LEITURA = new Set(['dispositivos', 'descobrir', 'info', 'apps', 'estado', 'tela', 'logcat']);
+const SO_LEITURA = new Set(['dispositivos', 'descobrir', 'info', 'apps', 'estado', 'tela', 'logcat', 'diagnostico']);
+// v0.46.0: "otimizar" não passa pela confirmação única: CADA passo pergunta (src/tvOtimizar.js), sempre — nem
+// adbConfirm:false nem regra "permitir" dispensam, e numa rotina a resposta vazia não faz nada.
+const PASSO_A_PASSO = new Set(['otimizar']);
 // Confirmam SEMPRE, mesmo com adbConfirm:false ou regra "permitir".
 const SENSIVEIS = new Set(['reiniciar', 'desinstalar', 'limpar', 'shell']);
 
@@ -72,12 +75,14 @@ const declarations = [
         acao: {
           type: 'string',
           enum: ['dispositivos', 'descobrir', 'parear', 'conectar', 'desconectar', 'tcpip', 'info', 'apps', 'estado', 'tela', 'logcat',
-            'abrir_app', 'abrir_link', 'fechar_app', 'instalar', 'desinstalar', 'limpar', 'tecla', 'digitar', 'config', 'reiniciar', 'shell'],
+            'abrir_app', 'abrir_link', 'fechar_app', 'instalar', 'desinstalar', 'limpar', 'tecla', 'digitar', 'config', 'reiniciar', 'shell',
+            'diagnostico', 'otimizar'],
           description: 'dispositivos=lista; descobrir=acha aparelhos com depuração por Wi-Fi na rede; parear=Android 11+ (código de 6 dígitos ' +
             'da tela "Parear com código"); conectar/desconectar/tcpip=rede; info/apps/estado/tela/logcat=leitura; ' +
             'abrir_app/fechar_app/instalar/desinstalar/limpar=apps; abrir_link=abre um endereço no app certo do aparelho (ex.: um vídeo ' +
             'do YouTube no app da TV); tecla/digitar=controle (dormir/acordar desligam/ligam a tela sem inverter); config=settings; ' +
-            'reiniciar; shell=comando livre.',
+            'reiniciar; shell=comando livre; diagnostico=memória, disco, animações e os apps que mais pesam (só lê); ' +
+            'otimizar=TV lenta: animações 0,5x, limpar cache, fechar apps em segundo plano (pergunta a cada passo).',
         },
         alvo: { type: 'string', description: 'Aparelho: serial USB, "ip" ou "ip:porta" (padrão adbSerial do config; conectar/tcpip usam o ip; parear usa o ip:porta DE PAREAMENTO, que é outra porta).' },
         codigo: { type: 'string', description: 'parear: código de 6 dígitos mostrado no aparelho.' },
@@ -221,7 +226,7 @@ async function execute(name, args = {}, deps = {}) {
   try { alvo = validarAlvo(a.alvo || (['conectar', 'desconectar', 'parear', 'descobrir'].includes(acao) ? '' : cfg.adbSerial)); }
   catch (e) { return `Erro: ${e.message}`; }
 
-  if (!SO_LEITURA.has(acao)) {
+  if (!SO_LEITURA.has(acao) && !PASSO_A_PASSO.has(acao)) {
     const sensivel = ehSensivel(acao, a);
     const liberado = !sensivel && (cfg.adbConfirm === false || permissions.permitido('adb', a, cfg));
     if (!liberado) {
@@ -354,6 +359,18 @@ async function execute(name, args = {}, deps = {}) {
         // Comando LIVRE: o shell do aparelho interpreta de propósito (por isso confirma sempre).
         return textoSaida(await rodarAdb(adbPath, comAlvo(alvo, ['shell', comando])));
       }
+      // v0.46.0: melhorador de TV (src/tvOtimizar.js) — comandos fixos, entre aspas simples para o aparelho
+      case 'diagnostico':
+      case 'otimizar': {
+        const tv = require('../tvOtimizar');
+        const executar = (argv) => rodarAdb(adbPath, comAlvo(alvo, noAparelho(...argv)));
+        const teste = await executar(['echo', 'ok']);
+        if (teste.erro) return teste.erro;
+        if (acao === 'diagnostico') return tv.relatorio(await tv.diagnostico(executar));
+        const r = await tv.otimizar(executar, perguntar);
+        const feitos = r.feitos.map((f) => `${tv.PASSOS[f.passo].titulo}: ${f.feito ? 'feito' : f.erro ? `falhou (${f.erro})` : 'pulado'}`);
+        return feitos.length ? `Otimização:\n${feitos.join('\n')}` : `Nada a otimizar agora.\n${tv.relatorio(r.diagnostico)}`;
+      }
       default:
         return `Erro: ação de adb desconhecida: "${paraExibir(acao)}".`;
     }
@@ -406,5 +423,5 @@ const teclaValida = (t) => Boolean(TECLAS[String(t || '').trim().toLowerCase()] 
 
 module.exports = {
   declarations, execute, TECLAS, ALIASES, PACOTE_OK, MAX_TEXTO, validarAlvo, validarPorta, validarLink, hostPorta, descreverAcao,
-  noAparelho, argsDoComando, teclaValida, SO_LEITURA, SENSIVEIS,
+  noAparelho, argsDoComando, teclaValida, SO_LEITURA, SENSIVEIS, rodarAdb, comAlvo,
 };

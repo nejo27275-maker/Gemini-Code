@@ -49,10 +49,26 @@ async function makeVideo(prompt, outDir, { model = 'models/veo-3.1-generate-prev
   fs.mkdirSync(outDir, { recursive: true });
   const started = await callLongRunningModel(model, { instances: [{ prompt }] });
   const done = await pollOperation(started.name, { timeoutMs: 10 * 60 * 1000 });
-  const videoB64 = done.response?.generateVideoResponse?.generatedSamples?.[0]?.video?.encodedVideo;
-  if (!videoB64) throw new Error('Resposta sem vídeo. Veja se o modelo Veo está habilitado na conta.');
-  const outPath = path.join(outDir, 'video.mp4');
-  fs.writeFileSync(outPath, Buffer.from(videoB64, 'base64'));
+  const video = done.response?.generateVideoResponse?.generatedSamples?.[0]?.video || {};
+  // v0.46.0: a API devolve o vídeo dentro da resposta (encodedVideo) ou um endereço para baixar (uri). A chave só vai
+  // para o próprio endereço da API do Google — nunca para um host qualquer que viesse na resposta.
+  let dados;
+  if (video.encodedVideo) {
+    dados = Buffer.from(video.encodedVideo, 'base64');
+  } else if (video.uri) {
+    let u;
+    try { u = new URL(video.uri); } catch { throw new Error('A resposta trouxe um endereço de vídeo inválido.'); }
+    if (u.protocol !== 'https:' || u.hostname !== 'generativelanguage.googleapis.com') throw new Error(`O vídeo veio de um endereço inesperado (${u.hostname}); não baixei.`);
+    const res = await fetch(u, { headers: { 'x-goog-api-key': loadConfig().apiKey }, redirect: 'follow' });
+    if (!res.ok) throw new Error(`Não consegui baixar o vídeo (HTTP ${res.status}).`);
+    dados = Buffer.from(await res.arrayBuffer());
+  } else {
+    throw new Error('Resposta sem vídeo. Veja se o modelo Veo está habilitado na conta.');
+  }
+  // antes era sempre "video.mp4" (o segundo vídeo apagava o primeiro); agora um nome novo a cada vez
+  let outPath = path.join(outDir, `video-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.mp4`);
+  for (let i = 2; fs.existsSync(outPath); i++) outPath = outPath.replace(/(-\d+)?\.mp4$/, `-${i}.mp4`);
+  fs.writeFileSync(outPath, dados, { flag: 'wx' });
   return { outPath };
 }
 

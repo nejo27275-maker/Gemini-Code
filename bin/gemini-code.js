@@ -157,6 +157,16 @@ No modo "chat", digite /help para ver os comandos de sessão (/clear, /model, /s
   gemini-code adb tecla <cima|baixo|ok|voltar|home|play...>   Navega na TV pelo controle virtual
   gemini-code adb abrir <pacote> | digitar <texto> | instalar <app.apk> | shell <cmd>   (pedem confirmação)
 
+  gemini-code saude anotar pressao 13x8        Assistente de saúde (não é médico): diário, alertas, remédios com lembrete,
+  gemini-code saude resumo | pagina | aliado   página para a consulta e triagem de emergência (gemini-code saude ajuda)
+  gemini-code compras add "arroz 5kg" --qtd 2  Lista de compras do mês por seção, gasto estimado e orçamento
+  gemini-code compras mes | ifood              ifood: copia a lista e abre o iFood (o pedido e o pagamento são seus)
+  gemini-code imagem gerar|editar|melhorar|descrever   Imagens com IA ou, para melhorar, sem IA (ImageMagick)
+  gemini-code video melhorar|slideshow|gerar   Vídeos: melhorar e slideshow no aparelho (ffmpeg); gerar com IA (Veo)
+  gemini-code camera foto|analisar|vigiar      Câmera do celular/webcam; vigiar avisa quando algo muda
+  gemini-code tv diagnostico | otimizar        Melhorador de TV: animações, cache e apps em segundo plano (pergunta)
+  gemini-code criar site|app NOME | servir PASTA   Site ou app (PWA, instala no celular) prontos para personalizar
+
   gemini-code sandbox                          Mostra se a sandbox do run_shell funciona aqui e o que ela libera
   gemini-code sandbox testar "comando"         Roda um comando na sandbox (para ver o que funciona lá dentro)
   gemini-code config set-sandbox auto|sempre|off   auto: o que roda sem você aprovar vai para a sandbox (Linux + bubblewrap)
@@ -664,6 +674,8 @@ async function chatLoop({ agente: nomeAgente } = {}) {
       // plano só restringe (interseção das ferramentas). O modelo do agente, se definido, vale sobre o /model.
       const restricao = planMode.opcoes(modoPlano);
       const turno = agenteDoTurno ? personalAgents.prepararTurno(aliadosStore, agenteDoTurno, textoEnviado, { restricao }) : null;
+      // v0.46.0: aliado de saúde — aviso de emergência por regras fixas, antes da resposta da IA
+      if (turno && turno.alerta) console.log(chalk.red(`\n${turno.alerta}`));
       process.stdout.write(chalk.green(`\n${agenteDoTurno ? agenteDoTurno.name : 'gemini-code'}> `));
       let streamed = false;
       const rodar = () => runOnce(textoEnviado, {
@@ -885,6 +897,23 @@ async function main() {
       return;
     }
 
+    case 'compras': {
+      // v0.46.0: lista de compras do mês + ponte para o iFood (src/compras.js)
+      const r = await require('../src/comprasCommands').executar(rest);
+      imprimirLinhas(r.linhas);
+      if (r.codigo) process.exitCode = r.codigo;
+      return;
+    }
+
+    case 'saude':
+    case 'saúde': {
+      // v0.46.0: assistente de saúde (src/saude.js, src/saudeCommands.js)
+      const r = await require('../src/saudeCommands').executar(rest);
+      imprimirLinhas(r.linhas);
+      if (r.codigo) process.exitCode = r.codigo;
+      return;
+    }
+
     case 'mcp': {
       try { console.log(mcpPresets.comando(rest, { mcpPath: require('../src/config').MCP_PATH })); } catch (err) { console.log(`Erro no mcp.json: ${err.message}`); }
       return;
@@ -1001,6 +1030,217 @@ async function main() {
         console.log(`Imagem gerada: ${r.outPath}`);
       } else {
         console.log('Uso: gemini-code design [slides|doc|image] "descrição" [pasta]');
+      }
+      return;
+    }
+
+    case 'imagem':
+    case 'foto': {
+      // v0.46.0: criar, editar, melhorar e descrever imagens (src/imagem.js)
+      const [sub, ...resto] = rest;
+      const flags = { _: [] };
+      for (let i = 0; i < resto.length; i++) {
+        if (['--saida', '--modo', '--ampliar'].includes(resto[i]) && i + 1 < resto.length) flags[resto[i].slice(2)] = resto[++i];
+        else flags._.push(resto[i]);
+      }
+      const im = require('../src/imagem');
+      const uso = () => console.log([
+        'Uso: gemini-code imagem gerar "descrição"                      (com IA; usa a cota da sua chave)',
+        '     gemini-code imagem editar FOTO "o que mudar"              (com IA)',
+        '     gemini-code imagem melhorar FOTO [--modo local|ia] [--ampliar 2]   (local = ImageMagick, grátis e offline)',
+        '     gemini-code imagem descrever FOTO ["pergunta"]',
+        '     opções: --saida arquivo.png (nunca sobrescreve: cria um arquivo novo)',
+      ].join('\n'));
+      try {
+        let r;
+        if (sub === 'gerar') {
+          if (bloquearSeConvidado('geração de imagem (custa cota da API do dono).')) return;
+          if (!flags._.length) return uso();
+          r = await im.gerar(flags._.join(' '), { saida: flags.saida });
+        } else if (sub === 'editar') {
+          if (bloquearSeConvidado('edição de imagem com IA (custa cota da API do dono).')) return;
+          if (flags._.length < 2) return uso();
+          r = await im.editar(flags._[0], flags._.slice(1).join(' '), { saida: flags.saida });
+        } else if (sub === 'melhorar') {
+          if (!flags._[0]) return uso();
+          if (flags.modo === 'ia' && bloquearSeConvidado('melhorar com IA (custa cota da API do dono).')) return;
+          r = await im.melhorar(flags._[0], { modo: flags.modo || 'auto', saida: flags.saida, ampliar: flags.ampliar });
+        } else if (sub === 'descrever') {
+          if (!flags._[0]) return uso();
+          console.log(paraTerminal(await im.descrever(flags._[0], flags._.slice(1).join(' ') || undefined)));
+          return;
+        } else return uso();
+        console.log(chalk.green(`Imagem criada (${r.modo === 'ia' ? 'com IA' : 'sem IA, pelo ImageMagick'}): ${r.arquivo}`));
+      } catch (err) {
+        console.error(chalk.red(`Erro: ${err.message}`));
+        process.exitCode = 1;
+      }
+      return;
+    }
+
+    case 'criar': {
+      // v0.46.0: ponto de partida de site e de app (PWA), sem IA — src/criador.js
+      const [sub, ...resto] = rest;
+      const flags = { _: [] };
+      for (let i = 0; i < resto.length; i++) {
+        if (resto[i] === '--abrir') flags.abrir = true;
+        else if (resto[i].startsWith('--') && i + 1 < resto.length) flags[resto[i].slice(2)] = resto[++i];
+        else flags._.push(resto[i]);
+      }
+      const criador = require('../src/criador');
+      try {
+        if ((sub === 'site' || sub === 'app') && flags._[0]) {
+          const r = criador.criar({ tipo: sub, nome: flags._[0], titulo: flags.titulo, descricao: flags.descricao });
+          console.log(chalk.green(`${sub === 'app' ? 'App (PWA)' : 'Site'} criado em ${r.pasta}: ${r.arquivos.join(', ')}`));
+          console.log(chalk.dim(`Veja: gemini-code criar servir ${flags._[0]}   ·   Personalize: gemini-code chat → "no ./${flags._[0]}, ..."`));
+        } else if (sub === 'servir' && flags._[0]) {
+          const porta = Number(flags.porta || 8080);
+          if (!Number.isInteger(porta) || porta < 1 || porta > 65535) throw new Error('porta inválida.');
+          const srv = criador.servidor(flags._[0]);
+          srv.on('error', (e) => { console.error(chalk.red(`Erro: ${e.code === 'EADDRINUSE' ? `a porta ${porta} está em uso (use --porta 8081)` : e.message}`)); process.exitCode = 1; });
+          srv.listen(porta, '127.0.0.1', async () => {
+            const url = `http://127.0.0.1:${srv.address().port}/`;
+            console.log(chalk.green(`Servindo ${path.resolve(flags._[0])} em ${url} (só neste aparelho). Ctrl+C para parar.`));
+            if (flags.abrir) await require('../src/abrir').abrir(url);
+          });
+          return;
+        } else {
+          console.log([
+            'Uso: gemini-code criar site NOME [--titulo "Minha Padaria"] [--descricao "..."]   site responsivo, sem IA',
+            '     gemini-code criar app NOME [--titulo "Meus Gastos"]                         app PWA (instala no celular, funciona offline)',
+            '     gemini-code criar servir PASTA [--porta 8080] [--abrir]                      vê o site/app em http://127.0.0.1',
+          ].join('\n'));
+        }
+      } catch (err) {
+        console.error(chalk.red(`Erro: ${err.message}`));
+        process.exitCode = 1;
+      }
+      return;
+    }
+
+    case 'tv': {
+      // v0.46.0: melhorador de TV (src/tvOtimizar.js) — diagnóstico (só lê), otimizar (pergunta a cada passo), desfazer
+      const [sub = 'diagnostico', ...resto] = rest;
+      const flags = { _: [] };
+      for (let i = 0; i < resto.length; i++) {
+        if (resto[i] === '--tudo') flags.tudo = true;
+        else if (resto[i].startsWith('--') && i + 1 < resto.length) flags[resto[i].slice(2)] = resto[++i];
+        else flags._.push(resto[i]);
+      }
+      const tvo = require('../src/tvOtimizar');
+      const adbT = require('../src/tools/adbTools');
+      const cfg = loadConfig();
+      try {
+        // TV por Wi-Fi: reconecta antes (a conexão do adb cai quando ela dorme), como as rotinas de TV
+        let alvo = flags.alvo || cfg.adbSerial || '';
+        if (/^\d{1,3}(\.\d{1,3}){3}$/.test(alvo)) alvo = `${alvo}:${Number(cfg.adbPorta) || 5555}`;
+        if (/:\d+$/.test(alvo)) await adbT.rodarAdb(cfg.adbPath || 'adb', ['connect', adbT.hostPorta(alvo, cfg.adbPorta)]);
+        const executar = tvo.executorAdb({ alvo });
+        const teste = await executar(['echo', 'ok']);
+        if (teste.erro) { console.error(chalk.red(teste.erro)); process.exitCode = 1; return; }
+        if (sub === 'diagnostico' || sub === 'diagnóstico') {
+          console.log(paraTerminal(tvo.relatorio(await tvo.diagnostico(executar))));
+        } else if (sub === 'otimizar') {
+          const r = await tvo.otimizar(executar, require('../src/ui/prompt').ask, flags.tudo ? { passos: Object.keys(tvo.PASSOS) } : {});
+          console.log(paraTerminal(tvo.relatorio(r.diagnostico)));
+          if (!r.feitos.length) console.log(chalk.green('Nada a otimizar agora (use --tudo para fazer todos os passos mesmo assim).'));
+          for (const f of r.feitos) console.log((f.feito ? chalk.green : f.erro ? chalk.red : chalk.dim)(`${f.feito ? 'feito' : f.erro ? `falhou: ${paraTerminal(f.erro)}` : 'pulado'} — ${tvo.PASSOS[f.passo].titulo}`));
+          if (r.feitos.some((f) => f.feito && f.passo === 'animacoes')) console.log(chalk.dim('Para voltar as animações ao normal: gemini-code tv desfazer'));
+          require('../src/ui/prompt').closeShared();
+        } else if (sub === 'desfazer') {
+          const erro = await tvo.desfazer(executar);
+          console.log(erro ? chalk.red(erro) : chalk.green('Animações de volta em 1x.'));
+        } else {
+          console.log('Uso: gemini-code tv diagnostico | otimizar [--tudo] | desfazer   [--alvo IP]');
+        }
+      } catch (err) {
+        console.error(chalk.red(`Erro: ${err.message}`));
+        process.exitCode = 1;
+      }
+      return;
+    }
+
+    case 'camera':
+    case 'câmera': {
+      // v0.46.0: câmera do celular/webcam (src/camera.js)
+      const [sub, ...resto] = rest;
+      const flags = { _: [] };
+      for (let i = 0; i < resto.length; i++) {
+        if (['--notificar', '--descrever'].includes(resto[i])) flags[resto[i].slice(2)] = true;
+        else if (resto[i].startsWith('--') && i + 1 < resto.length) flags[resto[i].slice(2)] = resto[++i];
+        else flags._.push(resto[i]);
+      }
+      const cam = require('../src/camera');
+      try {
+        if (sub === 'foto') {
+          console.log(chalk.green(`Foto salva: ${await cam.foto({ saida: flags.saida, camera: flags.camera })}`));
+        } else if (sub === 'analisar') {
+          const r = await cam.analisar(flags._.join(' ') || undefined, { camera: flags.camera, manterFoto: Boolean(flags.saida) });
+          console.log(paraTerminal(r.resposta));
+        } else if (sub === 'vigiar') {
+          let parar = false;
+          process.on('SIGINT', () => { parar = true; console.log(chalk.dim('\n(parando depois da foto atual...)')); });
+          const { notificarSistema } = require('../src/routineRunner');
+          console.log(chalk.dim(`Vigiando: uma foto a cada ${flags.intervalo || 30} s; mudança acima de ${flags.sensibilidade || 5}% guarda a foto em ./${flags.pasta || 'vigia'}. Ctrl+C para parar.`));
+          const r = await cam.vigiar({
+            intervaloS: flags.intervalo, sensibilidade: flags.sensibilidade, pasta: flags.pasta || 'vigia', camera: flags.camera,
+            deveParar: () => parar, log: (m) => console.log(chalk.dim(m)),
+            aoDetectar: async ({ arquivo, mudou }) => {
+              let texto = `Movimento: ${(mudou * 100).toFixed(0)}% da imagem mudou (${path.basename(arquivo)})`;
+              if (flags.descrever) {
+                try { texto += ` — ${await require('../src/imagem').descrever(arquivo, 'Em uma frase: o que mudou ou quem/o que aparece nesta foto?')}`; } catch (e) { texto += ` (sem descrição: ${e.message})`; }
+              }
+              console.log(chalk.yellow(paraTerminal(texto)));
+              if (flags.notificar) await notificarSistema('gemini-code: câmera', texto.slice(0, 300));
+            },
+          });
+          console.log(`Fim: ${r.fotos} fotos, ${r.deteccoes} movimento(s); fotos em ${r.pasta}`);
+        } else {
+          console.log([
+            'Uso: gemini-code camera foto [--camera 1] [--saida foto.jpg]           (1 = frontal)',
+            '     gemini-code camera analisar "o que tem na geladeira?" [--camera 1]   (manda a foto para a IA)',
+            '     gemini-code camera vigiar [--intervalo 30] [--sensibilidade 5] [--pasta vigia] [--notificar] [--descrever]',
+            '     (vigiar compara as fotos no aparelho, sem IA; --descrever pede à IA uma frase sobre cada movimento)',
+          ].join('\n'));
+        }
+      } catch (err) {
+        console.error(chalk.red(`Erro: ${err.message}`));
+        process.exitCode = 1;
+      }
+      return;
+    }
+
+    case 'video':
+    case 'vídeo': {
+      // v0.46.0: melhorar vídeo, slideshow de fotos (ffmpeg, local) e vídeo com IA (Veo) — src/video.js
+      const [sub, ...resto] = rest;
+      const flags = { _: [] };
+      for (let i = 0; i < resto.length; i++) {
+        if (resto[i] === '--estabilizar') flags.estabilizar = true;
+        else if (resto[i].startsWith('--') && i + 1 < resto.length) flags[resto[i].slice(2)] = resto[++i];
+        else flags._.push(resto[i]);
+      }
+      const v = require('../src/video');
+      try {
+        let r;
+        if (sub === 'melhorar' && flags._[0]) r = await v.melhorar(flags._[0], { saida: flags.saida, estabilizar: flags.estabilizar });
+        else if (sub === 'slideshow' && flags._.length) r = await v.slideshow(flags._, { segundos: flags.segundos, musica: flags.musica, saida: flags.saida });
+        else if (sub === 'gerar' && flags._.length) {
+          if (bloquearSeConvidado('geração de vídeo (custa cota da API do dono).')) return;
+          r = await v.gerar(flags._.join(' '));
+        } else {
+          console.log([
+            'Uso: gemini-code video melhorar VIDEO.mp4 [--estabilizar] [--saida novo.mp4]   (menos ruído, mais nitidez)',
+            '     gemini-code video slideshow foto1.jpg foto2.jpg ... [--segundos 3] [--musica musica.mp3] [--saida album.mp4]',
+            '     gemini-code video gerar "descrição"                                          (com IA, Veo)',
+            '     (melhorar e slideshow usam o ffmpeg no aparelho: Termux: pkg install ffmpeg)',
+          ].join('\n'));
+          return;
+        }
+        console.log(chalk.green(`Vídeo criado: ${r.arquivo}`));
+      } catch (err) {
+        console.error(chalk.red(`Erro: ${err.message}`));
+        process.exitCode = 1;
       }
       return;
     }
@@ -1510,14 +1750,17 @@ async function main() {
           const url = flags.url;
           const pedido = flags.prompt;
           const tv = flags.tv;
+          const lembrete = flags.lembrete;
           const timezone = flags.timezone || routines.DEFAULT_TIMEZONE;
           const triggers = ['every', 'at', 'cron'].filter((k) => flags[k] !== undefined);
-          if (!name || [url, pedido, tv].filter(Boolean).length !== 1 || triggers.length !== 1) {
+          if (!name || [url, pedido, tv, lembrete].filter(Boolean).length !== 1 || triggers.length !== 1) {
             console.log("Uso: gemini-code routines create --name \"Meu site\" --url https://exemplo.com (--every 5m | --at 2026-10-11T08:00:00-03:00 | --cron '*/5 * * * *') [--timezone America/Recife]");
             console.log("  ou: gemini-code routines create --name \"Resumo\" --prompt \"resuma os TODO do projeto\" [--ferramentas read_file,list_dir] [--passos 20] [--notificar] --cron '0 8 * * 1-5'");
             console.log('      (agente: sem ninguém olhando, o que pediria confirmação é recusado; padrão só leitura: ' + routines.FERRAMENTAS_ROTINA_PADRAO.join(', ') + ')');
             console.log("  ou: gemini-code routines create --name \"Dormir\" --tv \"tecla dormir\" --cron '0 23 * * *' [--alvo 192.168.0.50]");
             console.log('      (TV/celular, sem IA; um --tv por passo: ' + routines.ACOES_ROTINA_ADB.join(', ') + ', ex.: --tv "abrir_app com.netflix.ninja" --tv "esperar 5")');
+            console.log("  ou: gemini-code routines create --name \"Conta de luz\" --lembrete \"Pagar a conta de luz\" [--titulo \"Contas\"] --cron '0 9 10 * *'");
+            console.log('      (só uma notificação no horário, sem IA)');
             return;
           }
           let trigger;
@@ -1537,7 +1780,8 @@ async function main() {
           const routine = routines.create({
             name, description: flags.description || '', category: flags.category,
             priority: flags.priority || 'normal', trigger,
-            action: tv ? { type: 'adb', alvo: flags.alvo, passos: tv.map(passoDaTv), notificar: flags.notificar === true } : pedido
+            action: lembrete ? { type: 'lembrete', texto: lembrete, titulo: flags.titulo }
+              : tv ? { type: 'adb', alvo: flags.alvo, passos: tv.map(passoDaTv), notificar: flags.notificar === true } : pedido
               ? { type: 'agente', prompt: pedido, ferramentas, maxPassos: flags.passos === undefined ? undefined : Number(flags.passos), notificar: flags.notificar === true }
               : { type: 'http-check', url, timeoutMs: flags.timeout ? routines.parseDuration(flags.timeout) : 10000,
                 expectedStatus: flags['expected-status'] ? Number(flags['expected-status']) : undefined },
