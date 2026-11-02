@@ -19,6 +19,8 @@ const imagemTools = require('../src/tools/imagemTools');
 
 const PNG_1PX = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
 const magick = im.acharMagick();
+// no CI o ImageMagick é instalado: lá o teste de verdade não pode ser pulado em silêncio
+const exigirMidia = process.env.GEMINI_CODE_EXIGIR_MIDIA === '1';
 
 test.after(() => { process.chdir(antes); for (const d of [HOME, PROJ]) fs.rmSync(d, { recursive: true, force: true }); });
 
@@ -31,7 +33,8 @@ test('ImageMagick: formato explícito na entrada e na saída; ampliar só quando
   assert.throws(() => im.argsMelhorar('/x/a.svg', '/x/b.png'), /use \.png/);
 });
 
-test('melhorar sem IA (ImageMagick de verdade): arquivo novo, nunca sobrescreve; gif vira png', { skip: !magick && 'sem ImageMagick' }, async () => {
+test('melhorar sem IA (ImageMagick de verdade): arquivo novo, nunca sobrescreve; gif vira png', { skip: !magick && !exigirMidia && 'sem ImageMagick' }, async () => {
+  assert.ok(magick, 'ImageMagick não encontrado (GEMINI_CODE_EXIGIR_MIDIA=1)');
   execFileSync(magick, ['-size', '80x60', 'plasma:fractal', 'jpeg:' + path.join(PROJ, 'foto.jpg')]);
   const r1 = await im.melhorar('foto.jpg', { modo: 'local' });
   assert.equal(r1.arquivo, path.join(PROJ, 'foto-melhorada.jpg'));

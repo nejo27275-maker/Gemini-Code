@@ -21,6 +21,8 @@ const tools = require('../src/tools');
 
 const magick = require('../src/imagem').acharMagick();
 const ffmpeg = video.acharFfmpeg();
+// no CI o ImageMagick e o ffmpeg são instalados: lá estes testes não podem ser pulados em silêncio
+const exigirMidia = process.env.GEMINI_CODE_EXIGIR_MIDIA === '1';
 
 test.after(() => { process.chdir(antes); for (const d of [HOME, PROJ]) fs.rmSync(d, { recursive: true, force: true }); });
 
@@ -48,7 +50,8 @@ test('câmera: foto cria arquivo novo; analisar apaga a foto temporária depois 
   assert.equal(fs.existsSync(vista), false, 'a foto temporária some');
 });
 
-test('vigia: compara de verdade (ImageMagick) e guarda só o que mudou', { skip: !magick && 'sem ImageMagick' }, async () => {
+test('vigia: compara de verdade (ImageMagick) e guarda só o que mudou', { skip: !magick && !exigirMidia && 'sem ImageMagick' }, async () => {
+  assert.ok(magick, 'ImageMagick não encontrado (GEMINI_CODE_EXIGIR_MIDIA=1)');
   // JPEG, como sai da câmera
   const a = path.join(PROJ, 'a.jpg');
   const b = path.join(PROJ, 'b.jpg');
@@ -84,7 +87,8 @@ test('vídeo: lista do concat escapa aspas; filtros; entradas conferidas', () =>
   ]);
 });
 
-test('vídeo com ffmpeg de verdade: melhorar e slideshow com música, sem sobrescrever', { skip: !ffmpeg && 'sem ffmpeg' }, async () => {
+test('vídeo com ffmpeg de verdade: melhorar e slideshow com música, sem sobrescrever', { skip: !ffmpeg && !exigirMidia && 'sem ffmpeg' }, async () => {
+  assert.ok(ffmpeg, 'ffmpeg não encontrado (GEMINI_CODE_EXIGIR_MIDIA=1)');
   execFileSync(ffmpeg, ['-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc=duration=1:size=160x120:rate=10', '-c:v', 'libx264', path.join(PROJ, 'v.mp4')]);
   const m = await video.melhorar('v.mp4');
   assert.equal(m.arquivo, path.join(PROJ, 'v-melhorado.mp4'));

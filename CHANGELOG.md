@@ -54,6 +54,10 @@ Base: o branch da 0.45.1 (ainda sem PR).
 
 Testes: 906 no Node 20.20 e 22.22, com o bubblewrap real (905 passando, 1 pulado por rodar como root). Novos: `saude` (9), `lembrete` (3), `imagem` (6), `cameraVideo` (6), `tvOtimizar` (5), `criadorCompras` (6). ImageMagick e ffmpeg rodaram de verdade nos testes; as páginas (saúde, site, app) foram abertas num Chromium de verdade. ESLint 10.1.0: 0 problemas.
 
+**CI:**
+- **1ª rodada:** 906 testes, 903 passando, nos Node 20, 22 e 24. Os 3 pulados eram os testes de mídia, porque a máquina do GitHub não tem ImageMagick nem ffmpeg.
+- **Mudança:** agora o CI instala os dois e define `GEMINI_CODE_EXIGIR_MIDIA=1`, que faz esses testes falharem em vez de pular.
+
 **Limites:**
 - Nada com IA de verdade foi testado aqui, porque este ambiente não tem chave nem rede para o Google: gerar/editar imagem, descrever, Veo e analisar foto.
 - A câmera foi testada com câmera simulada (não há webcam aqui); a TV, com o adb falso.

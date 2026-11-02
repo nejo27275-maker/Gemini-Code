@@ -46,6 +46,13 @@ jobs:
           bwrap --ro-bind / / --unshare-all --unshare-user -- true \
             || sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           bwrap --version
+      - name: Install ImageMagick e ffmpeg (testes de mídia)
+        # v0.46.0: melhorar foto, câmera-vigia e vídeo rodam com os programas de verdade (tests/imagem.test.js,
+        # tests/cameraVideo.test.js); com GEMINI_CODE_EXIGIR_MIDIA=1 esses testes falham em vez de pular.
+        run: |
+          sudo apt-get install -y -qq imagemagick ffmpeg
+          (magick -version || convert -version) | head -1
+          ffmpeg -version | head -1
       - name: Syntax checks
         run: |
           find src bin tests -type f -name '*.js' -print0 | xargs -0 -n1 node --check
@@ -55,6 +62,8 @@ jobs:
         env:
           # com o bubblewrap instalado, os testes de fuga da sandbox não podem ser pulados
           GEMINI_CODE_EXIGIR_SANDBOX: '1'
+          # idem para os testes com ImageMagick e ffmpeg de verdade
+          GEMINI_CODE_EXIGIR_MIDIA: '1'
       - name: Install ESLint (versão fixa, só para a checagem; não entra no package.json)
         if: matrix.node-version == 22
         run: npm install --no-save --no-audit --no-fund eslint@10.1.0
