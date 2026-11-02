@@ -178,6 +178,10 @@ extra). Cobertura atual:
 | sandbox do `run_shell`: filtro seccomp conferido num emulador de BPF, ambiente, pastas, montagem, onde achar o bwrap, decisão (auto/sempre/off, `fora_da_sandbox`, rotinas) com um bwrap falso, e com o bwrap real: gravar fora, segredos, rede, socket do sistema, `.git`, timeout e encerrar (v0.45.0; a parte real é obrigatória no CI) | `sandbox.test.js` |
 | gravar fora do projeto pergunta; nada dentro do `.git` (v0.45.0) | `areaTrabalho.test.js` |
 | autoGit não roda config plantada (fsmonitor, gpg, filtro) (v0.45.0) | `snapshots.test.js` |
+| `search_files`: arquivo como path, `\r\n`, `file_glob` com glob, `.gitignore`, regex catastrófica interrompida no prazo, trecho centrado (v0.45.1) | `buscaV0451.test.js` |
+| esquema JSON (zod/pydantic) → subconjunto do Gemini; nomes MCP dentro das regras e de volta ao servidor certo (v0.45.1) | `schemaGemini.test.js` |
+| argumentos em texto JSON dos provedores: conserto e erro claro (v0.45.1) | `argumentos.test.js` |
+| `read_skill` por pasta e por nome; SKILL.md ilegível (v0.45.1) | `skillsV0451.test.js` |
 | hooks `UserPromptSubmit`, `SessionStart`, `Stop` | `hooksEventos.test.js` |
 | subagentes do usuário (`.md`) | `subagentesDoUsuario.test.js` |
 | anti-SSRF com IPv6 (`privateAddress`) e DNS rebinding nas rotinas (`src/redeSegura.js`) | `ssrfIpv6.test.js` |

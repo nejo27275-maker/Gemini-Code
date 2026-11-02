@@ -116,6 +116,19 @@ const declarations = [
   },
 ];
 
+// v0.45.1: falha do sistema ao gravar (pasta sem permissão, disco cheio, nome comprido demais, destino que é uma
+// pasta) virava um erro cru do Node; agora diz o motivo em português e o que fazer.
+const MOTIVOS_GRAVACAO = {
+  EACCES: 'sem permissão para gravar ali', EPERM: 'sem permissão para gravar ali', EROFS: 'o disco ali é só leitura',
+  ENOSPC: 'o disco está cheio', ENAMETOOLONG: 'o nome do arquivo (ou do caminho) é comprido demais',
+  EISDIR: 'o destino é uma pasta, não um arquivo', ENOTDIR: 'uma parte do caminho é um arquivo, não uma pasta',
+  EEXIST: 'já existe um arquivo com esse nome no lugar de uma pasta do caminho',
+};
+function erroDeGravacao(alvo, err) {
+  const motivo = MOTIVOS_GRAVACAO[err && err.code] || (err && err.message) || String(err);
+  return `Erro: não deu para gravar ${alvo}: ${motivo}${err && err.code ? ` (${err.code})` : ''}. Nada foi alterado nesse arquivo.`;
+}
+
 async function execute(name, args) {
   switch (name) {
     case 'read_file': {
@@ -167,10 +180,15 @@ async function execute(name, args) {
       // v0.45.0: fora da pasta do projeto (ex.: ~/.bashrc), pergunta antes — src/tools/protectedPaths.js
       const recusaW = await confirmarForaDaArea([args.path]);
       if (recusaW) return recusaW;
-      fs.mkdirSync(path.dirname(path.resolve(args.path)), { recursive: true });
-      rewind.registrar(args.path);
-      const backupW = backupBeforeWrite(args.path);
-      fs.writeFileSync(args.path, args.content, 'utf8');
+      let backupW;
+      try {
+        fs.mkdirSync(path.dirname(path.resolve(args.path)), { recursive: true });
+        rewind.registrar(args.path);
+        backupW = backupBeforeWrite(args.path);
+        fs.writeFileSync(args.path, args.content, 'utf8');
+      } catch (err) {
+        return erroDeGravacao(args.path, err);
+      }
       return backupW
         ? `Arquivo salvo: ${args.path} (backup do conteúdo anterior em ${backupW})`
         : `Arquivo salvo: ${args.path}`;
@@ -203,7 +221,7 @@ async function execute(name, args) {
       if (recusaE) return recusaE;
       rewind.registrar(p);
       const backupE = backupBeforeWrite(p);
-      fs.writeFileSync(p, novo, 'utf8');
+      try { fs.writeFileSync(p, novo, 'utf8'); } catch (err) { return erroDeGravacao(args.path, err); }
       return backupE
         ? `Editado: ${args.path} (backup do conteúdo anterior em ${backupE})`
         : `Editado: ${args.path}`;

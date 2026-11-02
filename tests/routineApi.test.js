@@ -41,3 +41,22 @@ test('API exige token, permite criar rascunhos e controlar rotina', async (t) =>
   const list = await fetch(`${baseUrl}/api/routines`, { headers: { authorization: `Bearer ${'a'.repeat(64)}` } });
   assert.equal((await list.json()).routines.length, 1);
 });
+
+// v0.45.1: um pedido malformado, sem token, derrubava o processo do serviço (new URL lançava no handler assíncrono)
+test('pedido com endereço malformado recebe 400 e o serviço continua no ar', async (t) => {
+  const store = setup();
+  const server = createRoutineApiServer({ store, runner: createRoutineRunner({ store, maxRetries: 0 }), token: 'a'.repeat(64) });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const port = server.address().port;
+  const resposta = await new Promise((resolve, reject) => {
+    const s = require('node:net').connect(port, '127.0.0.1', () => s.write('GET http://[ HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n'));
+    let dados = '';
+    s.on('data', (d) => { dados += d; });
+    s.on('end', () => resolve(dados));
+    s.on('error', reject);
+  });
+  assert.match(resposta, /^HTTP\/1\.1 400/);
+  const saude = await fetch(`http://127.0.0.1:${port}/health`);
+  assert.equal(saude.status, 200, 'o serviço segue respondendo');
+});

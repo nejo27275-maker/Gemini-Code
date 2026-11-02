@@ -48,6 +48,14 @@ Confirmar? (s/n)
 Comandos destrutivos (`rm -rf`, `git reset --hard`...) e que mexem na config do gemini-code continuam pedindo
 confirmação dentro ou fora da sandbox.
 
+**`run_checks`** (os testes/lint do projeto) segue a mesma regra desde a v0.45.1: a aprovação da sessão vale para
+"rodar `npm test`", mas o script por trás é do projeto e o modelo pode tê-lo editado depois. Então só a execução
+que você aprovou **naquela hora** roda fora; as seguintes (e todas, com `confirmShell` desligado ou numa rotina)
+rodam na sandbox. O convidado do cowork roda os testes só na sandbox — sem ela, você confirma a cada vez.
+
+Se o comando roda numa pasta fora do projeto que fica dentro do `/tmp` (o `cwd` do `run_shell`/`run_checks`), ela
+aparece lá dentro **só leitura** (gravável, o modelo poderia liberar qualquer pasta só escolhendo o `cwd`).
+
 ## Instalar e conferir
 
 ```bash

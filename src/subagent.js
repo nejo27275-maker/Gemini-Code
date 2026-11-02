@@ -17,7 +17,8 @@ const MAX_RELATORIO = 6000;
 const MAX_PROFUNDIDADE = 1;
 const contexto = new AsyncLocalStorage(); // { profundidade }
 
-const SO_LEITURA = ['read_file', 'list_dir', 'search_files', 'read_skill'];
+// v0.45.1: glob_files (achar arquivos pelo nome) entra: é só leitura e poupa dezenas de list_dir.
+const SO_LEITURA = ['read_file', 'list_dir', 'search_files', 'glob_files', 'read_skill'];
 
 const TIPOS = {
   explorador: {
@@ -26,7 +27,7 @@ const TIPOS = {
     maxSteps: 25,
     somenteLeitura: true,
     instrucao:
-      'Você é um subagente EXPLORADOR (somente leitura). Investigue com list_dir, search_files e read_file ' +
+      'Você é um subagente EXPLORADOR (somente leitura). Investigue com glob_files, list_dir, search_files e read_file ' +
       '(use start_line/end_line em arquivos grandes) e responda à pergunta com precisão.',
   },
   revisor: {

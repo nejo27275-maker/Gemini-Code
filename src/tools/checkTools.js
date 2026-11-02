@@ -16,8 +16,9 @@ const fs = require('fs');
 const path = require('path');
 const { exec } = require('child_process');
 const { loadConfig } = require('../config');
-const { ask } = require('../ui/prompt');
+const prompt = require('../ui/prompt'); // pelo objeto: os testes trocam prompt.ask
 const { paraExibir } = require('../ui/textoSeguro');
+const sandbox = require('../sandbox');
 
 const TIMEOUT_MS = 120000;
 const MAX_BUFFER = 1024 * 1024 * 10;
@@ -55,10 +56,11 @@ function detectarComandos(cwd) {
   return comandos;
 }
 
-function rodar(cmd, cwd) {
+// v0.45.1: com `prep` (src/sandbox.js), roda pelo bwrap; sem, como sempre. `timeoutMs`: o maior entre 2 min e o
+// shellTimeoutMs do config (suíte grande passava dos 2 min fixos e era morta no meio).
+function rodar(cmd, cwd, { prep = null, timeoutMs = TIMEOUT_MS } = {}) {
   return new Promise((resolve) => {
-    // CI=true evita o modo watch (jest/vitest/react-scripts) que ficava pendurado até o timeout.
-    exec(cmd, { cwd, timeout: TIMEOUT_MS, maxBuffer: MAX_BUFFER, killSignal: 'SIGKILL', env: { ...process.env, CI: 'true' } }, (err, stdout, stderr) => {
+    const tratar = (err, stdout, stderr) => {
       const saida = [stdout, stderr].filter(Boolean).join('\n').trim() || '(sem saída)';
       // v0.3.7: nem todo exit code != 0 é falha do código do usuário.
       //  - pytest sai com 5 quando não encontrou nenhum teste;
@@ -74,7 +76,13 @@ function rodar(cmd, cwd) {
         saida,
         motivo: err ? (err.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' ? 'saída grande demais' : err.killed ? 'timeout' : `exit code ${err.code ?? '?'}`) : null,
       });
-    });
+    };
+    if (prep) {
+      sandbox.rodar(prep, { timeoutMs, maxBuffer: MAX_BUFFER }).then(({ err, stdout, stderr }) => tratar(err, stdout, stderr));
+      return;
+    }
+    // CI=true evita o modo watch (jest/vitest/react-scripts) que ficava pendurado até o timeout.
+    exec(cmd, { cwd, timeout: timeoutMs, maxBuffer: MAX_BUFFER, killSignal: 'SIGKILL', env: { ...process.env, CI: 'true' } }, tratar);
   });
 }
 
@@ -101,22 +109,35 @@ const declarations = [
 // vez por sessão (mostrando os comandos exatos) antes da primeira execução.
 const sessao = { confirmado: false };
 
-async function confirmarSeNecessario(comandos) {
-  if (sessao.confirmado) return true;
-  let confirmShell = true;
-  try { confirmShell = loadConfig().confirmShell !== false; } catch { /* config ilegível: fica no seguro */ }
-  if (!confirmShell) return true;
-  const lista = comandos.map((c) => `  ${paraExibir(c.cmd)}`).join('\n');
-  const resposta = (await ask(`\n[gemini-code] run_checks vai executar:\n${lista}\nPermitir nesta sessão? (s/n) `)).toLowerCase();
-  if (resposta === 's' || resposta === 'y') {
-    sessao.confirmado = true;
-    return true;
+// v0.45.1: a aprovação da sessão vale para "npm test" — mas o script por trás é do projeto e o modelo pode tê-lo
+// editado DEPOIS. Mesma regra do run_shell (src/sandbox.js): o que roda sem uma pessoa aprovar NESTA chamada vai
+// para a sandbox (aprovação de antes, confirmShell desligado, rotina); "sempre" isola tudo. Convidado do cowork
+// (sessão "só leitura") roda os testes só na sandbox, ou com uma pergunta a cada vez se ela não existir aqui.
+async function decidir(comandos, cfg) {
+  const convidado = (() => { try { return require('../security').getSessionRole() === 'guest'; } catch { return false; } })();
+  const modo = sandbox.modoDe(cfg);
+  const info = modo === 'off' && !convidado ? null : await sandbox.verificar();
+  const temSandbox = Boolean(info && info.ok);
+  const semNinguem = prompt.perguntasSuspensas();
+  const precisaAprovar = convidado ? !temSandbox : (cfg.confirmShell !== false && !sessao.confirmado);
+  if (modo === 'sempre' && !temSandbox) {
+    return { erro: `Erro: a sandbox está no modo "sempre", mas não funciona aqui (${info.motivo}). Os testes não rodaram.` };
   }
-  return false;
+  const perguntar = precisaAprovar && !(semNinguem && temSandbox);
+  const naSandbox = temSandbox && (modo === 'sempre' || convidado || !perguntar);
+  if (perguntar) {
+    const lista = comandos.map((c) => `  ${paraExibir(c.cmd)}`).join('\n');
+    const resposta = String(await prompt.ask(`\n[gemini-code] run_checks vai executar:\n${lista}\n${convidado ? 'Permitir? (s/n) ' : 'Permitir nesta sessão? (s/n) '}`)).toLowerCase();
+    if (resposta !== 's' && resposta !== 'y') return { cancelado: true };
+    if (!convidado) sessao.confirmado = true;
+  }
+  return { naSandbox, info };
 }
 
 async function execute(name, args) {
   if (name !== 'run_checks') throw new Error(`Ferramenta de verificação desconhecida: ${name}`);
+  args = args || {};
+  if (args.cwd != null && typeof args.cwd !== 'string') return 'Erro: "cwd" precisa ser texto (a pasta do projeto).';
   const cwd = args.cwd || process.cwd();
   if (!fs.existsSync(cwd) || !fs.statSync(cwd).isDirectory()) {
     return `Erro: diretório não existe: ${cwd}`;
@@ -131,12 +152,18 @@ async function execute(name, args) {
     );
   }
 
-  if (!(await confirmarSeNecessario(comandos))) return 'run_checks cancelado pelo usuário. Não rode os testes por outro meio sem o usuário pedir.';
+  let cfg = {};
+  try { cfg = loadConfig() || {}; } catch { /* config ilegível: padrões seguros (pergunta) */ }
+  const decisao = await decidir(comandos, cfg);
+  if (decisao.erro) return decisao.erro;
+  if (decisao.cancelado) return 'run_checks cancelado pelo usuário. Não rode os testes por outro meio sem o usuário pedir.';
+  const timeoutMs = Math.max(TIMEOUT_MS, Number(cfg.shellTimeoutMs) || 0);
 
   const partes = [];
   let algumFalhou = false;
   for (const { label, cmd } of comandos) {
-    const resultado = await rodar(cmd, cwd);
+    const prep = decisao.naSandbox ? sandbox.montar(cmd, { info: decisao.info, cfg, cwd, env: { ...process.env, CI: 'true' } }) : null;
+    const resultado = await rodar(cmd, cwd, { prep, timeoutMs });
     if (!resultado.ok) algumFalhou = true;
     partes.push(
       `--- ${label} (${resultado.ignorado ? `ignorado: ${resultado.ignorado}` : resultado.ok ? 'passou' : `falhou: ${resultado.motivo}`}) ---\n${resultado.saida}`
@@ -145,7 +172,11 @@ async function execute(name, args) {
   const cabecalho = algumFalhou
     ? 'Alguma verificação falhou — corrija o problema e rode run_checks de novo antes de concluir.'
     : 'Todas as verificações passaram.';
-  return `${cabecalho}\n\n${partes.join('\n\n')}`;
+  const nota = !decisao.naSandbox ? ''
+    : algumFalhou
+      ? '\n[sandbox: sem rede e gravando só na pasta do projeto. Se a falha veio disso (ex.: o teste baixa algo), rode o comando com run_shell e fora_da_sandbox: true — o usuário confirma.]'
+      : '\n[rodou na sandbox]';
+  return `${cabecalho}\n\n${partes.join('\n\n')}${nota}`;
 }
 
 module.exports = { declarations, execute, detectarComandos, rodar, sessao };

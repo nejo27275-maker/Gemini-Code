@@ -2,7 +2,8 @@
 // Os perfis limitados usam allowlists reais; prompts sozinhos não são controles de segurança.
 'use strict';
 
-const READ_TOOLS = Object.freeze(['read_file', 'list_dir', 'search_files', 'read_skill']);
+// v0.45.1: glob_files (achar arquivos pelo nome) também é só leitura — sem ele, "onde estão os testes?" virava dezenas de list_dir.
+const READ_TOOLS = Object.freeze(['read_file', 'list_dir', 'search_files', 'glob_files', 'read_skill']);
 const PROFILES = Object.freeze({
   coder: {
     name: 'coder',

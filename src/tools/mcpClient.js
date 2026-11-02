@@ -334,30 +334,66 @@ async function loadAllMcpTools() {
   return connections;
 }
 
+// v0.45.1: o nome que o modelo vê precisa caber nas regras das APIs (Gemini e OpenAI: só letras, números, "_" e
+// "-", até 64 caracteres) — senão a API recusa o pedido INTEIRO e o chat para. O MCP permite "." e até 128
+// caracteres, e o nome do servidor é o que o usuário escreveu no mcp.json. Nome trocado ganha um pedaço do hash
+// do original (sem colisão); o mapa leva de volta ao servidor e à ferramenta certos.
+const MAX_NOME = 64;
+let mapaNomes = { conns: null, porNome: new Map() };
+
+function nomeExposto(servidor, ferramenta, usados = new Set()) {
+  const bruto = `mcp__${servidor}__${ferramenta}`;
+  let nome = bruto.replace(/[^a-zA-Z0-9_-]/g, '_');
+  if (nome.length > MAX_NOME || (nome !== bruto && usados.has(nome))) {
+    const hash = require('crypto').createHash('sha1').update(bruto).digest('hex').slice(0, 8);
+    nome = `${nome.slice(0, MAX_NOME - 9)}_${hash}`;
+  }
+  return nome;
+}
+
+function mapaDe(conns) {
+  if (mapaNomes.conns === conns) return mapaNomes.porNome;
+  const porNome = new Map();
+  for (const [serverName, conn] of Object.entries(conns)) {
+    for (const tool of conn.tools || []) {
+      if (!tool || typeof tool.name !== 'string') continue;
+      const nome = nomeExposto(serverName, tool.name, new Set(porNome.keys()));
+      if (!porNome.has(nome)) porNome.set(nome, { serverName, toolName: tool.name, tool });
+    }
+  }
+  mapaNomes = { conns, porNome };
+  return porNome;
+}
+
 /** Devolve as ferramentas de todos os servidores MCP no formato do Gemini. */
 async function declarationsForGemini() {
   const conns = await loadAllMcpTools();
   const decls = [];
-  for (const [serverName, conn] of Object.entries(conns)) {
-    for (const tool of conn.tools) {
-      decls.push({
-        name: `mcp__${serverName}__${tool.name}`,
-        description: tool.description || `Ferramenta MCP ${tool.name} de ${serverName}`,
-        parameters: tool.inputSchema || { type: 'object', properties: {} },
-      });
-    }
+  for (const [nome, { serverName, tool }] of mapaDe(conns)) {
+    decls.push({
+      name: nome,
+      description: tool.description || `Ferramenta MCP ${tool.name} de ${serverName}`,
+      parameters: tool.inputSchema || { type: 'object', properties: {} },
+    });
   }
   return decls;
 }
 
 async function execute(fullName, args) {
   const conns = await loadAllMcpTools();
-  // v0.3.7: o nome do servidor pode conter "__"; casa pelo prefixo dos
-  // servidores conhecidos (o mais longo vence) em vez de split('__').
-  const nomes = Object.keys(conns).sort((a, b) => b.length - a.length);
-  const serverName = nomes.find((n) => fullName.startsWith(`mcp__${n}__`));
-  if (!serverName) throw new Error(`Servidor MCP não encontrado para a ferramenta: ${fullName}`);
-  const toolName = fullName.slice(`mcp__${serverName}__`.length);
+  let serverName;
+  let toolName;
+  const mapeado = mapaDe(conns).get(fullName);
+  if (mapeado) {
+    ({ serverName, toolName } = mapeado);
+  } else {
+    // v0.3.7: o nome do servidor pode conter "__"; casa pelo prefixo dos
+    // servidores conhecidos (o mais longo vence) em vez de split('__').
+    const nomes = Object.keys(conns).sort((a, b) => b.length - a.length);
+    serverName = nomes.find((n) => fullName.startsWith(`mcp__${n}__`));
+    if (!serverName) throw new Error(`Servidor MCP não encontrado para a ferramenta: ${fullName}`);
+    toolName = fullName.slice(`mcp__${serverName}__`.length);
+  }
   if (precisaConfirmar(conns[serverName].cfg, toolName)) {
     const resumo = JSON.stringify(args || {}).slice(0, 600);
     const resp = String(await perguntar(`\n[gemini-code] O servidor "${paraExibir(serverName)}" vai executar "${paraExibir(toolName)}":\n  ${paraExibir(resumo)}\nConfirmar? (s/n) `) || '').trim().toLowerCase();
@@ -376,6 +412,6 @@ function stopAll() {
 function _testar({ conexoes, ask, servidores } = {}) { if (conexoes !== undefined) connections = conexoes; if (ask) perguntar = ask; if (servidores) lerServidores = servidores; }
 
 module.exports = {
-  declarationsForGemini, execute, stopAll, McpConnection, McpHttpConnection, novaConexao, expandirVariaveis, formatarResultado,
+  declarationsForGemini, execute, stopAll, McpConnection, McpHttpConnection, novaConexao, expandirVariaveis, formatarResultado, nomeExposto,
   precisaConfirmar, ambienteSemSegredosDoGeminiCode, SEGREDOS_DO_GEMINI_CODE, _testar,
 };

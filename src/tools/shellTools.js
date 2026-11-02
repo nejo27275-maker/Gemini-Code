@@ -253,43 +253,10 @@ function runCommand(command, { timeoutMs, maxBuffer, cwd }) {
   });
 }
 
-// v0.45.0: o mesmo que runCommand, mas pelo bwrap (src/sandbox.js). Usa spawn porque o filtro seccomp vai
-// por um descritor extra (fd 3), que o exec não deixa passar. stdin fechado: nada fica esperando entrada.
-function rodarNaSandbox(prep, { timeoutMs, maxBuffer }) {
-  return new Promise((resolve) => {
-    const saidas = [[], []];
-    let tamanho = 0;
-    let estourou = false;
-    let expirou = false;
-    let terminou = false;
-    let filho;
-    try {
-      filho = spawn(prep.arquivo, prep.args, { env: prep.env, stdio: ['ignore', 'pipe', 'pipe', 'pipe'] });
-    } catch (err) {
-      return resolve(formatarResultado({ code: err.code || err.message }, '', '', timeoutMs));
-    }
-    const matar = () => { sandbox.matarDescendentes(filho.pid); try { filho.kill('SIGKILL'); } catch { /* já saiu */ } };
-    const relogio = timeoutMs ? setTimeout(() => { expirou = true; matar(); }, timeoutMs) : null;
-    const acabar = (err) => {
-      if (terminou) return;
-      terminou = true;
-      if (relogio) clearTimeout(relogio);
-      resolve(formatarResultado(err, Buffer.concat(saidas[0]).toString('utf8'), Buffer.concat(saidas[1]).toString('utf8'), timeoutMs));
-    };
-    [filho.stdout, filho.stderr].forEach((stream, i) => stream.on('data', (d) => {
-      tamanho += d.length;
-      if (tamanho > maxBuffer) { estourou = true; matar(); return; }
-      saidas[i].push(d);
-    }));
-    filho.stdio[3].on('error', () => { /* bwrap saiu antes de ler o filtro */ });
-    filho.stdio[3].end(prep.bpf);
-    filho.on('error', (err) => acabar({ code: err.code || err.message }));
-    filho.on('close', (codigo, sinal) => acabar(
-      estourou ? { code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' }
-        : expirou ? { killed: true }
-          : codigo === 0 ? null : { code: codigo ?? sinal }
-    ));
-  });
+// v0.45.0: o mesmo que runCommand, mas pelo bwrap (src/sandbox.js, que também serve ao run_checks).
+async function rodarNaSandbox(prep, { timeoutMs, maxBuffer }) {
+  const { err, stdout, stderr } = await sandbox.rodar(prep, { timeoutMs, maxBuffer });
+  return formatarResultado(err, stdout, stderr, timeoutMs);
 }
 
 async function execute(name, args) {

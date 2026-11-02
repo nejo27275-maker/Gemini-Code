@@ -74,7 +74,10 @@ function createRoutineApiServer({ store, runner, token = getOrCreateToken().toke
   const porIp = criarLimitador({ max: rateLimit, janelaMs: rateWindowMs });
   const falhasAuth = criarLimitador({ max: maxFalhasAuth, janelaMs: janelaFalhasMs });
   const server = http.createServer(async (req, res) => {
-    const url = new URL(req.url, 'http://localhost');
+    // v0.45.1: um pedido sem token com endereço malformado ("GET http://[ HTTP/1.1") fazia o new URL lançar dentro
+    // do handler assíncrono — rejeição não tratada, e o processo do serviço de rotinas caía inteiro.
+    let url;
+    try { url = new URL(req.url, 'http://localhost'); } catch { return sendJson(res, 400, { error: 'invalid_request', message: 'Endereço inválido.' }); }
     if (req.method === 'GET' && url.pathname === '/health') {
       return sendJson(res, 200, { ok: true, service: 'gemini-code-routines', time: new Date().toISOString() });
     }

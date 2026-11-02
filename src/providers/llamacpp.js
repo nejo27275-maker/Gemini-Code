@@ -229,9 +229,8 @@ function extrairChamadasEmTexto(texto, tools) {
     let obj;
     try { obj = JSON.parse(c); } catch { continue; }
     const nome = obj.name || obj.tool || obj.function;
-    let args = obj.arguments || obj.parameters || obj.args || {};
-    if (typeof args === 'string') { try { args = JSON.parse(args); } catch { args = {}; } }
-    if (typeof nome === 'string' && nomes.has(nome) && args && typeof args === 'object') calls.push({ name: nome, args });
+    const args = require('./argumentos').lerArgumentos(obj.arguments || obj.parameters || obj.args || {});
+    if (typeof nome === 'string' && nomes.has(nome)) calls.push({ name: nome, args });
   }
   return calls.length ? calls : null;
 }
@@ -430,11 +429,8 @@ async function chatWithTools({ modelName, systemInstruction, history, tools, onT
 
   const parts = [];
   let texto = r.texto;
-  const chamadas = r.calls.map((c) => {
-    let args = c.args;
-    if (typeof args === 'string') { try { args = JSON.parse(args || '{}'); } catch { args = {}; } }
-    return { name: c.name, args: args || {}, id: c.id };
-  }).filter((c) => c.name);
+  // v0.45.1: JSON quebrado é consertado ou vira um erro claro para o modelo (antes: {} em silêncio)
+  const chamadas = r.calls.map((c) => ({ name: c.name, args: require('./argumentos').lerArgumentos(c.args), id: c.id })).filter((c) => c.name);
   if (!chamadas.length) {
     const emTexto = extrairChamadasEmTexto(texto, compactas.tools);
     if (emTexto) {

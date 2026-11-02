@@ -425,3 +425,70 @@ test('real: shell_status encerrar derruba o comando de fundo da sandbox', async 
   while (Date.now() < fim && vivos().length) await new Promise((ok) => setTimeout(ok, 50));
   assert.deepEqual(vivos().map((n) => `${n} ${fs.readFileSync(`/proc/${n}/stat`, 'utf8').slice(0, 80)}`), []);
 });
+
+// ---------------------------------------------------------------------------
+// v0.45.1: run_checks segue a mesma regra (roda scripts do projeto, que o modelo pode ter editado)
+// ---------------------------------------------------------------------------
+const checks = require('../src/tools/checkTools');
+const security = require('../src/security');
+
+function projetoComTeste() {
+  const d = fs.mkdtempSync(path.join(BASE, 'checks-'));
+  fs.writeFileSync(path.join(d, 'package.json'), JSON.stringify({ scripts: { test: 'node -e "console.log(42)"' } }));
+  return d;
+}
+
+test('run_checks: a 1ª vez pergunta e roda normal; depois (aprovação de antes) vai para a sandbox', { skip: !linux }, async () => {
+  const perguntas = cenario({ respostas: ['s'] });
+  checks.sessao.confirmado = false;
+  const d = projetoComTeste();
+  const r1 = await checks.execute('run_checks', { cwd: d });
+  assert.match(r1, /Todas as verificações passaram/);
+  assert.equal(perguntas.length, 1);
+  assert.equal(chamadasFalso().length, 0, 'aprovado agora: fora da sandbox');
+  const r2 = await checks.execute('run_checks', { cwd: d });
+  assert.match(r2, /passaram[\s\S]*\[rodou na sandbox\]/);
+  assert.equal(perguntas.length, 1, 'não pergunta de novo');
+  const [c] = chamadasFalso();
+  assert.ok(c.args.includes('--chdir') && c.args[c.args.indexOf('--chdir') + 1] === fs.realpathSync(d));
+});
+
+test('run_checks: confirmShell desligado vai direto para a sandbox; "sempre" sem sandbox recusa', { skip: !linux }, async () => {
+  checks.sessao.confirmado = false;
+  let perguntas = cenario({ cfg: { confirmShell: false } });
+  assert.match(await checks.execute('run_checks', { cwd: projetoComTeste() }), /\[rodou na sandbox\]/);
+  assert.equal(perguntas.length, 0);
+  perguntas = cenario({ cfg: { confirmShell: false, shellSandbox: 'sempre' }, disponivel: false });
+  assert.match(await checks.execute('run_checks', { cwd: projetoComTeste() }), /^Erro: a sandbox está no modo "sempre"/);
+  assert.equal(perguntas.length, 0, 'recusa sem perguntar');
+});
+
+test('run_checks do convidado: na sandbox sem perguntar; sem sandbox, pergunta TODA vez', { skip: !linux }, async () => {
+  checks.sessao.confirmado = false;
+  config.saveConfig({ apiKeyLocked: security.encriptar('K', 'dono'), apiKeyLockedGuest: security.encriptar('K', 'convidado'), apiKey: '' });
+  assert.equal(security.unlock('convidado'), true);
+  try {
+    let perguntas = cenario({ cfg: { confirmShell: false } });
+    assert.match(await checks.execute('run_checks', { cwd: projetoComTeste() }), /\[rodou na sandbox\]/);
+    assert.equal(perguntas.length, 0);
+    perguntas = cenario({ cfg: { confirmShell: false }, disponivel: false, respostas: ['s', 'n'] });
+    const d = projetoComTeste();
+    assert.match(await checks.execute('run_checks', { cwd: d }), /passaram/);
+    assert.match(await checks.execute('run_checks', { cwd: d }), /cancelado/);
+    assert.equal(perguntas.length, 2, 'a aprovação do convidado não vale para a sessão');
+  } finally { security.clearSession(); config.saveConfig({ apiKeyLocked: null, apiKeyLockedGuest: null }); }
+});
+
+test('real: comando com cwd no /tmp (fora do projeto) roda lá, só leitura', async (t) => {
+  if (semReal()) return pular(t);
+  const fora = fs.mkdtempSync(path.join(os.tmpdir(), 'gc-sbx-cwd-'));
+  fs.writeFileSync(path.join(fora, 'dado.txt'), 'conteudo-fora');
+  try {
+    config.saveConfig({ confirmShell: false, shellSandbox: 'auto', shellSandboxRede: false, shellTimeoutMs: 120000 });
+    sandbox.verificar = verificarReal;
+    const r = await shell.execute('run_shell', { command: 'cat dado.txt; echo x > novo.txt', cwd: fora });
+    assert.match(r, /conteudo-fora/);
+    assert.match(r, /Read-only file system/);
+    assert.equal(fs.existsSync(path.join(fora, 'novo.txt')), false);
+  } finally { fs.rmSync(fora, { recursive: true, force: true }); }
+});

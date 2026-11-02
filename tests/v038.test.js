@@ -231,7 +231,7 @@ test('subagente: contexto isolado, ferramentas restritas, sem delegate_task e re
   const r = await sub.execute('delegate_task', { task: 'onde fica o login?', context: 'projeto X' }, { runOnceFn });
   assert.match(r, /^\[relatório do subagente explorador\]\nachei em src\/a\.js:10/);
   assert.deepEqual(recebido.opts.history, []);
-  assert.deepEqual(recebido.opts.allowedTools, ['read_file', 'list_dir', 'search_files', 'read_skill']);
+  assert.deepEqual(recebido.opts.allowedTools, ['read_file', 'list_dir', 'search_files', 'glob_files', 'read_skill']);
   assert.ok(!recebido.opts.allowedTools.includes('delegate_task'));
   assert.match(recebido.prompt, /onde fica o login\?[\s\S]*Contexto:\nprojeto X/);
   assert.match(recebido.opts.extraSystemInstruction, /EXPLORADOR/);

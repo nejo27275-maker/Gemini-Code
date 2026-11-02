@@ -261,7 +261,8 @@ function respostaDePartes(parts) {
 function montarBody({ history, tools, systemInstruction }) {
   return {
     contents: history,
-    ...(tools && tools.length ? { tools: [{ functionDeclarations: tools }] } : {}),
+    // v0.45.1: esquema JSON completo (MCP) traduzido para o subconjunto que a API aceita — src/schemaGemini.js
+    ...(tools && tools.length ? { tools: [{ functionDeclarations: require('./schemaGemini').declaracoesParaGemini(tools) }] } : {}),
     ...(systemInstruction
       ? { systemInstruction: { parts: [{ text: systemInstruction }] } }
       : {}),

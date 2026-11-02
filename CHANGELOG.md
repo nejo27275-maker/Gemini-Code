@@ -1,3 +1,39 @@
+## 0.45.1 — caça aos bugs: todas as ferramentas revisadas
+
+Base: o branch da 0.45.0 (ainda sem PR). Cada ferramenta foi chamada com argumentos ruins (faltando, nulos, do tipo errado, gigantes, com byte nulo — 1.248 chamadas) e cada comando do terminal com argumentos vazios e errados (672); depois, revisão do código de cada uma. O que apareceu:
+
+**Corrigido (segurança): um pedido malformado derrubava o serviço de rotinas.** `GET http://[ HTTP/1.1`, sem token, fazia o `new URL` lançar dentro do servidor e o processo inteiro caía (reproduzido). Agora responde 400 e segue no ar.
+
+**Corrigido: um servidor MCP podia derrubar o chat.** O nome das ferramentas MCP (`mcp__servidor__ferramenta`) ia direto para a API, que exige só letras, números, `_` e `-`, até 64 caracteres — e o MCP permite ponto e até 128. Um servidor `blender.local` ou um nome comprido fazia a API recusar o pedido inteiro. Agora o nome exposto segue a regra (sem colisão) e a chamada volta ao servidor e à ferramenta certos. E o esquema dos argumentos, que os servidores mandam em JSON Schema completo (`additionalProperties`, `$ref`, `const`, `"type": ["string","null"]`...), é traduzido para o subconjunto que o Gemini aceita (`src/schemaGemini.js`); ferramenta sem argumentos não manda mais o objeto vazio que a API recusa. Os provedores compatíveis com OpenAI seguem recebendo o original.
+
+**Corrigido: `browser` declarava os tipos em maiúsculas** (`STRING`, `INTEGER`): valia no Gemini, mas não é JSON Schema para o llama.cpp/OpenAI.
+
+**`search_files`:**
+- `path` pode ser um arquivo (antes dizia "nenhuma ocorrência" sem abrir);
+- linhas `\r\n` (Windows) quebravam a âncora `$`;
+- `file_glob` aceita glob (`*.js`, `src/**/*.ts`) — o que o modelo manda; antes era só sufixo e `*.js` nunca casava;
+- respeita os `.gitignore`;
+- **regex do modelo roda numa thread com prazo** — `(a+)+$` numa linha comprida travava o processo inteiro (e o cowork junto);
+- linha longa mostra o trecho em volta da ocorrência.
+
+**`run_checks` segue a regra da sandbox** (roda scripts do projeto, que o modelo pode ter editado): só o que você aprova na hora roda fora; o resto, na sandbox. Convidado do cowork: só na sandbox, ou confirmando a cada vez. O prazo agora é o maior entre 2 min e o `shellTimeoutMs` (suíte grande era morta no meio). **Corrigido:** comando com `cwd` no `/tmp` fora do projeto falhava na sandbox ("Can't chdir"): a pasta aparece lá dentro, só leitura.
+
+**`web_fetch` respeita as regras "permitir"** (`config permitir "web_fetch(https://docs.python.org/*)"` não mudava nada; agora dispensa a pergunta, a cada redirecionamento).
+
+**Argumentos das ferramentas:**
+- vazios, nulos ou em lista viravam `TypeError` cru; agora a ferramenta responde o que falta;
+- caminho com byte nulo é recusado;
+- falha do sistema ao gravar (sem permissão, disco cheio, nome comprido, destino que é pasta) vira "Erro: não deu para gravar X: motivo";
+- **modelo local** (llama.cpp, Ollama, OpenAI-compatível): JSON quebrado nos argumentos virava `{}` em silêncio e o modelo não entendia o erro; agora vírgula sobrando e cerca ` ```json ` são consertadas, e o resto vira "argumentos em JSON inválido" com o que chegou.
+
+**`read_skill`** aceita a pasta da skill e o nome dela (antes: `EISDIR` cru), tem limite de tamanho, e um `SKILL.md` ilegível não derruba a lista (nem o prompt do sistema).
+
+**Perfis e subagentes só leitura** (`explore`, `plan`, `review`, explorador...) ganharam o `glob_files`, que também só lê; ele ganhou a trava de convidado.
+
+Testes: 871 no Node 20.20 e no 22.22, com a sandbox real (870 passando, 1 pulado por rodar como root). Novos: `tests/buscaV0451.test.js` (6), `tests/schemaGemini.test.js` (5), `tests/skillsV0451.test.js` (4), `tests/argumentos.test.js` (3) e mais em `sandbox`, `areaTrabalho`, `routineApi` e `webTools`. ESLint 10.1.0: 0 problemas.
+
+**Limites:** a tradução do esquema para o Gemini foi testada contra esquemas no formato do zod e do pydantic, não contra a API do Google de verdade (este ambiente não tem chave).
+
 ## 0.45.0 — sandbox do sistema para o shell
 
 Base: o branch da 0.44.1 (ainda sem PR). Até aqui a única barreira do `run_shell` era a confirmação. Sem ela — `confirmShell` desligado, regra `permitir`, rotina agendada — o comando rodava com todos os poderes do usuário: um texto de página da web que convencesse o modelo podia ler `~/.ssh`, mandar a chave para fora ou deixar algo no `~/.bashrc`.

@@ -125,9 +125,9 @@ async function chatWithTools({ modelName, systemInstruction, history, tools, onT
   if (r.texto) parts.push({ text: r.texto });
   for (const c of r.calls) {
     if (!c.name) continue;
-    let args = c.args;
-    if (typeof args === 'string') { try { args = JSON.parse(args || '{}'); } catch { args = {}; } }
-    parts.push({ functionCall: { name: c.name, args: args || {}, ...(c.id ? { id: c.id } : {}) } });
+    // v0.45.1: JSON quebrado é consertado ou vira um erro claro para o modelo (antes: {} em silêncio)
+    const args = require('./argumentos').lerArgumentos(c.args);
+    parts.push({ functionCall: { name: c.name, args, ...(c.id ? { id: c.id } : {}) } });
   }
   if (!parts.length) parts.push({ text: '' });
   const temChamada = parts.some((p) => p.functionCall);

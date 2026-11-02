@@ -58,10 +58,26 @@ async function getAllDeclarations(allowedNames) {
   return all.filter((d) => allowedNames.includes(d.name));
 }
 
+// v0.45.1: args que não são um objeto (null, lista, texto — vindos de um modelo local confuso, de um workflow ou
+// do MCP) viravam TypeError cru dentro de cada ferramenta ("Cannot read properties of null"). Agora viram {} e a
+// ferramenta responde com o erro dela ("precisa de path"). Caminho com byte nulo não é caminho: recusa aqui.
+function normalizarArgs(args) {
+  return args && typeof args === 'object' && !Array.isArray(args) ? args : {};
+}
+const CAMPOS_DE_CAMINHO = ['path', 'cwd', 'arquivo'];
+
 async function execute(name, args, allowedNames) {
   if (!semRestricao(allowedNames) && !allowedNames.includes(name)) {
     throw new Error(`Ferramenta "${name}" não está liberada para este agente.`);
   }
+  args = normalizarArgs(args);
+  // v0.45.1: o provedor (src/providers/argumentos.js) não conseguiu ler o JSON dos argumentos: diz isso ao modelo
+  if (typeof args.__argsInvalidos === 'string') {
+    return `Erro: os argumentos de ${name} vieram em JSON inválido e a ferramenta não rodou. Reenvie a chamada com um ` +
+      `objeto JSON válido (aspas duplas, sem vírgula sobrando). Recebido: ${args.__argsInvalidos}`;
+  }
+  const comNulo = CAMPOS_DE_CAMINHO.find((c) => typeof args[c] === 'string' && args[c].includes('\0'));
+  if (comNulo) return `Erro: "${comNulo}" tem um caractere nulo (\\0) — isso não é um caminho válido.`;
   if (fileTools.declarations.some((d) => d.name === name)) return fileTools.execute(name, args);
   if (multiEditTools.declarations.some((d) => d.name === name)) return multiEditTools.execute(name, args);
   if (globTools.declarations.some((d) => d.name === name)) return globTools.execute(name, args);
@@ -88,4 +104,4 @@ function nomesNativos() {
   ].flatMap((m) => m.declarations.map((d) => d.name)).concat(personalTools.NOMES);
 }
 
-module.exports = { getAllDeclarations, execute, nomesNativos, stopMcp: mcpClient.stopAll };
+module.exports = { getAllDeclarations, execute, nomesNativos, normalizarArgs, stopMcp: mcpClient.stopAll };

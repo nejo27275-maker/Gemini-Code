@@ -571,3 +571,20 @@ test('caractere que muda de tamanho em minúscula ("İ") não desalinha o texto'
   assert.equal(htmlParaTexto('İİİ<script>segredo()</script>texto visível'), 'İİİtexto visível');
   assert.equal(htmlParaTexto('İİ<PRE>  recuo</PRE>depois'), 'İİ\n  recuo\ndepois');
 });
+
+// v0.45.1: a regra "permitir" do config (ex.: web_fetch(https://docs.exemplo.com/*)) dispensa a pergunta — antes só o
+// "negar" valia e a regra não mudava nada. Ela vale por salto: um redirecionamento para fora dela pergunta de novo.
+test('regra "permitir" dispensa a pergunta só para o que ela cobre (inclusive em redirecionamento)', async () => {
+  const { fn } = fetchFalso({
+    'https://docs.exemplo.com/a': { corpo: 'doc liberada' },
+    'https://docs.exemplo.com/vai': { status: 302, headers: { location: 'https://outro.exemplo.com/x' } },
+    'https://outro.exemplo.com/x': { corpo: 'outro site' },
+  });
+  const cfg = { confirmWeb: true, webDominiosPermitidos: [], permissoes: { permitir: ['web_fetch(https://docs.exemplo.com/*)'], negar: [] } };
+  const { execute, perguntas } = montar({ fetchFn: fn, loadConfig: () => cfg, ensurePublicTarget: async () => {} });
+  assert.match(await execute('web_fetch', { url: 'https://docs.exemplo.com/a' }), /doc liberada/);
+  assert.equal(perguntas.length, 0, 'coberto pela regra: não pergunta');
+  assert.match(await execute('web_fetch', { url: 'https://docs.exemplo.com/vai' }), /outro site/);
+  assert.equal(perguntas.length, 1, 'o redirecionamento para outro site pergunta');
+  assert.match(perguntas[0], /redirecionou para outro site/);
+});

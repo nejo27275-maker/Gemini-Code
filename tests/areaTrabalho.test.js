@@ -145,3 +145,14 @@ test('.git: write_file, edit_file e edit_files recusam (mesmo dentro do projeto)
   fs.symlinkSync(path.join(git, 'hooks'), path.join(PROJETO, 'ganchos'));
   assert.match(await fileTools.execute('write_file', { path: path.join(PROJETO, 'ganchos', 'post-merge'), content: 'x' }), /^Bloqueado: o que está no \.git/);
 });
+
+// v0.45.1: falha do sistema ao gravar vira uma mensagem clara (antes: erro cru do Node)
+test('write_file/edit_file: falha do sistema vira "Erro: não deu para gravar" com o motivo', async () => {
+  config.saveConfig({ confirmarForaDoProjeto: true });
+  respondendo();
+  fs.mkdirSync(path.join(PROJETO, 'uma-pasta'), { recursive: true });
+  assert.match(await fileTools.execute('write_file', { path: 'uma-pasta', content: 'x' }), /^Erro: não deu para gravar uma-pasta: o destino é uma pasta, não um arquivo \(EISDIR\)/);
+  assert.match(await fileTools.execute('write_file', { path: 'n'.repeat(300), content: 'x' }), /comprido demais \(ENAMETOOLONG\)/);
+  fs.writeFileSync(path.join(PROJETO, 'um-arquivo'), 'x');
+  assert.match(await fileTools.execute('write_file', { path: 'um-arquivo/dentro.txt', content: 'x' }), /^Erro: não deu para gravar um-arquivo\/dentro\.txt/);
+});

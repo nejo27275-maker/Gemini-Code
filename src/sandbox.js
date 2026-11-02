@@ -306,12 +306,19 @@ function montar(comando, {
     try { const st = fs.lstatSync(git); existe = st.isDirectory() || st.isFile(); } catch { /* não é repositório */ }
     if (existe) args.push('--ro-bind', git, git);
   }
+  // v0.45.1: a pasta onde o comando roda (cwd do run_shell/run_checks) fora das graváveis e debaixo do /tmp ou /run
+  // sumia (lá dentro eles são vazios) e o bwrap falhava com "Can't chdir". Aparece só leitura — gravável seria um
+  // jeito de o modelo liberar qualquer pasta (ex.: ~/.config) só escolhendo o cwd.
+  const dir = real(path.resolve(cwd || projeto)) || path.resolve(cwd || projeto);
+  const sumiria = ['/tmp', '/run'].some((t) => dentro(dir, t));
+  if (sumiria && !gravaveis.some((g) => dentro(dir, g)) && !escondidos.some((e) => dentro(dir, e.caminho))) {
+    args.push('--ro-bind', dir, dir);
+  }
   for (const e of escondidos) {
     // vazio e só leitura: gravar ali falha na hora, em vez de sumir sem aviso
     if (e.pasta) args.push('--tmpfs', e.caminho, '--remount-ro', e.caminho);
     else args.push('--ro-bind', '/dev/null', e.caminho);
   }
-  const dir = path.resolve(cwd || projeto);
   args.push(...flagsIsolamento({ rede, disableUserns: info.disableUserns !== false }), '--chdir', dir, '--seccomp', '3', '--', '/bin/sh', '-c', comando);
   return { arquivo: info.arquivo, args, env: ambiente(env), gravaveis, avisos, bpf: filtroSeccomp(), rede };
 }
@@ -344,6 +351,48 @@ function matarDescendentes(pid) {
   } catch { return 0; }
 }
 
+/**
+ * Roda um comando montado por montar(): o filtro seccomp vai pelo fd 3 (por isso spawn, e não exec), stdin
+ * fechado, prazo e limite de saída. Devolve { err, stdout, stderr } com err no formato do exec (null,
+ * { code }, { killed: true } ou { code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' }). Nunca lança.
+ */
+function rodar(prep, { timeoutMs, maxBuffer = 10 * 1024 * 1024 } = {}) {
+  return new Promise((resolve) => {
+    const saidas = [[], []];
+    let tamanho = 0;
+    let estourou = false;
+    let expirou = false;
+    let terminou = false;
+    let filho;
+    try {
+      filho = spawn(prep.arquivo, prep.args, { env: prep.env, stdio: ['ignore', 'pipe', 'pipe', 'pipe'] });
+    } catch (err) {
+      return resolve({ err: { code: err.code || err.message }, stdout: '', stderr: '' });
+    }
+    const matar = () => { matarDescendentes(filho.pid); try { filho.kill('SIGKILL'); } catch { /* já saiu */ } };
+    const relogio = timeoutMs ? setTimeout(() => { expirou = true; matar(); }, timeoutMs) : null;
+    const acabar = (err) => {
+      if (terminou) return;
+      terminou = true;
+      if (relogio) clearTimeout(relogio);
+      resolve({ err, stdout: Buffer.concat(saidas[0]).toString('utf8'), stderr: Buffer.concat(saidas[1]).toString('utf8') });
+    };
+    [filho.stdout, filho.stderr].forEach((stream, i) => stream.on('data', (d) => {
+      tamanho += d.length;
+      if (tamanho > maxBuffer) { estourou = true; matar(); return; }
+      saidas[i].push(d);
+    }));
+    filho.stdio[3].on('error', () => { /* bwrap saiu antes de ler o filtro */ });
+    filho.stdio[3].end(prep.bpf);
+    filho.on('error', (err) => acabar({ code: err.code || err.message }));
+    filho.on('close', (codigo, sinal) => acabar(
+      estourou ? { code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' }
+        : expirou ? { killed: true }
+          : codigo === 0 ? null : { code: codigo ?? sinal }
+    ));
+  });
+}
+
 /** Uma linha para o modelo (e o status) dizendo o que a sandbox permite. */
 function descrever({ gravaveis = [], rede = false } = {}) {
   const onde = gravaveis.length ? gravaveis.join(', ') : 'nenhuma pasta (só um /tmp descartável)';
@@ -352,5 +401,5 @@ function descrever({ gravaveis = [], rede = false } = {}) {
 
 module.exports = {
   MODOS, CREDENCIAIS_HOME, LOCAIS_BWRAP, modoDe, filtroSeccomp, acharBwrap, areasDoModelo, verificar, limparCache, flagsIsolamento,
-  areasGravaveis, caminhosEscondidos, ambiente, resumo, montar, descrever, matarDescendentes,
+  areasGravaveis, caminhosEscondidos, ambiente, resumo, montar, rodar, descrever, matarDescendentes,
 };
