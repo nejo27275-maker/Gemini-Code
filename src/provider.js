@@ -121,6 +121,8 @@ async function chatWithTools(args) {
   try {
     return await chamar(escolha, chamadaArgs);
   } catch (err) {
+    // v0.48.1: o usuário mandou parar — nada de tentar o outro lado (gastaria cota depois do "Parar")
+    if (args.signal && args.signal.aborted) throw err;
     // Só o modo híbrido troca de lado sozinho — e só se nada foi impresso
     // ainda (senão o texto sairia duplicado).
     const hibrido = (cfg.provider || 'hybrid') === 'hybrid' && !args.modelName;

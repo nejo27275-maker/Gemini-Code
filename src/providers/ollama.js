@@ -148,7 +148,7 @@ function erroConexao(err, url, { noMeio = false } = {}) {
   return e;
 }
 
-async function chatWithTools({ modelName, systemInstruction, history, tools, onText }) {
+async function chatWithTools({ modelName, systemInstruction, history, tools, onText, signal }) {
   const cfg = loadConfig();
   const model = modelName || cfg.ollamaModel;
   const url = `${baseUrl(cfg)}/api/chat`;
@@ -170,7 +170,8 @@ async function chatWithTools({ modelName, systemInstruction, history, tools, onT
 
   let res;
   try {
-    res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    // v0.48.1: com o "Parar" do usuário (signal) a conexão é cortada
+    res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), ...(signal ? { signal } : {}) });
   } catch (err) {
     throw erroConexao(err, baseUrl(cfg));
   }

@@ -456,6 +456,29 @@
     li.scrollIntoView({ block: 'end' });
   }
 
+  // enquanto o agente trabalha, o botão do microfone é o "Parar"
+  function marcarOcupado(sim) {
+    ocupado = sim;
+    if (sim) app.dataset.ocupado = 'true'; else delete app.dataset.ocupado;
+    const b = $('btn-mic');
+    b.setAttribute('aria-label', sim ? 'Parar (Esc)' : 'Falar (espaço)');
+    b.title = sim ? 'Parar o agente (Esc)' : 'Falar (tecla espaço) · Esc para parar';
+  }
+
+  // Parar de verdade: o servidor para o agente no próximo ponto seguro (não chama o modelo de novo, não roda a
+  // próxima ferramenta) e conta a pergunta aberta como "não". A conversa termina pelo caminho normal ("fim").
+  let parando = false;
+  async function parar() {
+    if (!ocupado || parando) return;
+    parando = true;
+    continuo = false;
+    marcar('btn-continuo', false);
+    fecharPergunta();
+    pararFala();
+    estado('pensando', 'Parando…');
+    try { await api('/api/parar', {}); } catch { /* sem conexão: a conversa termina do mesmo jeito */ }
+  }
+
   async function enviar(texto) {
     texto = String(texto || '').trim();
     if (!texto || ocupado) return;
@@ -464,7 +487,7 @@
       mostrarResposta('Abra o endereço completo que o terminal mostrou (com #t=...). A chave muda a cada vez que o modo site é aberto.');
       return;
     }
-    ocupado = true;
+    marcarOcupado(true);
     pararDeOuvir();
     pararFala();
     elOuvido.textContent = texto;
@@ -474,6 +497,7 @@
     estado('pensando');
     let resposta = '';
     let parcial = '';
+    let interrompida = false;
     try {
       const res = await api('/api/conversa', { texto });
       if (!res.ok) {
@@ -482,11 +506,11 @@
       }
       for await (const ev of eventos(res)) {
         if (ev.tipo === 'parcial') { parcial += ev.texto; mostrarResposta(parcial); }
-        else if (ev.tipo === 'ferramenta') estado('pensando', `Usando: ${ev.nome}`);
+        else if (ev.tipo === 'ferramenta') { if (!parando) estado('pensando', `Usando: ${ev.nome}`); }
         else if (ev.tipo === 'alerta') { elAlerta.textContent = ev.texto; elAlerta.hidden = false; elPainel.hidden = false; }
-        else if (ev.tipo === 'pergunta') await perguntar(ev);
+        else if (ev.tipo === 'pergunta') { if (!parando) await perguntar(ev); }
         else if (ev.tipo === 'pergunta-expirou') fecharPergunta();
-        else if (ev.tipo === 'resposta') { resposta = ev.texto; mostrarResposta(resposta); }
+        else if (ev.tipo === 'resposta') { resposta = ev.texto; interrompida = Boolean(ev.interrompido); if (!interrompida) mostrarResposta(resposta); }
         else if (ev.tipo === 'erro') { resposta = ev.texto; mostrarResposta(resposta); }
       }
     } catch (e) {
@@ -494,10 +518,18 @@
       mostrarResposta(resposta);
       estado('erro');
     } finally {
-      ocupado = false;
+      // quem pediu para parar não quer ouvir a resposta, mesmo que ela tenha chegado junto com o "Parar"
+      if (parando) interrompida = true;
+      parando = false;
+      marcarOcupado(false);
       fecharPergunta();
     }
     if (resposta) registrar('agente', resposta);
+    if (interrompida && estadoAtual !== 'erro') {
+      if (!parcial && /^\(interrompido/.test(resposta)) mostrarResposta('');
+      estado('ocioso', 'Parado');
+      return;
+    }
     if (estadoAtual !== 'erro') falar(resposta);
     else if (continuo) { continuo = false; marcar('btn-continuo', false); }
   }
@@ -531,6 +563,7 @@
   function marcar(id, ligado) { $(id).setAttribute(id === 'btn-historico' ? 'aria-expanded' : 'aria-pressed', String(ligado)); }
 
   $('btn-mic').addEventListener('click', () => {
+    if (ocupado) { parar(); return; }
     if (estadoAtual === 'ouvindo' || estadoAtual === 'falando') { pararDeOuvir(); pararFala(); continuo = false; marcar('btn-continuo', false); estado('ocioso'); return; }
     ouvir();
   });
@@ -553,12 +586,14 @@
     // num botão ou campo, o espaço é dele (senão o botão e o atalho disparariam juntos)
     const digitando = ev.target instanceof Element && Boolean(ev.target.closest('input, textarea, button, select'));
     if (ev.key === 'Escape') {
-      if (perguntaAtual) { responder('n'); return; }
+      // Esc para tudo: com o agente trabalhando, para o agente (a pergunta aberta vira "não")
+      if (ocupado) { parar(); return; }
       pararDeOuvir(); pararFala(); continuo = false; marcar('btn-continuo', false);
-      if (!ocupado) estado('ocioso');
+      estado('ocioso');
     } else if (ev.code === 'Space' && !digitando && !perguntaAtual) {
       ev.preventDefault();
-      $('btn-mic').click();
+      // o espaço é "falar": enquanto o agente trabalha, não vira "Parar" sem querer (para isso: Esc ou o botão)
+      if (!ocupado) $('btn-mic').click();
     }
   });
 

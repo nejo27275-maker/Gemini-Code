@@ -75,6 +75,8 @@ async function fetchComRetry(url, init, opts = {}) {
       motivo = `HTTP ${res.status}`;
       try { await res.body?.cancel?.(); } catch { /* ignora */ }
     } catch (err) {
+      // v0.48.1: parado pelo usuário (signal) não é falha de rede: nada de tentar de novo
+      if (init && init.signal && init.signal.aborted) throw err;
       // erro de rede (sem internet, DNS...): só 1 nova tentativa, pra não
       // deixar o usuário esperando à toa quando está offline de verdade.
       if (i >= Math.min(1, esperas.length)) throw err;
@@ -82,6 +84,7 @@ async function fetchComRetry(url, init, opts = {}) {
     }
     aviso(`[gemini] servidor indisponível (${motivo}). Tentando de novo em ${esperas[i] / 1000}s (${i + 1}/${esperas.length})...`);
     await dormir(esperas[i]);
+    if (init && init.signal && init.signal.aborted) throw Object.assign(new Error('[gemini] parado pelo usuário.'), { name: 'AbortError' });
   }
 }
 
@@ -297,7 +300,7 @@ async function chatWithTools(args) {
     return await chatUmModelo({ ...args, modelName: modelo, onText }, cfg);
   } catch (err) {
     const reserva = cfg.fallbackModel;
-    if (err && err.transitorio && reserva && reserva !== modelo && !emitiu) {
+    if (err && err.transitorio && reserva && reserva !== modelo && !emitiu && !(args.signal && args.signal.aborted)) {
       console.error(`[gemini] ${modelo} continua indisponível; tentando o modelo reserva ${reserva}.`);
       return chatUmModelo({ ...args, modelName: reserva, onText }, cfg);
     }
@@ -305,7 +308,7 @@ async function chatWithTools(args) {
   }
 }
 
-async function chatUmModelo({ modelName, systemInstruction, history, tools, onText }, cfg) {
+async function chatUmModelo({ modelName, systemInstruction, history, tools, onText, signal }, cfg) {
   if (!cfg.apiKey) {
     throw new Error(
       'Nenhuma API key configurada. Rode: gemini-code config set-key SUA_CHAVE\n' +
@@ -317,7 +320,7 @@ async function chatUmModelo({ modelName, systemInstruction, history, tools, onTe
   const body = montarBody({ history, tools, systemInstruction });
 
   if (onText && cfg.enableStreaming !== false) {
-    return chatWithToolsStream({ model, body, apiKey: cfg.apiKey, onText });
+    return chatWithToolsStream({ model, body, apiKey: cfg.apiKey, onText, signal });
   }
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
@@ -328,6 +331,7 @@ async function chatUmModelo({ modelName, systemInstruction, history, tools, onTe
       'x-goog-api-key': cfg.apiKey,
     },
     body: JSON.stringify(body),
+    ...(signal ? { signal } : {}),
   });
 
   const data = await res.json().catch(() => ({}));
@@ -355,7 +359,7 @@ async function chatUmModelo({ modelName, systemInstruction, history, tools, onTe
  * pedaço chamando `onText` incrementalmente, e juntamos as `functionCall`
  * (que vêm inteiras num único pedaço, nunca fatiadas) para o final.
  */
-async function chatWithToolsStream({ model, body, apiKey, onText }) {
+async function chatWithToolsStream({ model, body, apiKey, onText, signal }) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
   const res = await fetchComRetry(url, {
     method: 'POST',
@@ -364,6 +368,7 @@ async function chatWithToolsStream({ model, body, apiKey, onText }) {
       'x-goog-api-key': apiKey,
     },
     body: JSON.stringify(body),
+    ...(signal ? { signal } : {}),
   });
 
   if (!res.ok) {

@@ -310,11 +310,14 @@ async function lerStream(response, onText, reiniciarTimer, criarErro = erroHttp)
   return { texto, calls: calls.filter(Boolean), usage };
 }
 
-async function pedir({ url, body, onText, timeoutMs }) {
+async function pedir({ url, body, onText, timeoutMs, signal }) {
   const ctrl = new AbortController();
   let timer;
   let estourou = false;
   const reiniciar = () => { clearTimeout(timer); timer = setTimeout(() => { estourou = true; ctrl.abort(); }, timeoutMs); };
+  // v0.48.1: o "Parar" do usuário corta a conexão também (e libera o servidor local para o próximo pedido)
+  const aoParar = () => ctrl.abort();
+  if (signal) { if (signal.aborted) ctrl.abort(); else signal.addEventListener('abort', aoParar, { once: true }); }
   reiniciar();
   try {
     const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: ctrl.signal });
@@ -342,6 +345,7 @@ async function pedir({ url, body, onText, timeoutMs }) {
     throw err; // quem chama converte falha de rede
   } finally {
     clearTimeout(timer);
+    if (signal) signal.removeEventListener('abort', aoParar);
   }
 }
 
@@ -358,7 +362,7 @@ async function esperarPronto({ esperaMs = 90000, log = () => {} } = {}) {
   return false;
 }
 
-async function chatWithTools({ modelName, systemInstruction, history, tools, onText }) {
+async function chatWithTools({ modelName, systemInstruction, history, tools, onText, signal }) {
   const cfg = loadConfig();
   const base = baseUrl(cfg);
   const url = `${base}/v1/chat/completions`;
@@ -405,7 +409,7 @@ async function chatWithTools({ modelName, systemInstruction, history, tools, onT
 
   const tentar = async () => {
     try {
-      return await pedir({ url, body, onText: exibir ? onText : undefined, timeoutMs });
+      return await pedir({ url, body, onText: exibir ? onText : undefined, timeoutMs, signal });
     } catch (err) {
       if (err && err.rede === undefined && err.contexto === undefined && err.transitorio === undefined) throw erroConexao(err, base);
       throw err;
@@ -416,6 +420,8 @@ async function chatWithTools({ modelName, systemInstruction, history, tools, onT
   try {
     r = await tentar();
   } catch (err) {
+    // v0.48.1: parado pelo usuário: nada de subir o servidor local nem esperar o modelo carregar
+    if (signal && signal.aborted) throw err;
     const autoStart = (process.env.LLAMACPP_AUTOSTART === '1' || cfg.llamaCppAutoStart === true) && localServer.enderecoLocal(base);
     const carregando = err.transitorio && /loading|carregando/i.test(err.message);
     if (err.rede && autoStart && !/sem resposta/.test(err.message)) {

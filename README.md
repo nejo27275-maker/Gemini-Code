@@ -71,8 +71,8 @@ gemini-code site --aliado central --abrir   # pela voz: computador, celular/TV, 
 
 Uma esfera brilhante com anéis e um círculo de risquinhos que reagem à sua voz (ouvindo), giram em violeta (pensando),
 pulsam com a fala (respondendo) e ficam âmbar quando o agente precisa da sua permissão — que você dá **na própria
-página**. Microfone com **espaço**, **Esc** para parar, modo **contínuo** para conversar sem as mãos. Voz pelo Chrome ou
-Edge (PC ou Android). O servidor só atende em `127.0.0.1`, com uma chave nova a cada vez. Guia: `docs/MODO_SITE.md`.
+página**. Microfone com **espaço**; enquanto ele trabalha, o botão vira **Parar** (ou **Esc**) e para o agente de verdade
+(v0.48.1). Modo **contínuo** para conversar sem as mãos. Voz pelo Chrome ou Edge (PC ou Android). O servidor só atende em `127.0.0.1`, com uma chave nova a cada vez. Guia: `docs/MODO_SITE.md`.
 
 ## Redes sociais, celular, computador, sites e desafios — v0.47.0
 

@@ -9,6 +9,8 @@
 //  - CSP fechada (só os nossos três arquivos, nada de fora), sem moldura (frame-ancestors), nosniff, no-referrer;
 //  - as confirmações das ferramentas aparecem na página (src/ui/prompt.js, definirPerguntador) e, sem resposta,
 //    expiram em "não". O texto mostrado passa por paraExibir; a página só usa textContent (nada vira HTML).
+// v0.48.1: "Parar" de verdade — /api/parar (botão, Esc) e a página fechada no meio param o agente (runOnce com
+// signal): nada de seguir rodando ferramentas e gastando cota com ninguém olhando; a pergunta aberta vira "não".
 'use strict';
 
 const crypto = require('crypto');
@@ -61,19 +63,16 @@ function lerCorpo(req, max) {
 
 /**
  * Como o modo site conversa: o agente de sempre (runOnce) ou um aliado (mesmo caminho do "aliados chat").
- * @returns {(texto, { historico, onText, onFerramenta, onAlerta }) => Promise<{ texto, historico }>}
+ * @returns {(texto, { historico, onText, onFerramenta, onAlerta, signal }) => Promise<{ texto, historico, interrompido? }>}
  */
 function conversarComAgente({ aliado = null, runOnce = (...a) => require('../agent').runOnce(...a) } = {}) {
-  return async (texto, { historico, onText, onFerramenta, onAlerta }) => {
-    if (!aliado) {
-      const r = await runOnce(texto, { history: historico, onText, onFerramenta });
-      return { texto: r.text, historico: r.history };
-    }
+  const resultado = (r) => ({ texto: r.text, historico: r.history, ...(r.interrompido ? { interrompido: true } : {}) });
+  return async (texto, { historico, onText, onFerramenta, onAlerta, signal }) => {
+    if (!aliado) return resultado(await runOnce(texto, { history: historico, onText, onFerramenta, signal }));
     const pa = require('../personalAgents');
     const { opcoes, ctx, alerta } = pa.prepararTurno(aliado.store, aliado.agente, texto, {});
     if (alerta) onAlerta(alerta);
-    const r = await pa.comAgente(ctx, () => runOnce(texto, { history: historico, ...opcoes, onText, onFerramenta }));
-    return { texto: r.text, historico: r.history };
+    return resultado(await pa.comAgente(ctx, () => runOnce(texto, { history: historico, ...opcoes, onText, onFerramenta, signal })));
   };
 }
 
@@ -97,7 +96,19 @@ function criarServidorSite({
   for (const [rota, [arquivo]] of Object.entries(ARQUIVOS)) conteudo[rota] = fs.readFileSync(path.join(PUBLICO, arquivo));
   let historico = [];
   let ocupado = false;
+  let parador = null; // AbortController da conversa em andamento
   const pendentes = new Map();
+
+  /** Para a conversa em andamento (se houver): o agente para no próximo ponto seguro e a pergunta aberta vira "não". */
+  function parar(motivo) {
+    if (!parador) return false;
+    if (!parador.signal.aborted) {
+      parador.abort();
+      log(`[site] parado (${motivo})`);
+    }
+    for (const [, p] of pendentes) p.responder('');
+    return true;
+  }
 
   const json = (res, status, obj) => {
     res.writeHead(status, { ...BASE, 'content-type': 'application/json; charset=utf-8' });
@@ -142,6 +153,7 @@ function criarServidorSite({
       p.responder(typeof corpo.resposta === 'string' ? corpo.resposta.slice(0, 200) : '');
       return json(res, 200, { ok: true });
     }
+    if (caminho === '/api/parar') return json(res, 200, { ok: true, parando: parar('pela página') });
     if (caminho === '/api/limpar') {
       if (ocupado) return json(res, 409, { erro: 'espere a resposta terminar' });
       historico = [];
@@ -155,13 +167,17 @@ function criarServidorSite({
     if (!texto || texto.length > MAX_TEXTO) return json(res, 400, { erro: `mensagem vazia ou longa demais (máx. ${MAX_TEXTO})` });
     if (ocupado) return json(res, 409, { erro: 'ainda estou respondendo a mensagem anterior' });
     ocupado = true;
+    const ctrl = new AbortController();
+    parador = ctrl;
     res.writeHead(200, { ...BASE, 'content-type': 'application/x-ndjson; charset=utf-8' });
     let aberto = true;
-    res.on('close', () => { aberto = false; });
+    let terminou = false;
+    // a página fechou (ou recarregou) no meio: ninguém está olhando, então o agente para
+    res.on('close', () => { aberto = false; if (!terminou) parar('a página fechou'); });
     const enviar = (ev) => { if (aberto && !res.writableEnded) res.write(`${JSON.stringify(ev)}\n`); };
     log(`[site] você: ${texto.slice(0, 200)}`);
     const desfazer = definirPerguntador((pergunta) => new Promise((resolve) => {
-      if (!aberto) return resolve(''); // a página fechou: ninguém para responder = "não"
+      if (!aberto || ctrl.signal.aborted) return resolve(''); // página fechada ou "Parar": ninguém responde = "não"
       const id = crypto.randomBytes(8).toString('hex');
       const timer = setTimeout(() => { pendentes.delete(id); enviar({ tipo: 'pergunta-expirou', id }); resolve(''); }, prazoPerguntaMs);
       pendentes.set(id, { responder: (r) => { clearTimeout(timer); pendentes.delete(id); resolve(r); } });
@@ -174,18 +190,21 @@ function criarServidorSite({
         onText: (t) => enviar({ tipo: 'parcial', texto: semControlesInvisiveis(String(t)) }),
         onFerramenta: (nome) => enviar({ tipo: 'ferramenta', nome: String(nome).slice(0, 80) }),
         onAlerta: (t) => enviar({ tipo: 'alerta', texto: String(t) }),
+        signal: ctrl.signal,
       });
       if (r && Array.isArray(r.historico)) historico = r.historico;
-      enviar({ tipo: 'resposta', texto: semControlesInvisiveis(String((r && r.texto) || '')) });
+      enviar({ tipo: 'resposta', texto: semControlesInvisiveis(String((r && r.texto) || '')), ...(r && r.interrompido ? { interrompido: true } : {}) });
     } catch (e) {
       enviar({ tipo: 'erro', texto: `Erro: ${e && e.message ? e.message : e}` });
     } finally {
+      terminou = true;
       desfazer();
       for (const [, p] of pendentes) p.responder(''); // pergunta sem resposta = "não"
+      if (parador === ctrl) parador = null;
       ocupado = false;
       enviar({ tipo: 'fim' });
       if (!res.writableEnded) res.end();
-      log('[site] resposta enviada');
+      log(ctrl.signal.aborted ? '[site] conversa parada' : '[site] resposta enviada');
     }
   }
 

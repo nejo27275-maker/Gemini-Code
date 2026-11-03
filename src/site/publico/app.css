@@ -136,7 +136,17 @@ button { cursor: pointer; }
 .mic svg rect { fill: var(--ciano-forte); stroke: none; }
 .mic:active { transform: scale(0.96); }
 .app[data-estado="ouvindo"] .mic { animation: pulsar 1.2s ease-in-out infinite; background: radial-gradient(circle at 50% 40%, rgba(143, 244, 255, 0.7), rgba(4, 30, 46, 0.9) 70%); }
-.app[data-estado="falando"] .mic, .app[data-estado="pensando"] .mic { border-color: var(--texto-fraco); }
+.app[data-estado="falando"] .mic { border-color: var(--texto-fraco); }
+/* enquanto o agente trabalha, o botão do microfone vira "Parar" (quadrado) */
+.mic .icone-parar { display: none; }
+.mic .icone-parar rect { fill: #ffd2d8; }
+.app[data-ocupado="true"] .mic .icone-mic { display: none; }
+.app[data-ocupado="true"] .mic .icone-parar { display: block; }
+.app[data-ocupado="true"] .mic {
+  border-color: rgba(255, 90, 110, 0.85);
+  background: radial-gradient(circle at 50% 40%, rgba(255, 90, 110, 0.28), rgba(30, 6, 12, 0.9) 70%);
+  box-shadow: 0 0 18px rgba(255, 90, 110, 0.45), inset 0 0 14px rgba(255, 90, 110, 0.25);
+}
 
 /* ---- histórico ---- */
 .historico {

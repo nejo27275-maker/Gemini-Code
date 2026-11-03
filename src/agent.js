@@ -181,6 +181,27 @@ function podarHistorico(convo) {
   return [...inicio, aviso, ...convo.slice(corte)];
 }
 
+// v0.48.1: "Parar" de verdade (o modo site manda; ver src/site/servidor.js). Com `signal` (AbortSignal) o agente
+// para no próximo ponto seguro: não chama o modelo de novo, não roda a próxima ferramenta e não espera a resposta
+// que está chegando (o provedor recebe o mesmo signal e corta a conexão). Uma ferramenta que JÁ está rodando
+// termina antes — cortar no meio deixaria arquivo pela metade.
+const AVISO_INTERROMPIDO = '(interrompido por você)';
+const NAO_RODOU = 'Não rodou: o usuário mandou parar antes desta ferramenta. Não tente de novo sem ele pedir.';
+const PARADO = Symbol('parado');
+
+/** A resposta do modelo, ou PARADO assim que o signal disparar (a chamada que estava no ar é descartada). */
+function esperarOuParar(promessa, signal) {
+  if (!signal) return promessa;
+  return new Promise((resolve, reject) => {
+    const aoParar = () => resolve(PARADO);
+    if (signal.aborted) aoParar(); else signal.addEventListener('abort', aoParar, { once: true });
+    promessa.then(
+      (v) => { signal.removeEventListener('abort', aoParar); resolve(v); },
+      (e) => { signal.removeEventListener('abort', aoParar); if (signal.aborted) resolve(PARADO); else reject(e); },
+    );
+  });
+}
+
 /**
  * Roda uma única "rodada" do agente para uma instrução do usuário.
  *
@@ -194,11 +215,15 @@ function podarHistorico(convo) {
  * — existe só para testar o loop sem chamar a API do Gemini, o sistema de
  * arquivos real ou ferramentas de verdade (ver tests/agent.test.js). Em uso
  * normal (CLI) ninguém passa `deps` e o comportamento é idêntico ao de antes.
+ *
+ * `signal` (v0.48.1), se passado, para o agente no próximo ponto seguro; o resultado vem com `interrompido: true`
+ * e o histórico continua consistente (toda chamada de ferramenta tem resposta e o turno fecha com texto).
  */
 async function runOnce(userMessage, opts = {}) {
   // `imagens` (v0.41.0): [{ inlineData: {mimeType, data} }] de src/imagens.js, enviadas junto com a mensagem.
   // `onFerramenta` (v0.48.0): avisa o nome de cada ferramenta usada (o modo site mostra na tela)
-  const { history = [], modelName, extraSystemInstruction, allowedTools, onText, onFerramenta, deps = {}, maxSteps = 60, logPrefix = '', imagens = [] } = opts;
+  const { history = [], modelName, extraSystemInstruction, allowedTools, onText, onFerramenta, deps = {}, maxSteps = 60, logPrefix = '', imagens = [], signal } = opts;
+  const parado = () => Boolean(signal && signal.aborted);
   const loadConfigFn = deps.loadConfig || loadConfig;
   const chatWithToolsFn = deps.chatWithTools || chatWithTools;
   const getAllDeclarationsFn = deps.getAllDeclarations || tools.getAllDeclarations;
@@ -229,6 +254,10 @@ async function runOnce(userMessage, opts = {}) {
   const convo = podarHistorico([...history, { role: 'user', parts: partesComImagens(mensagemFinal, imagens) }]);
   // Imagens valem para ESTE pedido; no histórico devolvido viram um marcador curto.
   const fechar = (resultado) => (imagens.length ? { ...resultado, history: tirarImagensDoHistorico(resultado.history) } : resultado);
+  const interromper = () => {
+    convo.push({ role: 'model', parts: [{ text: AVISO_INTERROMPIDO }] });
+    return fechar({ text: AVISO_INTERROMPIDO, history: convo, interrompido: true });
+  };
 
   // Limite alto (não removido de propósito): sem nenhum teto, se o modelo
   // entrar num loop chamando ferramenta sem nunca fechar com texto, o
@@ -243,18 +272,21 @@ async function runOnce(userMessage, opts = {}) {
   let avisouEnxugar = false;
   let continuacoesStop = 0;
   for (let step = 0; step < maxSteps; step++) {
+    if (parado()) return interromper();
     const enxuto = enxugarResultadosAntigos(podarHistorico(convo), { maxChars: maxCharsContexto });
     if (enxuto.enxugados && !avisouEnxugar) {
       avisouEnxugar = true;
       console.log(chalk.dim(`${logPrefix}(contexto grande: resultados antigos de ferramenta viraram resumo curto para caber e gastar menos)`));
     }
-    const response = await chatWithToolsFn({
+    const response = await esperarOuParar(chatWithToolsFn({
       modelName, // undefined = o roteador (src/provider.js) escolhe conforme o config
       systemInstruction,
       history: enxuto.history,
       tools: declarations,
       onText,
-    });
+      ...(signal ? { signal } : {}),
+    }), signal);
+    if (response === PARADO) return interromper();
 
     const calls = response.functionCalls ? response.functionCalls() : [];
     if (!calls || calls.length === 0) {
@@ -282,6 +314,8 @@ async function runOnce(userMessage, opts = {}) {
 
     // Executa UMA chamada e devolve o functionResponse correspondente.
     const executarChamada = async (call) => {
+      // parou antes desta: ela não roda, mas ganha resposta (a API exige uma resposta por chamada)
+      if (parado()) return { functionResponse: { name: call.name, ...(call.id ? { id: call.id } : {}), response: { result: NAO_RODOU } } };
       console.log(chalk.dim(`\n${logPrefix}→ usando ferramenta: ${paraTerminal(call.name)}(${paraTerminal(JSON.stringify(call.args))})`));
       if (typeof onFerramenta === 'function') { try { onFerramenta(String(call.name)); } catch { /* quem ouve não derruba o agente */ } }
       let result;
@@ -358,6 +392,7 @@ async function runOnce(userMessage, opts = {}) {
       convo.push({ role: 'model', parts: [{ text: loopDetectado }] });
       return fechar({ text: loopDetectado, history: convo });
     }
+    if (parado()) return interromper();
   }
 
   // Se chegou aqui, o modelo ficou 60 rodadas seguidas só chamando
@@ -371,4 +406,4 @@ async function runOnce(userMessage, opts = {}) {
   return fechar({ text: aviso, history: convo });
 }
 
-module.exports = { runOnce, buildSystemInstruction, podarHistorico, cortarResultado };
+module.exports = { runOnce, buildSystemInstruction, podarHistorico, cortarResultado, AVISO_INTERROMPIDO };

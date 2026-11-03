@@ -1,4 +1,4 @@
-# Modo site — conversar por voz com a esfera (v0.48.0)
+# Modo site — conversar por voz com a esfera (v0.48.0; "Parar" na v0.48.1)
 
 `gemini-code site` abre uma página no seu navegador para conversar com o agente **por voz ou por texto**. No centro
 fica uma esfera brilhante com anéis e um círculo de "risquinhos" que reagem: seguem o seu microfone quando ele ouve,
@@ -16,7 +16,11 @@ abra o endereço completo e não compartilhe.
 
 ## Usar
 
-- **Falar:** toque no microfone (ou aperte **espaço**). Fale; quando você para, ele envia. **Esc** para tudo.
+- **Falar:** toque no microfone (ou aperte **espaço**). Fale; quando você para, ele envia.
+- **Parar:** enquanto o agente trabalha, o botão do microfone vira **Parar** (um quadrado). Ele e o **Esc** param o
+  agente de verdade: ele não chama o modelo de novo, não usa a próxima ferramenta e uma pergunta aberta conta como
+  "não". Uma ação que já começou (gravar um arquivo, por exemplo) termina antes, para não ficar pela metade.
+  Fechar a página no meio também para o agente. O espaço continua sendo só "falar".
 - **Contínuo:** depois de responder, ele volta a ouvir sozinho — uma conversa sem as mãos.
 - **Falar respostas:** liga/desliga a leitura em voz alta (o texto aparece sempre).
 - **Conversa:** o histórico desta sessão; "Limpar" começa do zero.
@@ -44,7 +48,8 @@ O modo site roda o agente com as ferramentas dele, então o servidor é fechado:
   confere a origem e o `Host` (contra *DNS rebinding*);
 - a página só carrega os próprios arquivos (CSP fechada), não abre dentro de outro site e mostra tudo como texto — uma
   resposta do modelo nunca vira código na página;
-- uma conversa por vez; mensagens de até 4.000 caracteres.
+- uma conversa por vez; mensagens de até 4.000 caracteres;
+- página fechada no meio = agente parado (ninguém olhando, nada de seguir usando ferramentas nem gastando cota).
 
 ## Limites honestos
 

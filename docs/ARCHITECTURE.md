@@ -61,6 +61,10 @@ documento é sobre como o código por trás disso está organizado.
   Host/Origin conferidos e CSP fechada; a página com a esfera animada em canvas, reconhecimento e síntese de voz do
   navegador e a conversa em eventos NDJSON; as confirmações das ferramentas chegam à página pelo
   `definirPerguntador` de `src/ui/prompt.js`). Guia: `docs/MODO_SITE.md`.
+- **v0.48.1** — "Parar" de verdade: `runOnce({ signal })` (src/agent.js) para no próximo ponto seguro (não chama o
+  modelo de novo, não roda a próxima ferramenta — que recebe a resposta "não rodou" — e não espera a resposta que
+  está chegando); os provedores repassam o signal ao `fetch` e, depois dele, não repetem, não trocam de lado nem
+  ligam o llama.cpp. O modo site usa por `/api/parar` (botão/Esc) e quando a página fecha no meio.
 - **`src/routineRunner.js`** — executor das rotinas: `http-check` e, desde a v0.44.0,
   `agente` (o agente roda sozinho; `src/ui/prompt.js` responde "não" a toda confirmação).
 - Os provedores `llamacpp`, `ollama` e `openai` pedem **sempre** em streaming; o
@@ -212,7 +216,8 @@ extra). Cobertura atual:
 | computador: comandos de Linux X11/Wayland, macOS e Windows; execução com programas falsos; abrir sem rodar comando; ferramenta que pergunta (v0.47.0) | `computador.test.js` |
 | desafios: progresso, sequência, calendário, lembrete que se encerra, postar o progresso, ferramenta (v0.47.0) | `desafios.test.js` |
 | sandbox sem órfão no encerrar, marca única por execução, `--at` das rotinas sem adivinhar a data (v0.47.0) | `v047.test.js` |
-| modo site: segurança do servidor (chave, Origin, Host/DNS rebinding, CORS, CSP, tamanhos), conversa em eventos, uma por vez, confirmações na página (expiram em "não"), aliado, e a página num Chromium de verdade (v0.48.0) | `site.test.js` |
+| modo site: segurança do servidor (chave, Origin, Host/DNS rebinding, CORS, CSP, tamanhos), conversa em eventos, uma por vez, confirmações na página (expiram em "não"), aliado, e a página num Chromium de verdade (v0.48.0); "Parar" pela página, página fechada e o botão clicado no Chromium (v0.48.1) | `site.test.js` |
+| "Parar": `runOnce` com signal (antes do modelo, durante a resposta, entre ferramentas; histórico consistente); provedores sem repetir, sem trocar de lado, sem reserva e sem ligar o llama.cpp depois do "Parar"; conexão cortada de verdade (v0.48.1) | `parar.test.js` |
 | hooks `UserPromptSubmit`, `SessionStart`, `Stop` | `hooksEventos.test.js` |
 | subagentes do usuário (`.md`) | `subagentesDoUsuario.test.js` |
 | anti-SSRF com IPv6 (`privateAddress`) e DNS rebinding nas rotinas (`src/redeSegura.js`) | `ssrfIpv6.test.js` |

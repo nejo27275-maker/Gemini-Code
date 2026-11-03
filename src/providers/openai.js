@@ -47,11 +47,14 @@ function erroRede(err, url) {
   return error;
 }
 
-async function pedir({ url, headers, body, onText, timeoutMs }) {
+async function pedir({ url, headers, body, onText, timeoutMs, signal }) {
   const ctrl = new AbortController();
   let timer;
   let estourou = false;
   const reiniciar = () => { clearTimeout(timer); timer = setTimeout(() => { estourou = true; ctrl.abort(); }, timeoutMs); };
+  // v0.48.1: o "Parar" do usuário corta a conexão também
+  const aoParar = () => ctrl.abort();
+  if (signal) { if (signal.aborted) ctrl.abort(); else signal.addEventListener('abort', aoParar, { once: true }); }
   reiniciar();
   try {
     let response;
@@ -81,10 +84,11 @@ async function pedir({ url, headers, body, onText, timeoutMs }) {
     throw err;
   } finally {
     clearTimeout(timer);
+    if (signal) signal.removeEventListener('abort', aoParar);
   }
 }
 
-async function chatWithTools({ modelName, systemInstruction, history, tools, onText }) {
+async function chatWithTools({ modelName, systemInstruction, history, tools, onText, signal }) {
   const cfg = loadConfig();
   const key = chave(cfg);
   if (!key) {
@@ -119,7 +123,7 @@ async function chatWithTools({ modelName, systemInstruction, history, tools, onT
     'X-Title': 'gemini-code',
   };
 
-  const r = await pedir({ url, headers, body, onText: exibir ? onText : undefined, timeoutMs: Number(cfg.openaiTimeoutMs) || 300000 });
+  const r = await pedir({ url, headers, body, onText: exibir ? onText : undefined, timeoutMs: Number(cfg.openaiTimeoutMs) || 300000, signal });
 
   const parts = [];
   if (r.texto) parts.push({ text: r.texto });

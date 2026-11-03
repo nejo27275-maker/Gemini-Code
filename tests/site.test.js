@@ -220,6 +220,77 @@ test('conversarComAgente: o agente de sempre ou um aliado (instruções, ferrame
 });
 
 // ---------------------------------------------------------------------------
+// v0.48.1: "Parar" de verdade
+// ---------------------------------------------------------------------------
+/** Agente falso que trabalha até alguém mandar parar. */
+const ateParar = (vistos) => async (texto, { historico, signal }) => {
+  vistos.push(signal);
+  if (texto !== 'longa') return { texto: 'ok', historico: [...historico, 'turno'] };
+  await new Promise((r) => signal.addEventListener('abort', r, { once: true }));
+  return { texto: '(interrompido por você)', historico: [...historico, 'parado'], interrompido: true };
+};
+
+test('Parar: /api/parar para a conversa no meio, a resposta vem marcada e a próxima mensagem funciona', async () => {
+  const vistos = [];
+  const { porta } = await subir({ conversar: ateParar(vistos) });
+  assert.deepEqual(JSON.parse((await api(porta, '/api/parar', {})).corpo), { ok: true, parando: false }, 'sem conversa, nada a parar');
+  const conversa = api(porta, '/api/conversa', { texto: 'longa' });
+  await dormir(80);
+  assert.equal((await pedir(porta, { metodo: 'POST', caminho: '/api/parar', corpo: '{}', headers: { 'content-type': 'application/json' } })).status, 401, 'parar também exige a chave');
+  assert.equal(vistos[0].aborted, false);
+  assert.deepEqual(JSON.parse((await api(porta, '/api/parar', {})).corpo), { ok: true, parando: true });
+  const evs = eventos(await conversa);
+  assert.deepEqual(evs.map((e) => e.tipo), ['estado', 'resposta', 'fim']);
+  assert.equal(evs[1].interrompido, true);
+  assert.equal(vistos[0].aborted, true);
+  const depois = eventos(await api(porta, '/api/conversa', { texto: 'outra' }));
+  const resposta = depois.find((e) => e.tipo === 'resposta');
+  assert.equal(resposta.texto, 'ok');
+  assert.equal(resposta.interrompido, undefined);
+  assert.equal(vistos[1].aborted, false, 'cada conversa tem o seu "Parar"');
+});
+
+test('Parar: a página fechou no meio — o agente é parado e o servidor fica livre', async () => {
+  const vistos = [];
+  const { porta } = await subir({ conversar: ateParar(vistos) });
+  await conversaAoVivo(porta, 'longa', (ev, req) => { if (ev.tipo === 'estado') req.destroy(); });
+  for (let i = 0; i < 40 && !(vistos[0] && vistos[0].aborted); i++) await dormir(25);
+  assert.equal(vistos[0].aborted, true, 'ninguém olhando: o agente para');
+  for (let i = 0; i < 40; i++) {
+    const r = await api(porta, '/api/conversa', { texto: 'outra' });
+    if (r.status === 200) { assert.equal(eventos(r).find((e) => e.tipo === 'resposta').texto, 'ok'); return; }
+    await dormir(25);
+  }
+  assert.fail('o servidor continuou ocupado depois de parar');
+});
+
+test('Parar: com uma pergunta aberta, ela vira "não" na hora; perguntas depois do "Parar" nem aparecem', async () => {
+  const respostas = [];
+  const { porta } = await subir({
+    prazoPerguntaMs: 60000,
+    conversar: async () => {
+      respostas.push(await prompt.ask('Permitir A? (s/n) '));
+      respostas.push(await prompt.ask('Permitir B? (s/n) '));
+      return { texto: 'fim', historico: [] };
+    },
+  });
+  const inicio = Date.now();
+  const todos = await conversaAoVivo(porta, 'x', async (ev) => { if (ev.tipo === 'pergunta') await api(porta, '/api/parar', {}); });
+  assert.deepEqual(respostas, ['', '']);
+  assert.equal(todos.filter((e) => e.tipo === 'pergunta').length, 1, 'a 2ª pergunta não chegou à página');
+  assert.ok(Date.now() - inicio < 10000, 'não esperou o prazo de 60 s');
+});
+
+test('Parar: conversarComAgente repassa o signal ao agente e marca a resposta interrompida', async () => {
+  const ctrl = new AbortController();
+  let visto;
+  const runOnce = async (texto, opts) => { visto = opts.signal; return { text: '(interrompido por você)', history: ['h'], interrompido: true }; };
+  const r = await conversarComAgente({ runOnce })('oi', { historico: [], onText() {}, onFerramenta() {}, onAlerta() {}, signal: ctrl.signal });
+  assert.equal(visto, ctrl.signal);
+  assert.deepEqual(r, { texto: '(interrompido por você)', historico: ['h'], interrompido: true });
+});
+
+// ---------------------------------------------------------------------------
 // A página de verdade num Chrome/Chromium (o do CI do GitHub ou o desta máquina)
 // ---------------------------------------------------------------------------
 const { acharNavegador } = require('../src/navegador');
@@ -240,4 +311,24 @@ test('navegador real: a página sobe sem erro, a esfera desenha e uma mensagem d
   r = await f.execute('browser', { acao: 'esperar', texto: 'Resposta falsa para: olá, tudo bem?', segundos: 10 });
   assert.match(r, /apareceu na página/);
   assert.deepEqual(recebidas, ['olá, tudo bem?']);
+});
+
+test('navegador real: enquanto o agente trabalha o microfone vira "Parar", e parar funciona', { skip: pular }, async (t) => {
+  const { criarFerramenta } = require('../src/tools/browserTools');
+  const vistos = [];
+  const s = await subir({ conversar: ateParar(vistos) });
+  const f = criarFerramenta({ ask: async () => 's', loadConfig: () => ({ navegadorPermitirLocal: true }) });
+  t.after(() => f.encerrar());
+  let r = await f.execute('browser', { acao: 'abrir', url: s.endereco() });
+  assert.match(r, /\[\d+\] botão "Falar \(espaço\)"/, r);
+  const campo = (/\[(\d+)\] campo text "Mensagem para o agente"/.exec(r) || [])[1];
+  await f.execute('browser', { acao: 'digitar', elemento: Number(campo), texto: 'longa', enviar: true });
+  r = await f.execute('browser', { acao: 'esperar', texto: 'Pensando', segundos: 10 });
+  const parar = (/\[(\d+)\] botão "Parar \(Esc\)"/.exec(r) || [])[1];
+  assert.ok(parar, `o botão vira "Parar": ${r}`);
+  await f.execute('browser', { acao: 'clicar', elemento: Number(parar) });
+  r = await f.execute('browser', { acao: 'esperar', texto: 'Parado', segundos: 10 });
+  assert.match(r, /"Parado" apareceu na página/, r);
+  assert.equal(vistos[0].aborted, true, 'o servidor parou o agente');
+  assert.match(r, /\[\d+\] botão "Falar \(espaço\)"/, 'o botão volta a ser o microfone');
 });

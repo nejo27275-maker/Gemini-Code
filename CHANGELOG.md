@@ -1,3 +1,37 @@
+## 0.48.1 — "Parar" de verdade
+
+Base: a 0.48.0 (mesmo branch, ainda sem PR).
+
+**O problema:** no modo site, Esc e fechar a página só paravam a voz do navegador. O agente continuava rodando no
+computador: chamava o modelo e usava ferramentas sem ninguém olhando, e a próxima mensagem recebia "ainda estou
+respondendo".
+
+**Agora:**
+- **Botão "Parar":** enquanto o agente trabalha, o botão do microfone vira **Parar** (um quadrado). Ele e o **Esc**
+  param o agente de verdade, e a pergunta de permissão aberta conta como "não".
+- **Página fechada:** fechar ou recarregar a página no meio também para o agente.
+- **Espaço:** continua sendo só "falar", então não para nada sem querer.
+- **Onde o agente para (`runOnce({ signal })`):**
+  - não chama o modelo de novo;
+  - não roda a próxima ferramenta (ela recebe a resposta "não rodou", para o histórico continuar válido);
+  - não espera a resposta que está chegando.
+  - Uma ferramenta que **já** está rodando termina antes: cortar no meio deixaria um arquivo pela metade.
+  - A conversa guarda "(interrompido por você)", então o modelo sabe o que aconteceu.
+- **Provedores** (Gemini, compatível com OpenAI, llama.cpp, Ollama):
+  - cortam a conexão;
+  - depois do "Parar", **não** tentam de novo, **não** trocam para o outro lado no modo híbrido, **não** usam o
+    modelo reserva e **não** ligam o llama.cpp sozinhos. Nada de gastar cota depois de você mandar parar.
+- **Sem o "Parar":** nada muda. O terminal, as rotinas e o cowork funcionam como antes.
+
+**Testes novos:**
+- `tests/parar.test.js` (9): o loop do agente, os provedores e um servidor falso que vê a conexão cair.
+- `tests/site.test.js` (+5): `/api/parar`, página fechada, pergunta aberta, aliado e **o botão "Parar" clicado num
+  Chromium de verdade**.
+- Rodados contra o código antigo, falham ou travam esperando um "Parar" que nunca chegava.
+
+**Testes:** 986 (985 passando, 1 pulado como root) no Node 20 e no 22 — e a suíte inteira também no fuso de São Paulo.
+ESLint 0 problemas. Prints do botão "Parar" no PC e no celular, sem erro de JavaScript na página.
+
 ## 0.48.0 — modo site: conversa por voz com a esfera
 
 Base: a 0.47.0 (mesmo branch, ainda sem PR).
