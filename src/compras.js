@@ -41,6 +41,16 @@ function secaoDe(nome) {
 
 const real = (v) => `R$ ${Number(v).toFixed(2).replace('.', ',')}`;
 
+// v0.46.1: valores vindos do modelo/linha de comando. Antes um objeto virava o item "[object Object]" e a frequência
+// "constructor" passava (FREQUENCIAS["constructor"] é uma função, "verdadeira").
+const ehFrequencia = (f) => typeof f === 'string' && Object.prototype.hasOwnProperty.call(FREQUENCIAS, f.trim().toLowerCase());
+const PRECISA_ITEM = 'Informe o item (o nome ou o id; veja com: compras lista).';
+function textoCurto(v, max) {
+  if (typeof v !== 'string' && !(typeof v === 'number' && Number.isFinite(v))) return '';
+  const { semControlesInvisiveis } = require('./ui/textoSeguro');
+  return semControlesInvisiveis(String(v)).replace(/\s+/g, ' ').trim().slice(0, max);
+}
+
 function lerValor(v) {
   const n = Number(String(v ?? '').replace(/[R$\s]/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.'));
   if (!(n > 0 && n < 100000)) throw new Error(`Valor inválido: "${v}" (use 25,90).`);
@@ -54,27 +64,29 @@ function createComprasStore({ arquivo, clock = () => new Date() } = {}) {
   const gravar = (d) => escreverJson(caminho, d, { mode: 0o600 });
 
   function achar(d, ref) {
-    const r = semAcentoMinusculo(String(ref || '').trim());
-    if (!r) return null;
+    const r = semAcentoMinusculo(textoCurto(ref, 200));
+    if (!r) throw new Error(PRECISA_ITEM);
     return d.itens.find((i) => i.id === r) || d.itens.find((i) => semAcentoMinusculo(i.nome) === r) || d.itens.find((i) => semAcentoMinusculo(i.nome).includes(r)) || null;
   }
 
   function adicionar(nome, { quantidade, frequencia, categoria, preco, onde } = {}) {
-    const { semControlesInvisiveis } = require('./ui/textoSeguro');
-    const n = semControlesInvisiveis(String(nome || '')).replace(/\s+/g, ' ').trim();
+    const n = typeof nome === 'string' ? textoCurto(nome, 101) : '';
     if (!n || n.length > 100) throw new Error('Informe o item (até 100 caracteres), ex.: "arroz 5kg".');
-    const freq = frequencia ? String(frequencia).toLowerCase() : 'mensal';
-    if (!FREQUENCIAS[freq]) throw new Error(`Frequência inválida: "${frequencia}". Use: ${Object.keys(FREQUENCIAS).join(', ')}.`);
-    const qtd = quantidade === undefined ? 1 : Number(String(quantidade).replace(',', '.'));
+    if (frequencia !== undefined && frequencia !== null && frequencia !== '' && !ehFrequencia(frequencia)) {
+      throw new Error(`Frequência inválida: ${typeof frequencia === 'string' ? `"${frequencia.slice(0, 40)}"` : 'precisa ser um texto'}. Use: ${Object.keys(FREQUENCIAS).join(', ')}.`);
+    }
+    const freq = ehFrequencia(frequencia) ? frequencia.trim().toLowerCase() : 'mensal';
+    const qtd = quantidade === undefined || quantidade === null ? 1 : Number(String(quantidade).replace(',', '.'));
     if (!(qtd > 0 && qtd <= 1000)) throw new Error('Quantidade inválida (use um número, ex.: 2).');
     const d = ler();
-    if (achar(d, n) && semAcentoMinusculo(achar(d, n).nome) === semAcentoMinusculo(n)) throw new Error(`"${n}" já está na lista (mude com: compras quantidade/preço).`);
+    const igual = achar(d, n);
+    if (igual && semAcentoMinusculo(igual.nome) === semAcentoMinusculo(n)) throw new Error(`"${n}" já está na lista (mude com: compras quantidade/preço).`);
     if (d.itens.length >= MAX_ITENS) throw new Error(`No máximo ${MAX_ITENS} itens.`);
     const item = {
       id: crypto.randomBytes(3).toString('hex'), nome: n, quantidade: qtd, frequencia: freq,
-      categoria: categoria ? String(categoria).trim().slice(0, 40).toLowerCase() : secaoDe(n), precos: [],
+      categoria: textoCurto(categoria, 40).toLowerCase() || secaoDe(n), precos: [],
     };
-    if (preco !== undefined) item.precos.push({ data: clock().toISOString(), valor: lerValor(preco), ...(onde ? { onde: String(onde).slice(0, 40) } : {}) });
+    if (preco !== undefined && preco !== null && preco !== '') item.precos.push({ data: clock().toISOString(), valor: lerValor(preco), ...(textoCurto(onde, 40) ? { onde: textoCurto(onde, 40) } : {}) });
     d.itens.push(item);
     gravar(d);
     return item;
@@ -93,7 +105,7 @@ function createComprasStore({ arquivo, clock = () => new Date() } = {}) {
     const d = ler();
     const item = achar(d, ref);
     if (!item) throw new Error(`Não achei "${ref}" na lista.`);
-    item.precos.push({ data: clock().toISOString(), valor: lerValor(valor), ...(onde ? { onde: String(onde).slice(0, 40) } : {}) });
+    item.precos.push({ data: clock().toISOString(), valor: lerValor(valor), ...(textoCurto(onde, 40) ? { onde: textoCurto(onde, 40) } : {}) });
     item.precos = item.precos.slice(-24);
     gravar(d);
     return item;
@@ -103,16 +115,16 @@ function createComprasStore({ arquivo, clock = () => new Date() } = {}) {
     const d = ler();
     const item = achar(d, ref);
     if (!item) throw new Error(`Não achei "${ref}" na lista.`);
-    if (quantidade !== undefined) {
+    if (quantidade !== undefined && quantidade !== null) {
       const q = Number(String(quantidade).replace(',', '.'));
-      if (!(q > 0 && q <= 1000)) throw new Error('Quantidade inválida.');
+      if (!(q > 0 && q <= 1000)) throw new Error('Quantidade inválida (use um número, ex.: 2).');
       item.quantidade = q;
     }
-    if (frequencia !== undefined) {
-      if (!FREQUENCIAS[frequencia]) throw new Error(`Frequência inválida. Use: ${Object.keys(FREQUENCIAS).join(', ')}.`);
-      item.frequencia = frequencia;
+    if (frequencia !== undefined && frequencia !== null && frequencia !== '') {
+      if (!ehFrequencia(frequencia)) throw new Error(`Frequência inválida. Use: ${Object.keys(FREQUENCIAS).join(', ')}.`);
+      item.frequencia = frequencia.trim().toLowerCase();
     }
-    if (categoria !== undefined) item.categoria = String(categoria).trim().slice(0, 40).toLowerCase();
+    if (categoria !== undefined && textoCurto(categoria, 40)) item.categoria = textoCurto(categoria, 40).toLowerCase();
     gravar(d);
     return item;
   }
@@ -130,7 +142,7 @@ function createComprasStore({ arquivo, clock = () => new Date() } = {}) {
 function listaDoMes(store) {
   const itens = store.itens();
   const linhas = itens.map((i) => {
-    const qtd = i.quantidade * (FREQUENCIAS[i.frequencia] || 1);
+    const qtd = i.quantidade * (ehFrequencia(i.frequencia) ? FREQUENCIAS[i.frequencia.trim().toLowerCase()] : 1);
     const ultimo = i.precos.length ? i.precos[i.precos.length - 1].valor : null;
     return { ...i, qtdMes: Math.round(qtd * 100) / 100, ultimoPreco: ultimo, custo: ultimo === null ? null : Math.round(ultimo * qtd * 100) / 100 };
   });

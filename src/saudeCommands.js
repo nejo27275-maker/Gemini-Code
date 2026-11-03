@@ -24,13 +24,17 @@ const AJUDA = [
   `Emergência: ${saude.EMERGENCIA}`,
 ];
 
+// v0.46.1: um "--opção" sem valor no fim entrava no texto anotado ("sintoma tosse --nota" virava "tosse --nota");
+// agora vira uma opção ligada (true), que quem usa confere.
 function lerFlags(itens) {
   const flags = { _: [] };
   for (let i = 0; i < itens.length; i++) {
-    const it = itens[i];
+    const it = String(itens[i]);
     if (it === '--abrir') flags.abrir = true;
-    else if (it.startsWith('--') && i + 1 < itens.length) flags[it.slice(2)] = itens[++i];
-    else flags._.push(it);
+    else if (it.startsWith('--') && it.length > 2) {
+      const prox = itens[i + 1];
+      flags[it.slice(2)] = prox !== undefined && !String(prox).startsWith('--') ? String(itens[++i]) : true;
+    } else flags._.push(it);
   }
   return flags;
 }
@@ -88,14 +92,19 @@ async function executar(args, deps = {}) {
 
       case 'resumo': {
         const f = lerFlags(resto);
-        const dias = Math.min(3650, Math.max(1, Math.floor(Number(f.dias)) || 30));
+        const dias = saude.diasDe(f.dias, { max: 3650 });
         return ok(...saude.resumo(store, { dias }).split('\n').map((t) => L('texto', t)));
       }
 
       case 'lista': case 'listar': {
         const f = lerFlags(resto);
-        const dias = Math.min(3650, Math.max(1, Math.floor(Number(f.dias)) || 30));
-        const tipo = f.tipo ? (saude.ALIASES[f.tipo] || f.tipo) : undefined;
+        const dias = saude.diasDe(f.dias, { max: 3650 });
+        let tipo;
+        if (f.tipo !== undefined) {
+          const t = String(f.tipo).trim().toLowerCase();
+          tipo = Object.prototype.hasOwnProperty.call(saude.ALIASES, t) ? saude.ALIASES[t] : t;
+          if (!saude.TIPOS.includes(tipo)) return falha(`Tipo desconhecido: "${t}". Use: ${saude.TIPOS.join(', ')}.`);
+        }
         const regs = store.registros({ dias, tipo }).slice(-200);
         if (!regs.length) return ok(L('dim', 'Nada anotado no período.'));
         const perfil = store.perfil();
@@ -119,14 +128,18 @@ async function executar(args, deps = {}) {
 
       case 'pagina': case 'site': case 'relatorio': {
         const f = lerFlags(resto);
-        const dias = Math.min(3650, Math.max(1, Math.floor(Number(f.dias)) || 90));
+        const dias = saude.diasDe(f.dias, { padrao: 90, max: 3650 });
         const agora = deps.agora || new Date();
+        if (f.saida === true) return falha('Uso: gemini-code saude pagina [--saida arquivo.html] [--dias 90] [--abrir]');
         const nome = f.saida || `saude-${agora.toISOString().slice(0, 10)}.html`;
+        if (nome.startsWith('-')) return falha(`Nome de arquivo inválido: "${nome}" (não pode começar com "-").`);
         const destino = path.resolve(deps.cwd || process.cwd(), nome);
         if (path.extname(destino).toLowerCase() !== '.html') return falha('A página precisa terminar em .html');
         const { isProtected, isSecret } = require('./tools/protectedPaths');
         if (isProtected(destino) || isSecret(destino)) return falha('Esse caminho é protegido; escolha outro lugar para a página.');
         fs.writeFileSync(destino, saude.paginaHtml(store, { dias, agora }), { mode: 0o600 });
+        // v0.46.1: regravando um arquivo que já existia, o "mode" acima não vale — a página tem dados de saúde
+        try { fs.chmodSync(destino, 0o600); } catch { /* Windows */ }
         const linhas = [L('ok', `Página gerada: ${destino}`), L('dim', 'Abra no navegador (ou imprima para levar à consulta). Ela tem dados de saúde: cuidado ao compartilhar.')];
         if (f.abrir) {
           const abriu = await (deps.abrirFn || require('./abrir').abrir)(destino);
@@ -154,8 +167,9 @@ async function executar(args, deps = {}) {
         if (acao === 'add' || acao === 'adicionar') {
           const f = lerFlags(r2);
           const nome = f._.join(' ').trim();
-          if (!nome || !f.horarios) return falha('Uso: gemini-code saude remedio add "Nome" --horarios 08:00,20:00 [--dose 50mg]');
-          const rem = criarRemedio({ nome, dose: f.dose, horarios: f.horarios }, { store, rotinas, timezone: f.timezone || deps.timezone || require('./routines').DEFAULT_TIMEZONE });
+          if (!nome || typeof f.horarios !== 'string') return falha('Uso: gemini-code saude remedio add "Nome" --horarios 08:00,20:00 [--dose 50mg]');
+          const texto = (v) => (typeof v === 'string' ? v : undefined);
+          const rem = criarRemedio({ nome, dose: texto(f.dose), horarios: f.horarios }, { store, rotinas, timezone: texto(f.timezone) || deps.timezone || require('./routines').DEFAULT_TIMEZONE });
           return ok(
             L('ok', `Remédio salvo [${rem.id}]: ${rem.nome}${rem.dose ? ` ${rem.dose}` : ''} — lembretes às ${rem.horarios.join(', ')}.`),
             L('dim', 'Os lembretes chegam como notificação enquanto o agendador estiver rodando: gemini-code routines service'),
@@ -164,8 +178,9 @@ async function executar(args, deps = {}) {
         }
         if (acao === 'remover' || acao === 'apagar') {
           const id = r2[0];
-          const rem = id && store.remedios().find((r) => r.id === id);
-          if (!rem) return falha('Uso: gemini-code saude remedio remover ID (veja os ids com: saude remedio lista)');
+          if (!id) return falha('Uso: gemini-code saude remedio remover ID (veja os ids com: saude remedio lista)');
+          const rem = store.remedios().find((r) => r.id === id);
+          if (!rem) return falha(`Não achei o remédio ${id} (veja os ids com: saude remedio lista).`);
           for (const rid of rem.rotinas || []) { try { rotinas.pause(rid); rotinas.remove(rid); } catch { /* já removida */ } }
           store.removerRemedio(id);
           return ok(L('ok', `Remédio ${rem.nome} removido (e os lembretes dele).`));

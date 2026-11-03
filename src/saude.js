@@ -63,26 +63,40 @@ function lerPressao(texto) {
 }
 
 function lerFaixa(texto, { min, max, nome, unidade, decimais = 1 }) {
-  const m = /(\d{1,4}(?:[.,]\d+)?)/.exec(String(texto));
+  const s = String(texto);
+  const m = /\d{1,4}(?:[.,]\d+)?/.exec(s);
   if (!m) erro(`${nome}: informe um número (${unidade}).`);
-  const v = numero(m[1]);
-  if (!(v >= min && v <= max)) erro(`${nome} fora do possível: ${v} ${unidade} (aceito de ${min} a ${max}).`);
+  // v0.46.1: "-1" virava 1 (o sinal ficava de fora). Hífen colado numa palavra ("pos-140") não é sinal.
+  const negativo = /(^|[^\p{L}\p{N}])-\s*$/u.test(s.slice(0, m.index));
+  const v = numero(m[0]) * (negativo ? -1 : 1);
+  if (!(v >= min && v <= max)) erro(`${nome} fora do possível: ${br(v)} ${unidade} (aceito de ${min} a ${max}).`);
   return Number(v.toFixed(decimais));
 }
 
 const MOMENTOS = { jejum: 'jejum', pos: 'pos', 'pós': 'pos', 'pos-refeicao': 'pos', depois: 'pos', aleatoria: 'aleatoria', 'aleatória': 'aleatoria', qualquer: 'aleatoria' };
+// v0.46.1: chave vinda de fora só vale se for do próprio mapa ("constructor" não é um momento nem um tipo)
+const temChave = (obj, k) => Object.prototype.hasOwnProperty.call(obj, k);
+const EXEMPLOS = Object.freeze({
+  pressao: '"13x8" ou "130/80"', glicemia: '"98 jejum"', peso: '"72,5"', temperatura: '"37,8"', saturacao: '"97"',
+  batimentos: '"72"', sintoma: '"dor de cabeça desde ontem"', remedio: '"losartana 50mg"', nota: '"dormi mal"',
+});
 
 /** Texto livre -> { tipo, valores }. Lança Error com mensagem clara. */
 function interpretar(tipoBruto, texto) {
-  const t = String(tipoBruto || '').trim().toLowerCase();
-  const tipo = ALIASES[t] || t;
-  if (!TIPOS.includes(tipo)) erro(`Tipo desconhecido: "${tipoBruto}". Use: ${TIPOS.join(', ')}.`);
+  if (typeof tipoBruto !== 'string' || !tipoBruto.trim()) erro(`Informe o tipo: ${TIPOS.join(', ')}.`);
+  const t = tipoBruto.trim().toLowerCase();
+  const tipo = temChave(ALIASES, t) ? ALIASES[t] : t;
+  if (!TIPOS.includes(tipo)) erro(`Tipo desconhecido: "${tipoBruto.slice(0, 40)}". Use: ${TIPOS.join(', ')}.`);
+  // v0.46.1: só texto ou número de verdade — NaN virava o texto "NaN" e um objeto, "[object Object]"
+  if (texto != null && typeof texto !== 'string' && !(typeof texto === 'number' && Number.isFinite(texto))) {
+    erro(`${NOMES[tipo]}: o valor precisa ser um texto, ex.: ${EXEMPLOS[tipo]}.`);
+  }
   const bruto = String(texto ?? '').trim();
   switch (tipo) {
     case 'pressao': return { tipo, valores: lerPressao(bruto) };
     case 'glicemia': {
       const mgdl = lerFaixa(bruto, { min: 10, max: 900, nome: 'Glicemia', unidade: 'mg/dL', decimais: 0 });
-      const palavra = (bruto.toLowerCase().match(/[a-zçãéóáí-]+/g) || []).find((p) => MOMENTOS[p]);
+      const palavra = (bruto.toLowerCase().match(/[a-zçãéóáí-]+/g) || []).find((p) => temChave(MOMENTOS, p));
       return { tipo, valores: { mgdl, momento: palavra ? MOMENTOS[palavra] : 'aleatoria' } };
     }
     case 'peso': return { tipo, valores: { kg: lerFaixa(bruto, { min: 1, max: 400, nome: 'Peso', unidade: 'kg' }) } };
@@ -250,13 +264,12 @@ function createSaudeStore({ arquivo, clock = () => new Date() } = {}) {
 
   function anotar(tipo, texto, { quando, nota } = {}) {
     const { tipo: t, valores } = interpretar(tipo, texto);
-    const data = quando ? new Date(quando) : clock();
-    if (!Number.isFinite(data.getTime())) erro('Data inválida em "quando" (use, por exemplo, 2026-11-02 08:00).');
-    if (data.getTime() > clock().getTime() + 5 * 60000) erro('A data não pode estar no futuro.');
+    const data = quando === undefined || quando === null || quando === '' ? clock() : lerQuando(quando, clock());
     const d = ler();
     const reg = { id: crypto.randomBytes(4).toString('hex'), tipo: t, valores, quando: data.toISOString() };
-    if (nota) {
-      const n = String(nota).replace(/\s+/g, ' ').trim().slice(0, MAX_TEXTO);
+    if (typeof nota === 'string' || (typeof nota === 'number' && Number.isFinite(nota))) {
+      const { semControlesInvisiveis } = require('./ui/textoSeguro');
+      const n = semControlesInvisiveis(String(nota)).replace(/\s+/g, ' ').trim().slice(0, MAX_TEXTO);
       if (n) reg.nota = n;
     }
     d.registros.push(reg);
@@ -319,6 +332,58 @@ function createSaudeStore({ arquivo, clock = () => new Date() } = {}) {
   return { caminho, anotar, apagar, registros, perfil, remedios: () => ler().remedios, adicionarRemedio, removerRemedio, ler };
 }
 
+const DATA_INVALIDA = 'Data inválida em "quando": use 2026-11-02 08:00, 02/11/2026 08:00, 02/11 8h, "hoje 8h" ou "ontem 20h30".';
+
+/** Uma data no relógio local, conferindo que dia/mês/hora existem (o Date "conserta" 31/02 para 03/03 sem avisar). */
+function dataLocal(ano, mes, dia, h = 0, min = 0, seg = 0) {
+  const d = new Date(ano, mes - 1, dia, h, min, seg);
+  if (d.getFullYear() !== ano || d.getMonth() !== mes - 1 || d.getDate() !== dia || d.getHours() !== h || d.getMinutes() !== min) erro(DATA_INVALIDA);
+  return d;
+}
+
+/**
+ * v0.46.1: o "quando" de uma anotação. Antes ia direto para new Date(), que adivinha: "02/11/2026" virava 11 de
+ * FEVEREIRO (formato americano), "2026-02-31" virava 3 de março, "-1" virava 2001 e o número -1, 31/12/1969.
+ * Agora só valem: 2026-11-02[ 08:00[:00]][Z|-03:00], 02/11[/2026][ 8h|08:00|20h30] e hoje/ontem/anteontem[ 8h].
+ * Sem fuso, é a hora local deste aparelho. Lança Error.
+ */
+function lerQuando(valor, agora = new Date()) {
+  if (typeof valor !== 'string' || !valor.trim()) erro(DATA_INVALIDA);
+  const s = semAcentos(valor.trim().toLowerCase()).replace(/\s+/g, ' ').replace(/ (as|a) /, ' ');
+  const hora = (hh, mm) => [hh === undefined ? 0 : Number(hh), mm === undefined ? 0 : Number(mm)];
+  let m = /^(\d{4})-(\d{2})-(\d{2})(?:[ t](\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,3})?)?)?(?: ?(z|[+-]\d{2}:?\d{2}))?$/.exec(s);
+  let data;
+  if (m) {
+    const [ano, mes, dia] = [Number(m[1]), Number(m[2]), Number(m[3])];
+    const [h, min] = hora(m[4], m[5]);
+    const seg = m[6] === undefined ? 0 : Number(m[6]);
+    if (m[7]) {
+      // com fuso: confere os números no próprio fuso e converte
+      const off = m[7] === 'z' ? 0 : (m[7][0] === '-' ? -1 : 1) * (Number(m[7].slice(1, 3)) * 60 + Number(m[7].slice(-2)));
+      const utc = new Date(Date.UTC(ano, mes - 1, dia, h, min, seg));
+      if (utc.getUTCFullYear() !== ano || utc.getUTCMonth() !== mes - 1 || utc.getUTCDate() !== dia || utc.getUTCHours() !== h || utc.getUTCMinutes() !== min || Math.abs(off) > 14 * 60) erro(DATA_INVALIDA);
+      data = new Date(utc.getTime() - off * 60000);
+    } else {
+      data = dataLocal(ano, mes, dia, h, min, seg);
+    }
+  } else if ((m = /^(\d{1,2})\/(\d{1,2})(?:\/(\d{2}|\d{4}))?(?:,? (\d{1,2})(?:[:h](\d{2}))?h?)?$/.exec(s))) {
+    const ano = m[3] === undefined ? agora.getFullYear() : m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]);
+    data = dataLocal(ano, Number(m[2]), Number(m[1]), ...hora(m[4], m[5]));
+  } else if ((m = /^(hoje|ontem|anteontem)(?: (\d{1,2})(?:[:h](\d{2}))?h?)?$/.exec(s))) {
+    const recuo = { hoje: 0, ontem: 1, anteontem: 2 }[m[1]];
+    const base = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate() - recuo);
+    const [h, min] = m[2] === undefined ? [agora.getHours(), agora.getMinutes()] : hora(m[2], m[3]);
+    data = dataLocal(base.getFullYear(), base.getMonth() + 1, base.getDate(), h, min);
+  } else if (s === 'agora') {
+    data = new Date(agora.getTime());
+  } else {
+    erro(DATA_INVALIDA);
+  }
+  if (data.getTime() > agora.getTime() + 5 * 60000) erro('A data não pode estar no futuro.');
+  if (data.getFullYear() < 1900) erro(DATA_INVALIDA);
+  return data;
+}
+
 /** "8", "08:00", "8h30", "20h" -> "08:00". Lança Error. */
 function lerHorario(texto) {
   const m = /^(\d{1,2})(?:[:h](\d{2})?)?h?$/i.exec(String(texto).trim());
@@ -332,6 +397,19 @@ function lerHorario(texto) {
 // Resumo (texto) e página (HTML) para levar à consulta
 // ---------------------------------------------------------------------------
 const MEDIDAS = ['pressao', 'glicemia', 'peso', 'temperatura', 'saturacao', 'batimentos'];
+
+/** "último dia" / "últimos 30 dias" */
+function periodo(dias) { return dias === 1 ? 'último dia' : `últimos ${dias} dias`; }
+
+/**
+ * v0.46.1: período em dias vindo de fora (flag ou modelo). Inválido, zero ou negativo vira o padrão (antes "-5"
+ * virava 1 dia); acima do máximo, o máximo.
+ */
+function diasDe(valor, { padrao = 30, max = 365 } = {}) {
+  if (typeof valor !== 'number' && typeof valor !== 'string') return padrao; // "--dias" sem número chega como true
+  const n = Math.floor(Number(valor));
+  return Number.isFinite(n) && n >= 1 ? Math.min(max, n) : padrao;
+}
 
 function dataCurta(iso) {
   const d = new Date(iso);
@@ -360,7 +438,7 @@ function estatisticas(regs, tipo) {
 function resumo(store, { dias = 30 } = {}) {
   const regs = store.registros({ dias });
   const perfil = store.perfil();
-  const linhas = [`Saúde — últimos ${dias} dias (${regs.length} registro${regs.length === 1 ? '' : 's'})`];
+  const linhas = [`Saúde — ${periodo(dias)} (${regs.length} registro${regs.length === 1 ? '' : 's'})`];
   for (const tipo of MEDIDAS) {
     const e = estatisticas(regs, tipo);
     if (!e) continue;
@@ -480,7 +558,7 @@ tr.urgente td:first-child { border-left: 4px solid var(--urgente); } tr.alto td:
 <body>
 <main>
 <h1>Minha saúde</h1>
-<p>Relatório dos últimos ${dias} dias · gerado em ${esc(dataCurta(agora.toISOString()))}${perfil.alturaM ? ` · altura ${esc(br(perfil.alturaM.toFixed(2)))} m` : ''}</p>
+<p>Relatório: ${periodo(dias)} · gerado em ${esc(dataCurta(agora.toISOString()))}${perfil.alturaM ? ` · altura ${esc(br(perfil.alturaM.toFixed(2)))} m` : ''}</p>
 <p class="emergencia"><strong>Emergência:</strong> ${esc(EMERGENCIA)}</p>
 <div class="grade">
 ${cartoes || '<p>Nenhuma medição no período.</p>'}
@@ -512,6 +590,6 @@ const INSTRUCOES_ALIADO = [
 
 module.exports = {
   TIPOS, NOMES, ALIASES, EMERGENCIA, AVISO, INSTRUCOES_ALIADO,
-  br, interpretar, lerPressao, lerHorario, classificar, valorCurto, sinaisDeAlerta, avisoDeEmergencia, semAcentos,
+  br, interpretar, lerPressao, lerHorario, lerQuando, diasDe, classificar, valorCurto, sinaisDeAlerta, avisoDeEmergencia, semAcentos,
   createSaudeStore, resumo, paginaHtml, graficoSvg, esc,
 };

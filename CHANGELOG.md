@@ -1,3 +1,69 @@
+## 0.46.1 — polimento das novidades da 0.46.0
+
+Base: a 0.46.0 (mesmo branch, ainda sem PR).
+
+**Estresse:** 4.708 chamadas às ferramentas novas (saúde, câmera, vídeo, compras, imagem) com argumentos ruins e 1.039 comandos do terminal com argumentos vazios ou errados.
+- **Resultado:** nenhum erro solto e nada travou.
+- **O que apareceu:** dados ruins sendo gravados e mensagens que não batiam com o que acontecia.
+
+**Saúde:**
+- **Data da anotação (`quando`):** passava direto pelo `new Date()`, que adivinha:
+  - "02/11/2026" virava **11 de fevereiro** (formato americano);
+  - "2026-02-31" virava 3 de março;
+  - "-1" virava 2001, e o número -1 virava 31/12/1969.
+- **Agora:** só formatos claros: `2026-11-02 08:00`, `02/11/2026 08:00`, `02/11 8h`, `hoje 8h`, `ontem 20h30`. Testado em 8 fusos, inclusive UTC+14 e UTC-12.
+- **Valores:**
+  - sintoma, remédio ou nota com valor que não é texto virava "NaN" ou "[object Object]" no diário;
+  - "-1" de peso virava 1 kg (o sinal ficava de fora).
+  - Agora recusa.
+- **Período e listas:**
+  - `--dias -5` virava 1 dia (agora usa o padrão);
+  - "últimos 1 dias" agora é "último dia";
+  - `saude lista --tipo` com um tipo desconhecido agora avisa.
+- **Remédios e opções:**
+  - `remedio remover` com id inexistente mostrava o uso em vez de "não achei";
+  - `--dose` e `--nota` sem valor entravam como texto ("true", "tosse --nota").
+- **Permissão da página:** regravar a página de saúde por cima de um arquivo existente mantinha a permissão antiga. Agora ela fica só para o dono (0600).
+
+**Compras:**
+- **Validação:**
+  - o item "[object Object]" entrava na lista;
+  - a frequência "constructor" passava (é uma chave que todo objeto do JavaScript tem).
+- **Mensagens e opções:**
+  - `compras qtd ITEM` sem o número dizia "informe o item";
+  - `compras exportar --help` criava um arquivo chamado "--help": um `--opção` sem valor no fim virava nome.
+- **Exportar** agora recusa lista vazia, nome começando com "-" e caminho protegido, e não sobrescreve arquivo existente.
+
+**Vídeo com IA (Veo):** conferido com a documentação oficial (fluxo `predictLongRunning` → operação → `generatedSamples[0].video.uri`).
+- **Espera:** girava 10 min quando a consulta dava erro. Agora erro 4xx para na hora, e falha de rede ou 5xx tenta 5 vezes.
+- **Motivo:** uma operação com erro e o bloqueio pelo filtro de segurança do Google viravam "Resposta sem vídeo". Agora a mensagem diz o motivo.
+- **Erro em HTML:** uma página de erro em HTML virava SyntaxError.
+- **Pasta:** era criada mesmo quando não vinha vídeo.
+
+**Outros:**
+- **`criar servir`:**
+  - pasta com acento dava erro 500 no redirecionamento;
+  - "/%2Fimg" redirecionava para outro host (`//img/`);
+  - pasta inexistente dava um ENOENT cru.
+- **`imagem melhorar`:**
+  - `--modo xyz` ia para a IA;
+  - no modo auto sem ImageMagick, a IA rodava sem a trava de convidado.
+- **Ferramenta `video`:**
+  - as entradas agora têm a mesma trava de convidado da `imagem`;
+  - `saida` que não é texto vira erro claro.
+- **`camera vigiar`:**
+  - com `--intervalo 0` dizia "a cada 0 s" e usava 30;
+  - sem câmera, não sobra mais pasta vazia.
+- **Uso:**
+  - `tv xyz` procurava o adb antes de mostrar o uso;
+  - mostrar o uso por falta de argumento agora sai com código 1 em imagem, vídeo, câmera, criar e tv.
+
+**Mais rápido:** o terminal só carrega o agente (ferramentas, provedores, navegador) quando o comando usa. `--version`, `saude`, `compras` e `config` caíram de ~77 ms para ~50 ms aqui (de 78 para 31 módulos); no celular a diferença é maior.
+
+**Node 18:** nenhuma API exclusiva do Node 20+ no código (busca e análise com a gramática ES2022).
+
+**Testes:** 919 (918 passando, 1 pulado por rodar como root). Novos: `tests/polimento0461.test.js` (13).
+
 ## 0.46.0 — saúde, compras do mês, imagem, vídeo, câmera, TV e criar site/app
 
 Base: o branch da 0.45.1 (ainda sem PR).

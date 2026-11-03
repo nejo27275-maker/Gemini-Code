@@ -110,15 +110,24 @@ async function diferenca(a, b, { magick = require('./imagem').acharMagick(), tol
  * Vigia: fotografa a cada `intervaloS` segundos; mudança acima de `sensibilidade` (% da imagem) guarda a foto em
  * `pasta` e chama `aoDetectar`. Para com `deveParar()` (Ctrl+C no terminal) ou depois de `maxFotos`.
  */
+/** v0.46.1: intervalo (s) e sensibilidade (%) que o vigia usa de verdade — a mesma conta para a mensagem e o laço. */
+function parametrosVigia({ intervaloS, sensibilidade } = {}) {
+  const i = Number(intervaloS);
+  const s = Number(sensibilidade);
+  return {
+    intervalo: Number.isFinite(i) && i > 0 ? Math.max(5, i) : 30,
+    sensibilidadePct: Number.isFinite(s) && s > 0 ? Math.min(100, Math.max(0.5, s)) : 5,
+  };
+}
+
 async function vigiar({
   intervaloS = 30, sensibilidade = 5, pasta = 'vigia', camera = 0, cwd = process.cwd(), maxFotos = Infinity,
   aoDetectar = async () => {}, log = () => {}, deveParar = () => false, dormir = (ms) => new Promise((r) => setTimeout(r, ms)),
   fotoFn = foto, diferencaFn = diferenca,
 } = {}) {
-  const intervalo = Math.max(5, Number(intervaloS) || 30);
-  const limite = Math.min(100, Math.max(0.5, Number(sensibilidade) || 5)) / 100;
+  const { intervalo, sensibilidadePct } = parametrosVigia({ intervaloS, sensibilidade });
+  const limite = sensibilidadePct / 100;
   const dirVigia = path.resolve(cwd, pasta);
-  fs.mkdirSync(dirVigia, { recursive: true });
   const trabalho = fs.mkdtempSync(path.join(os.tmpdir(), 'gemini-code-vigia-fotos-'));
   let anterior = null;
   let fotos = 0;
@@ -132,6 +141,7 @@ async function vigiar({
         log(`foto ${fotos}: ${(mudou * 100).toFixed(1)}% diferente`);
         if (mudou >= limite) {
           deteccoes++;
+          fs.mkdirSync(dirVigia, { recursive: true }); // só quando há o que guardar (sem câmera, nada de pasta vazia)
           const guardada = path.join(dirVigia, `movimento-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.jpg`);
           fs.copyFileSync(atual, guardada);
           await aoDetectar({ arquivo: guardada, mudou });
@@ -150,4 +160,4 @@ async function vigiar({
   return { fotos, deteccoes, pasta: dirVigia };
 }
 
-module.exports = { comoFotografar, foto, analisar, diferenca, vigiar, DICA_SEM_CAMERA };
+module.exports = { comoFotografar, foto, analisar, diferenca, vigiar, parametrosVigia, DICA_SEM_CAMERA };

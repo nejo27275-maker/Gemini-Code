@@ -67,10 +67,17 @@ async function executeCamera(a) {
 
 async function executeVideo(a) {
   const { paraExibir } = require('../ui/textoSeguro');
-  const { confirmarForaDaArea } = require('./protectedPaths');
+  const { confirmarForaDaArea, foraDoProjetoParaConvidado } = require('./protectedPaths');
   const v = deps.video();
   const acao = String(a.acao || '');
   if (!['melhorar', 'slideshow', 'gerar'].includes(acao)) return 'Erro: video precisa de "acao": melhorar, slideshow ou gerar.';
+  if (a.saida !== undefined && a.saida !== null && (typeof a.saida !== 'string' || !a.saida.trim())) return 'Erro: "saida" precisa ser o caminho de um arquivo .mp4.';
+  // v0.46.1: as entradas passam pela mesma trava de convidado (cowork) da ferramenta "imagem"
+  const entradas = [a.arquivo, ...(Array.isArray(a.fotos) ? a.fotos : []), a.musica].filter((e) => typeof e === 'string' && e);
+  for (const e of entradas) {
+    const fora = foraDoProjetoParaConvidado(e);
+    if (fora) return fora;
+  }
   const previsto = path.resolve(a.saida || (acao === 'melhorar' && typeof a.arquivo === 'string' ? a.arquivo : path.join(process.cwd(), 'video.mp4')));
   const recusa = await confirmarForaDaArea([previsto]);
   if (recusa) return recusa;

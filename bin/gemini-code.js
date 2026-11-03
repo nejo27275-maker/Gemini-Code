@@ -12,18 +12,26 @@ const security = require('../src/security');
 const configCommands = require('../src/configCommands');
 const mcpPresets = require('../src/mcpPresets');
 const PACKAGE_JSON = require('../package.json');
-const { runOnce } = require('../src/agent');
-const { runAgentFile } = require('../src/agents/runner');
-const designTools = require('../src/tools/designTools');
-const mediaTools = require('../src/tools/mediaTools');
-const voice = require('../src/voice/voice');
-const { runLive } = require('../src/live/live');
+
+// v0.46.1: o agente (ferramentas, provedores, navegador, sandbox...) e o que depende dele só carregam quando o comando
+// usa. Antes até "--version", "saude", "compras" e "config" carregavam 78 módulos do projeto (uns 50 ms a mais aqui;
+// num celular com Termux, perto de meio segundo em CADA comando).
+function sobDemanda(caminho) {
+  let modulo = null;
+  return new Proxy({}, { get: (_, nome) => (modulo || (modulo = require(caminho)))[nome] });
+}
+const runOnce = (...a) => require('../src/agent').runOnce(...a);
+const runAgentFile = (...a) => require('../src/agents/runner').runAgentFile(...a);
+const designTools = sobDemanda('../src/tools/designTools');
+const mediaTools = sobDemanda('../src/tools/mediaTools');
+const voice = sobDemanda('../src/voice/voice');
+const runLive = (...a) => require('../src/live/live').runLive(...a);
 const { listSkills } = require('../src/skills/loader');
-const toolsIndex = require('../src/tools');
+const toolsIndex = sobDemanda('../src/tools');
 const agenda = require('../src/agenda');
 const projetos = require('../src/projetos');
 const routines = require('../src/routines');
-const { createRoutineRunner } = require('../src/routineRunner');
+const createRoutineRunner = (...a) => require('../src/routineRunner').createRoutineRunner(...a);
 const backup = require('../src/tools/backup');
 const sessions = require('../src/sessions');
 const checkpoints = require('../src/checkpoints');
@@ -33,15 +41,15 @@ const hooks = require('../src/hooks');
 const planMode = require('../src/planMode');
 const usage = require('../src/usage');
 const stepApproval = require('../src/stepApproval');
-const workflowTools = require('../src/tools/workflowTools');
+const workflowTools = sobDemanda('../src/tools/workflowTools');
 const artifacts = require('../src/artifacts');
 const agentProfiles = require('../src/agentProfiles');
 const { compactar } = require('../src/compact');
 const customCommands = require('../src/customCommands');
-const todoTools = require('../src/tools/todoTools');
+const todoTools = sobDemanda('../src/tools/todoTools');
 const knowledgeModule = require('../src/knowledge');
-const personalAgents = require('../src/personalAgents');
-const aliadosCommands = require('../src/personalAgentCommands');
+const personalAgents = sobDemanda('../src/personalAgents');
+const aliadosCommands = sobDemanda('../src/personalAgentCommands');
 // v0.43.2: a resposta do modelo vai ao terminal sem sequências de controle (OSC 52, ESC[2J...).
 const { paraTerminal } = require('../src/ui/textoSeguro');
 const { INSTRUCAO_MODO_CIENCIA } = require('../src/modoCiencia');
@@ -60,7 +68,8 @@ let saindo = false;
 function encerrarComLimpeza() {
   if (saindo) return;
   saindo = true;
-  try { toolsIndex.stopMcp(); } catch { /* já não tem o que fazer aqui */ }
+  // só há servidor MCP para parar se o cliente MCP chegou a ser carregado (não carrega o agente inteiro na saída)
+  try { if (require.cache[require.resolve('../src/tools/mcpClient')]) toolsIndex.stopMcp(); } catch { /* já não tem o que fazer aqui */ }
   process.exit(0);
 }
 process.on('SIGINT', encerrarComLimpeza);
@@ -1044,13 +1053,14 @@ async function main() {
         else flags._.push(resto[i]);
       }
       const im = require('../src/imagem');
-      const uso = () => console.log([
+      // v0.46.1: "uso" por falta de argumento sai com código 1 (scripts sabem que não rodou); sem subcomando, 0
+      const uso = () => { if (sub && !['ajuda', 'help', '--help'].includes(sub)) process.exitCode = 1; console.log([
         'Uso: gemini-code imagem gerar "descrição"                      (com IA; usa a cota da sua chave)',
         '     gemini-code imagem editar FOTO "o que mudar"              (com IA)',
         '     gemini-code imagem melhorar FOTO [--modo local|ia] [--ampliar 2]   (local = ImageMagick, grátis e offline)',
         '     gemini-code imagem descrever FOTO ["pergunta"]',
         '     opções: --saida arquivo.png (nunca sobrescreve: cria um arquivo novo)',
-      ].join('\n'));
+      ].join('\n')); };
       try {
         let r;
         if (sub === 'gerar') {
@@ -1063,8 +1073,12 @@ async function main() {
           r = await im.editar(flags._[0], flags._.slice(1).join(' '), { saida: flags.saida });
         } else if (sub === 'melhorar') {
           if (!flags._[0]) return uso();
-          if (flags.modo === 'ia' && bloquearSeConvidado('melhorar com IA (custa cota da API do dono).')) return;
-          r = await im.melhorar(flags._[0], { modo: flags.modo || 'auto', saida: flags.saida, ampliar: flags.ampliar });
+          // v0.46.1: "--modo xyz" caía na IA; e no "auto" sem ImageMagick a IA rodava sem a trava de convidado
+          if (flags.modo !== undefined && !['auto', 'local', 'ia'].includes(flags.modo)) throw new Error('--modo: auto, local (ImageMagick) ou ia.');
+          const modo = flags.modo || 'auto';
+          const usaIa = modo === 'ia' || (modo === 'auto' && !im.acharMagick());
+          if (usaIa && bloquearSeConvidado('melhorar com IA (custa cota da API do dono).')) return;
+          r = await im.melhorar(flags._[0], { modo, saida: flags.saida, ampliar: flags.ampliar });
         } else if (sub === 'descrever') {
           if (!flags._[0]) return uso();
           console.log(paraTerminal(await im.descrever(flags._[0], flags._.slice(1).join(' ') || undefined)));
@@ -1105,6 +1119,7 @@ async function main() {
           });
           return;
         } else {
+          if (sub && !['ajuda', 'help', '--help'].includes(sub)) process.exitCode = 1;
           console.log([
             'Uso: gemini-code criar site NOME [--titulo "Minha Padaria"] [--descricao "..."]   site responsivo, sem IA',
             '     gemini-code criar app NOME [--titulo "Meus Gastos"]                         app PWA (instala no celular, funciona offline)',
@@ -1130,6 +1145,12 @@ async function main() {
       const tvo = require('../src/tvOtimizar');
       const adbT = require('../src/tools/adbTools');
       const cfg = loadConfig();
+      if (!['diagnostico', 'diagnóstico', 'otimizar', 'desfazer'].includes(sub)) {
+        // v0.46.1: antes o subcomando errado só aparecia depois de procurar o adb ("adb não encontrado")
+        if (!['ajuda', 'help', '--help'].includes(sub)) process.exitCode = 1;
+        console.log('Uso: gemini-code tv diagnostico | otimizar [--tudo] | desfazer   [--alvo IP]');
+        return;
+      }
       try {
         // TV por Wi-Fi: reconecta antes (a conexão do adb cai quando ela dorme), como as rotinas de TV
         let alvo = flags.alvo || cfg.adbSerial || '';
@@ -1150,8 +1171,6 @@ async function main() {
         } else if (sub === 'desfazer') {
           const erro = await tvo.desfazer(executar);
           console.log(erro ? chalk.red(erro) : chalk.green('Animações de volta em 1x.'));
-        } else {
-          console.log('Uso: gemini-code tv diagnostico | otimizar [--tudo] | desfazer   [--alvo IP]');
         }
       } catch (err) {
         console.error(chalk.red(`Erro: ${err.message}`));
@@ -1181,7 +1200,8 @@ async function main() {
           let parar = false;
           process.on('SIGINT', () => { parar = true; console.log(chalk.dim('\n(parando depois da foto atual...)')); });
           const { notificarSistema } = require('../src/routineRunner');
-          console.log(chalk.dim(`Vigiando: uma foto a cada ${flags.intervalo || 30} s; mudança acima de ${flags.sensibilidade || 5}% guarda a foto em ./${flags.pasta || 'vigia'}. Ctrl+C para parar.`));
+          const pv = cam.parametrosVigia({ intervaloS: flags.intervalo, sensibilidade: flags.sensibilidade });
+          console.log(chalk.dim(`Vigiando: uma foto a cada ${pv.intervalo} s; mudança acima de ${pv.sensibilidadePct}% guarda a foto em ./${flags.pasta || 'vigia'}. Ctrl+C para parar.`));
           const r = await cam.vigiar({
             intervaloS: flags.intervalo, sensibilidade: flags.sensibilidade, pasta: flags.pasta || 'vigia', camera: flags.camera,
             deveParar: () => parar, log: (m) => console.log(chalk.dim(m)),
@@ -1196,6 +1216,7 @@ async function main() {
           });
           console.log(`Fim: ${r.fotos} fotos, ${r.deteccoes} movimento(s); fotos em ${r.pasta}`);
         } else {
+          if (sub && !['ajuda', 'help', '--help'].includes(sub)) process.exitCode = 1;
           console.log([
             'Uso: gemini-code camera foto [--camera 1] [--saida foto.jpg]           (1 = frontal)',
             '     gemini-code camera analisar "o que tem na geladeira?" [--camera 1]   (manda a foto para a IA)',
@@ -1229,6 +1250,7 @@ async function main() {
           if (bloquearSeConvidado('geração de vídeo (custa cota da API do dono).')) return;
           r = await v.gerar(flags._.join(' '));
         } else {
+          if (sub && !['ajuda', 'help', '--help'].includes(sub)) process.exitCode = 1;
           console.log([
             'Uso: gemini-code video melhorar VIDEO.mp4 [--estabilizar] [--saida novo.mp4]   (menos ruído, mais nitidez)',
             '     gemini-code video slideshow foto1.jpg foto2.jpg ... [--segundos 3] [--musica musica.mp3] [--saida album.mp4]',

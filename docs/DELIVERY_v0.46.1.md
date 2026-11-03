@@ -1,0 +1,25 @@
+# Entrega v0.46.1 — polimento das novidades da 0.46.0
+
+- **Estresse:** 4.708 chamadas às ferramentas novas e 1.039 comandos do terminal com argumentos ruins. Nenhum erro solto; o que apareceu foram dados ruins gravados e mensagens erradas.
+- **Saúde:**
+  - **Data da anotação:** "02/11/2026" virava 11 de fevereiro, e "-1" virava 1969 ou 2001. Agora só valem formatos claros (ISO, dd/mm, "hoje 8h", "ontem 20h30"), testados em 8 fusos.
+  - **Valores:** "NaN" e "[object Object]" não entram mais no diário, e "-1" kg é recusado.
+  - **Página:** sempre gravada só para o dono (0600).
+- **Compras:**
+  - o item "[object Object]" e a frequência "constructor" são recusados;
+  - `exportar --help` não cria mais um arquivo "--help";
+  - exportar recusa lista vazia, nome com "-" e caminho protegido, e não sobrescreve.
+- **Veo:** conferido com a documentação oficial. A espera para logo em erro 4xx e tenta 5 vezes em falha de rede. O motivo de erro ou de bloqueio pelo filtro de segurança aparece, e não sobra pasta vazia.
+- **`criar servir`:**
+  - redirecionamento de pasta com acento (dava erro 500);
+  - "/%2Fimg" não leva mais a outro host;
+  - pasta inexistente dá mensagem clara.
+- **Imagem e vídeo:**
+  - `imagem melhorar --modo xyz` é recusado;
+  - o modo auto que cai na IA respeita a trava de convidado;
+  - a ferramenta `video` tem a trava de convidado nas entradas.
+- **Terminal:**
+  - **Câmera:** `camera vigiar` mostra o intervalo que usa de verdade.
+  - **Uso:** a mensagem de uso sai com código 1.
+  - **Velocidade:** o agente só carrega quando o comando usa (~77 → ~50 ms por comando aqui; de 78 para 31 módulos).
+- **Testes:** 919 (918 passando, 1 pulado como root). Novos em `tests/polimento0461.test.js`.

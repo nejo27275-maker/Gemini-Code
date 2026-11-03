@@ -40,10 +40,7 @@ async function execute(name, args = {}) {
   const saude = require('../saude');
   const a = args && typeof args === 'object' ? args : {};
   const store = criarStore();
-  if (name === 'saude_consultar') {
-    const dias = Math.min(365, Math.max(1, Math.floor(Number(a.dias)) || 30));
-    return saude.resumo(store, { dias });
-  }
+  if (name === 'saude_consultar') return saude.resumo(store, { dias: saude.diasDe(a.dias, { max: 365 }) });
   if (name !== 'saude_registrar') throw new Error(`Ferramenta de saúde desconhecida: ${name}`);
   let r;
   try {

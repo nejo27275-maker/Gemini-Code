@@ -294,7 +294,9 @@ const TIPOS_HTTP = {
  * arquivos e pastas com ponto (.env, .git) nunca. Pedido malformado vira 400 — não derruba o processo.
  */
 function servidor(pasta) {
-  const raiz = fs.realpathSync(pasta);
+  let raiz;
+  try { raiz = fs.realpathSync(pasta); } catch { throw new Error(`pasta não encontrada: ${pasta}`); }
+  if (!fs.statSync(raiz).isDirectory()) throw new Error(`não é uma pasta: ${pasta}`);
   return http.createServer((req, res) => {
     const responder = (status, texto) => { res.writeHead(status, { 'content-type': 'text/plain; charset=utf-8', 'x-content-type-options': 'nosniff' }); res.end(req.method === 'HEAD' ? undefined : texto); };
     try {
@@ -308,7 +310,13 @@ function servidor(pasta) {
       try { real = fs.realpathSync(alvo); } catch { return responder(404, 'Não encontrado'); }
       if (real !== raiz && !real.startsWith(raiz + path.sep)) return responder(404, 'Não encontrado');
       const st = fs.statSync(real);
-      if (st.isDirectory()) { res.writeHead(301, { location: `${caminho.replace(/\/?$/, '/')}` }); return res.end(); }
+      if (st.isDirectory()) {
+        // v0.46.1: o endereço ia decodificado no cabeçalho — pasta com acento ("fotos-ç") dava 500, e "/%2Fimg" virava
+        // "//img/", que o navegador lê como OUTRO host. Agora só os pedaços, codificados, sempre começando com uma "/".
+        const destino = `/${caminho.split('/').filter(Boolean).map(encodeURIComponent).join('/')}/`;
+        res.writeHead(301, { location: destino.replace(/^\/+/, '/') });
+        return res.end();
+      }
       res.writeHead(200, { 'content-type': TIPOS_HTTP[path.extname(real).toLowerCase()] || 'application/octet-stream', 'content-length': st.size, 'x-content-type-options': 'nosniff', 'cache-control': 'no-cache' });
       if (req.method === 'HEAD') return res.end();
       fs.createReadStream(real).on('error', () => res.destroy()).pipe(res);

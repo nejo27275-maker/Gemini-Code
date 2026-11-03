@@ -17,11 +17,18 @@ const AJUDA = [
   '  gemini-code compras exportar [lista.txt]   texto para WhatsApp/bloco de notas',
 ];
 
+// v0.46.1: um "--opção" sem valor no fim entrava no nome ("compras exportar --help" criava o arquivo "--help";
+// "compras add arroz --qtd" criava o item "arroz --qtd"). Agora vira uma opção ligada (true).
 function lerFlags(itens) {
   const flags = { _: [] };
   for (let i = 0; i < itens.length; i++) {
-    if (itens[i].startsWith('--') && i + 1 < itens.length) flags[itens[i].slice(2)] = itens[++i];
-    else flags._.push(itens[i]);
+    const it = String(itens[i]);
+    if (it.startsWith('--') && it.length > 2) {
+      const prox = itens[i + 1];
+      flags[it.slice(2)] = prox !== undefined && !String(prox).startsWith('--') ? String(itens[++i]) : true;
+    } else {
+      flags._.push(it);
+    }
   }
   return flags;
 }
@@ -35,7 +42,7 @@ async function executar(args, deps = {}) {
   const ref = f._.join(' ').trim();
   try {
     switch (sub) {
-      case 'ajuda': case 'help': return ok(...AJUDA.map((t) => L('texto', t)));
+      case 'ajuda': case 'help': case '--help': case '-h': return ok(...AJUDA.map((t) => L('texto', t)));
       case 'add': case 'adicionar': {
         if (!ref) return falha('Uso: gemini-code compras add "arroz 5kg" [--qtd 2] [--freq mensal]');
         const i = store.adicionar(ref, { quantidade: f.qtd, frequencia: f.freq, categoria: f.categoria, preco: f.preco, onde: f.onde });
@@ -51,11 +58,13 @@ async function executar(args, deps = {}) {
         return i ? ok(L('ok', `Tirei da lista: ${i.nome}`)) : falha(`Não achei "${ref}" na lista.`);
       }
       case 'qtd': case 'quantidade': {
+        if (f._.length < 2) return falha('Uso: gemini-code compras qtd ITEM 3   (veja os itens com: compras lista)');
         const q = f._.pop();
         const i = store.mudar(f._.join(' '), { quantidade: q });
         return ok(L('ok', `${i.nome}: ${i.quantidade} por compra (${i.frequencia}).`));
       }
       case 'preco': case 'preço': {
+        if (f._.length < 2) return falha('Uso: gemini-code compras preco ITEM 26,50 [--onde mercado]');
         const v = f._.pop();
         const i = store.preco(f._.join(' '), v, { onde: f.onde });
         return ok(L('ok', `${i.nome}: ${compras.real(i.precos[i.precos.length - 1].valor)}${f.onde ? ` (${f.onde})` : ''}`));
@@ -72,10 +81,23 @@ async function executar(args, deps = {}) {
         return ok(...linhas);
       }
       case 'exportar': {
-        const texto = compras.textoDaLista(compras.listaDoMes(store));
-        if (!ref) return ok(...texto.split('\n').map((t) => L('texto', t)));
-        const destino = path.resolve(deps.cwd || process.cwd(), ref);
-        fs.writeFileSync(destino, `${texto}\n`, { flag: 'wx' });
+        const mes = compras.listaDoMes(store);
+        if (!Object.keys(mes.porSecao).length) return falha('A lista está vazia: adicione itens com "gemini-code compras add".');
+        const texto = compras.textoDaLista(mes);
+        const nome = typeof f.saida === 'string' ? f.saida : ref;
+        if (f.saida === true) return falha('Uso: gemini-code compras exportar [lista.txt]   (ou --saida lista.txt)');
+        if (!nome) return ok(...texto.split('\n').map((t) => L('texto', t)));
+        if (nome.startsWith('-')) return falha(`Nome de arquivo inválido: "${nome}" (não pode começar com "-").`);
+        const destino = path.resolve(deps.cwd || process.cwd(), nome);
+        const { isProtected, isSecret } = require('./tools/protectedPaths');
+        if (isProtected(destino) || isSecret(destino)) return falha('Esse caminho é protegido do gemini-code; escolha outro lugar.');
+        try {
+          fs.writeFileSync(destino, `${texto}\n`, { flag: 'wx' });
+        } catch (e) {
+          if (e.code === 'EEXIST') return falha(`Já existe ${destino}; escolha outro nome (nada foi sobrescrito).`);
+          if (e.code === 'ENOENT') return falha(`A pasta de ${destino} não existe.`);
+          throw e;
+        }
         return ok(L('ok', `Lista salva em ${destino}`));
       }
       case 'ifood': {
