@@ -19,3 +19,4 @@
 - Inclui o botão "Parar" clicado num Chromium de verdade e um servidor falso que vê a conexão cair.
 - Contra o código antigo, esses testes falham ou travam.
 - Suíte inteira: 986 no Node 20 e no 22, e no fuso de São Paulo (985 passando, 1 pulado como root). ESLint 0 problemas.
+- CI (commit 2cb9021): 986/986 nos Node 20, 22 e 24, nenhum pulado.

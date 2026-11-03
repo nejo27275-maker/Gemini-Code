@@ -30,7 +30,8 @@ respondendo".
 - Rodados contra o código antigo, falham ou travam esperando um "Parar" que nunca chegava.
 
 **Testes:** 986 (985 passando, 1 pulado como root) no Node 20 e no 22 — e a suíte inteira também no fuso de São Paulo.
-ESLint 0 problemas. Prints do botão "Parar" no PC e no celular, sem erro de JavaScript na página.
+ESLint 0 problemas. Prints do botão "Parar" no PC e no celular, sem erro de JavaScript na página. **CI (commit 2cb9021):**
+986/986 nos Node 20, 22 e 24, nenhum pulado — inclusive o botão "Parar" clicado no Chrome do GitHub.
 
 ## 0.48.0 — modo site: conversa por voz com a esfera
 
