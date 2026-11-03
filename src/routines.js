@@ -212,13 +212,40 @@ function validarAcaoLembrete(action) {
   return { type: 'lembrete', titulo: titulo || 'Lembrete', texto };
 }
 
+// v0.47.0: rotina "rede" — um post agendado nas redes sociais (src/redes.js). Quem cria aprova o texto, as redes e a
+// foto (o terminal mostra e pergunta); na hora, publica sem perguntar, UMA vez (nunca repete: sairia duplicado), com as
+// mesmas travas do terminal (limite de cada rede, anti-repetição, teto diário).
+const MAX_TEXTO_REDE = 5000;
+
+function validarAcaoRede(action) {
+  const { REDES, limparTexto } = require('./redes');
+  const lista = Array.isArray(action.redes) ? action.redes : [];
+  const redes = [...new Set(lista.map((r) => String(r || '').trim().toLowerCase()).filter(Boolean))];
+  if (!redes.length || redes.some((r) => !Object.prototype.hasOwnProperty.call(REDES, r))) {
+    throw new Error(`O post agendado precisa das redes onde publicar (com conta): ${Object.keys(REDES).join(', ')}.`);
+  }
+  const texto = limparTexto(action.texto);
+  const foto = typeof action.foto === 'string' && action.foto.trim() ? path.resolve(action.foto.trim()) : '';
+  const fotoUrl = typeof action.fotoUrl === 'string' ? action.fotoUrl.trim() : '';
+  if ((!texto && !foto && !fotoUrl) || texto.length > MAX_TEXTO_REDE) {
+    throw new Error(`O post agendado precisa de um texto com até ${MAX_TEXTO_REDE} caracteres (ou de uma foto).`);
+  }
+  const out = { type: 'rede', redes, texto };
+  if (foto) out.foto = foto;
+  if (fotoUrl) out.fotoUrl = fotoUrl;
+  const alt = limparTexto(action.alt).slice(0, 1000);
+  if (alt) out.alt = alt;
+  return out;
+}
+
 function validarAcao(action) {
   if (!action || typeof action !== 'object' || Array.isArray(action)) throw new Error('A rotina precisa de uma ação válida.');
   if (action.type === 'agente') return validarAcaoAgente(action);
   if (action.type === 'adb') return validarAcaoAdb(action);
   if (action.type === 'lembrete') return validarAcaoLembrete(action);
+  if (action.type === 'rede') return validarAcaoRede(action);
   if (action.type !== 'http-check') {
-    throw new Error('Ação inválida. Use http-check (verificar um site), agente (o agente faz uma tarefa sozinho), adb (comandos para a TV/celular) ou lembrete (uma notificação no horário).');
+    throw new Error('Ação inválida. Use http-check (verificar um site), agente (o agente faz uma tarefa sozinho), adb (comandos para a TV/celular), lembrete (uma notificação no horário) ou rede (um post agendado nas redes sociais).');
   }
   let url;
   try { url = new URL(action.url); } catch { throw new Error('URL inválida para a ação http-check.'); }
@@ -292,7 +319,7 @@ function createRoutineStore({ dataPath = ROUTINES_PATH, executionsPath = EXECUTI
     if (trigger.type === 'cron') nextRunAt = nextCronDate(trigger.expression, now, trigger.timezone);
     const routine = {
       id, name, description: String(input.description || '').trim().slice(0, 1000),
-      category: String(input.category || ({ agente: 'agente', adb: 'aparelho', lembrete: 'lembrete' }[action.type] || 'monitoramento')).trim().slice(0, 60) || 'monitoramento',
+      category: String(input.category || ({ agente: 'agente', adb: 'aparelho', lembrete: 'lembrete', rede: 'redes' }[action.type] || 'monitoramento')).trim().slice(0, 60) || 'monitoramento',
       priority: ['baixa', 'normal', 'alta', 'critica'].includes(input.priority) ? input.priority : 'normal',
       trigger, action, status: STATUSES.DRAFT, createdAt: nowIso, updatedAt: nowIso,
       nextRunAt, lastRunAt: null, lastResult: null, lastCronSlotKey: null,

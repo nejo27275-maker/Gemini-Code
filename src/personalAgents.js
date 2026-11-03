@@ -59,6 +59,8 @@ const PRESETS = Object.freeze({
   midia: Object.freeze(['imagem', 'camera', 'video', 'web_fetch']),
   // v0.46.0: aliado das compras — a lista do mês (não compra nem paga) e a web para receitas e preços
   compras: Object.freeze(['compras', 'web_fetch']),
+  // v0.47.0: aliado das redes sociais — publica pela ferramenta "redes" (sempre pergunta), cria imagens e confere fontes
+  redes: Object.freeze(['redes', 'imagem', 'web_fetch']),
   completo: null,
 });
 const PRESET_PADRAO = 'pesquisa';

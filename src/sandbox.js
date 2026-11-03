@@ -23,6 +23,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
+const crypto = require('crypto');
 
 const MODOS = Object.freeze(['off', 'auto', 'sempre']);
 
@@ -319,8 +320,12 @@ function montar(comando, {
     if (e.pasta) args.push('--tmpfs', e.caminho, '--remount-ro', e.caminho);
     else args.push('--ro-bind', '/dev/null', e.caminho);
   }
+  // v0.47.0: marca única desta execução nos argumentos (e no ambiente do comando). O bwrap de dentro do namespace é
+  // um fork do de fora (mesma linha de comando): é por ela que matarSandbox acha um órfão que nasceu no meio do encerrar.
+  const id = crypto.randomBytes(8).toString('hex');
+  args.push('--setenv', 'GEMINI_CODE_SANDBOX', id);
   args.push(...flagsIsolamento({ rede, disableUserns: info.disableUserns !== false }), '--chdir', dir, '--seccomp', '3', '--', '/bin/sh', '-c', comando);
-  return { arquivo: info.arquivo, args, env: ambiente(env), gravaveis, avisos, bpf: filtroSeccomp(), rede };
+  return { arquivo: info.arquivo, args, env: ambiente(env), gravaveis, avisos, bpf: filtroSeccomp(), rede, id };
 }
 
 /**
@@ -352,6 +357,36 @@ function matarDescendentes(pid) {
 }
 
 /**
+ * v0.47.0: encerra uma execução da sandbox sem deixar órfão. O bwrap de fora cria o de dentro (pid 1 do namespace) por
+ * fork, sem exec. Se o de fora morresse entre a busca pelos filhos e esse fork, o de dentro ficava órfão — e com ele o
+ * comando — para sempre (o --die-with-parent tem a mesma janela; visto uma vez numa suíte de testes carregada). Agora:
+ * mata os descendentes e o de fora, e por meio segundo varre o /proc atrás de quem carrega a marca desta execução
+ * (`--setenv GEMINI_CODE_SANDBOX <id>` na linha de comando), matando também os descendentes dele.
+ */
+function matarSandbox(pid, id) {
+  matarDescendentes(pid);
+  try { process.kill(pid, 'SIGKILL'); } catch { /* já saiu */ }
+  if (!id) return;
+  const marca = `\0GEMINI_CODE_SANDBOX\0${id}\0`;
+  const varrer = () => {
+    let nomes;
+    try { nomes = fs.readdirSync('/proc'); } catch { return; }
+    for (const n of nomes) {
+      if (!/^\d+$/.test(n) || Number(n) === pid) continue;
+      let cmd;
+      try { cmd = fs.readFileSync(`/proc/${n}/cmdline`, 'utf8'); } catch { continue; }
+      if (!cmd.includes(marca)) continue;
+      matarDescendentes(Number(n));
+      try { process.kill(Number(n), 'SIGKILL'); } catch { /* já saiu */ }
+    }
+  };
+  varrer();
+  let vezes = 0;
+  const relogio = setInterval(() => { varrer(); if (++vezes >= 10) clearInterval(relogio); }, 50);
+  if (relogio.unref) relogio.unref();
+}
+
+/**
  * Roda um comando montado por montar(): o filtro seccomp vai pelo fd 3 (por isso spawn, e não exec), stdin
  * fechado, prazo e limite de saída. Devolve { err, stdout, stderr } com err no formato do exec (null,
  * { code }, { killed: true } ou { code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' }). Nunca lança.
@@ -369,7 +404,7 @@ function rodar(prep, { timeoutMs, maxBuffer = 10 * 1024 * 1024 } = {}) {
     } catch (err) {
       return resolve({ err: { code: err.code || err.message }, stdout: '', stderr: '' });
     }
-    const matar = () => { matarDescendentes(filho.pid); try { filho.kill('SIGKILL'); } catch { /* já saiu */ } };
+    const matar = () => matarSandbox(filho.pid, prep.id);
     const relogio = timeoutMs ? setTimeout(() => { expirou = true; matar(); }, timeoutMs) : null;
     const acabar = (err) => {
       if (terminou) return;
@@ -401,5 +436,5 @@ function descrever({ gravaveis = [], rede = false } = {}) {
 
 module.exports = {
   MODOS, CREDENCIAIS_HOME, LOCAIS_BWRAP, modoDe, filtroSeccomp, acharBwrap, areasDoModelo, verificar, limparCache, flagsIsolamento,
-  areasGravaveis, caminhosEscondidos, ambiente, resumo, montar, rodar, descrever, matarDescendentes,
+  areasGravaveis, caminhosEscondidos, ambiente, resumo, montar, rodar, descrever, matarDescendentes, matarSandbox,
 };

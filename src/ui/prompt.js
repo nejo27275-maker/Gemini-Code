@@ -113,6 +113,52 @@ function perguntarColando(rl, promptText, callback, janelaMs = 150) {
   });
 }
 
+/**
+ * v0.47.0: pergunta segredos (token, senha de app, URL de webhook) SEM mostrar o que é digitado — nem na tela, nem
+ * depois no histórico do shell (por isso não vão como argumento do comando). Sem terminal (stdin de um pipe), lê uma
+ * linha por pergunta: `printf '%s\n' TOKEN | gemini-code redes conectar telegram --chat @canal`.
+ * Numa rotina (perguntas suspensas) ou sem entrada, devolve tudo vazio. Uma pergunta pode ser `{ pergunta, visivel }`
+ * (ex.: o @ do usuário) — vai na mesma sequência, para um stdin de pipe não perder linhas entre duas leituras.
+ */
+function perguntarSegredos(perguntas, { input = process.stdin, output = process.stdout } = {}) {
+  if (suspensas > 0 || semEntrada) return Promise.resolve(perguntas.map(() => ''));
+  closeShared(); // a interface compartilhada também lê o stdin: não pode ecoar o que vai ser digitado
+  const { Writable } = require('stream');
+  let mudo = false;
+  const saida = new Writable({ write(pedaco, cod, pronto) { if (!mudo) output.write(pedaco, cod); pronto(); } });
+  const terminal = Boolean(input.isTTY);
+  const temp = readline.createInterface({ input, output: saida, terminal });
+  return new Promise((resolve) => {
+    const respostas = [];
+    let fechado = false;
+    const fim = () => {
+      if (fechado) return;
+      fechado = true;
+      mudo = false;
+      temp.close();
+      while (respostas.length < perguntas.length) respostas.push('');
+      resolve(respostas);
+    };
+    temp.on('close', fim);
+    temp.on('SIGINT', () => { mudo = false; output.write('\n'); fim(); process.kill(process.pid, 'SIGINT'); });
+    const proxima = () => {
+      if (respostas.length >= perguntas.length) return fim();
+      mudo = false;
+      const atual = perguntas[respostas.length];
+      const texto = typeof atual === 'string' ? atual : String(atual && atual.pergunta);
+      const visivel = Boolean(atual && typeof atual === 'object' && atual.visivel);
+      temp.question(texto, (resposta) => {
+        mudo = false;
+        if (terminal && !visivel) output.write('\n');
+        respostas.push(String(resposta).trim());
+        proxima();
+      });
+      mudo = !visivel; // o texto da pergunta já saiu; o que vier agora (o segredo digitado) não aparece
+    };
+    proxima();
+  });
+}
+
 /** Fecha a interface compartilhada, se existir (uso: saída limpa do processo). */
 function closeShared() {
   if (rl) {
@@ -121,4 +167,4 @@ function closeShared() {
   }
 }
 
-module.exports = { getShared, ask, closeShared, perguntarColando, suspenderPerguntas, perguntasSuspensas };
+module.exports = { getShared, ask, closeShared, perguntarColando, suspenderPerguntas, perguntasSuspensas, perguntarSegredos };

@@ -170,6 +170,9 @@ No modo "chat", digite /help para ver os comandos de sessão (/clear, /model, /s
   gemini-code saude resumo | pagina | aliado   página para a consulta e triagem de emergência (gemini-code saude ajuda)
   gemini-code compras add "arroz 5kg" --qtd 2  Lista de compras do mês por seção, gasto estimado e orçamento
   gemini-code compras mes | ifood              ifood: copia a lista e abre o iFood (o pedido e o pagamento são seus)
+  gemini-code redes conectar bluesky           Redes sociais pelas APIs oficiais (Bluesky, Mastodon, Telegram, Discord, Facebook,
+  gemini-code redes postar "texto" --em a,b    Instagram, Threads, X): publica em várias ao mesmo tempo (pergunta antes),
+  gemini-code redes compartilhar "t" --em whatsapp   abre WhatsApp/LinkedIn/... com o texto pronto, lê menções e agenda posts
   gemini-code imagem gerar|editar|melhorar|descrever   Imagens com IA ou, para melhorar, sem IA (ImageMagick)
   gemini-code video melhorar|slideshow|gerar   Vídeos: melhorar e slideshow no aparelho (ffmpeg); gerar com IA (Veo)
   gemini-code camera foto|analisar|vigiar      Câmera do celular/webcam; vigiar avisa quando algo muda
@@ -911,6 +914,16 @@ async function main() {
       const r = await require('../src/comprasCommands').executar(rest);
       imprimirLinhas(r.linhas);
       if (r.codigo) process.exitCode = r.codigo;
+      return;
+    }
+
+    case 'redes':
+    case 'rede': {
+      // v0.47.0: redes sociais pelas APIs oficiais (src/redes.js, src/redesCommands.js)
+      const r = await require('../src/redesCommands').executar(rest);
+      imprimirLinhas(r.linhas);
+      if (r.codigo) process.exitCode = r.codigo;
+      require('../src/ui/prompt').closeShared();
       return;
     }
 
@@ -1787,7 +1800,9 @@ async function main() {
           }
           let trigger;
           if (flags.every !== undefined) trigger = { type: 'interval', intervalMs: routines.parseDuration(flags.every), timezone };
-          if (flags.at !== undefined) trigger = { type: 'once', runAt: flags.at, timezone };
+          // v0.47.0: --at passa pelo leitor rígido (src/datas.js). Antes ia para o new Date(): "04/11/2026 09:00" virava
+          // 11 de ABRIL (formato americano) e a rotina rodava no dia errado sem aviso.
+          if (flags.at !== undefined) trigger = { type: 'once', runAt: require('../src/datas').lerDataHora(String(flags.at), { futuro: 'obrigatorio' }).toISOString(), timezone };
           if (flags.cron !== undefined) trigger = { type: 'cron', expression: flags.cron, timezone };
           const ferramentas = flags.ferramentas === undefined ? undefined
             : ['nenhuma', 'none', ''].includes(String(flags.ferramentas).trim()) ? [] : String(flags.ferramentas).split(',').map((t) => t.trim()).filter(Boolean);

@@ -258,7 +258,31 @@ async function executeLembrete(routine, { notificarFn = notificarSistema, log = 
   return result;
 }
 
-function createRoutineRunner({ store, maxRetries = 2, baseRetryMs = 500, now = () => new Date(), allowPrivateTargets = process.env.ROUTINE_ALLOW_PRIVATE_TARGETS === '1', agente = {}, adb = {}, lembrete = {} } = {}) {
+// ---------------------------------------------------------------------------
+// v0.47.0: ação "rede" — o post agendado (src/redes.js). Publica uma vez, sem perguntar (aprovado ao criar) e nunca
+// repete (sairia duplicado). Uma rede que falha aparece no resultado; se nenhuma deu certo, a execução falha.
+// ---------------------------------------------------------------------------
+async function executeRede(routine, { store, cliente, log = (m) => console.log(m) } = {}) {
+  const { paraTerminal } = require('./ui/textoSeguro');
+  const redes = require('./redes');
+  const action = require('./routines').validarAcao(routine.action);
+  const started = Date.now();
+  const s = store || redes.createRedesStore();
+  const plano = redes.planejar({ texto: action.texto, redes: action.redes, foto: action.foto, fotoUrl: action.fotoUrl, alt: action.alt }, { store: s });
+  const resultados = await redes.publicar(plano, { store: s, ...(cliente ? { cliente } : {}) });
+  for (const r of resultados) log(`[rede] ${r.nome}: ${r.ok ? `publicado ${r.url || ''}` : `não publicou — ${paraTerminal(r.erro)}`}`);
+  const feitos = resultados.filter((r) => r.ok);
+  const falhas = resultados.filter((r) => !r.ok);
+  const message = [feitos.length ? `Publicado em ${feitos.map((r) => r.nome).join(', ')}.` : '', falhas.map((r) => `${r.nome}: ${r.erro}`).join(' ')].filter(Boolean).join(' ');
+  const result = {
+    ok: falhas.length === 0, message, publicados: feitos.map((r) => ({ rede: r.rede, url: r.url })),
+    falhas: falhas.map((r) => ({ rede: r.rede, erro: r.erro })), durationMs: Date.now() - started, checkedAt: new Date().toISOString(),
+  };
+  if (!feitos.length) throw Object.assign(new Error(message || 'Nada foi publicado.'), { result });
+  return result;
+}
+
+function createRoutineRunner({ store, maxRetries = 2, baseRetryMs = 500, now = () => new Date(), allowPrivateTargets = process.env.ROUTINE_ALLOW_PRIVATE_TARGETS === '1', agente = {}, adb = {}, lembrete = {}, rede = {} } = {}) {
   if (!store) throw new Error('O executor precisa de um armazenamento de rotinas.');
   const inFlight = new Set();
 
@@ -286,6 +310,7 @@ function createRoutineRunner({ store, maxRetries = 2, baseRetryMs = 500, now = (
           else if (routine.action.type === 'agente') result = await executeAgente(routine, agente);
           else if (routine.action.type === 'adb') result = await executeAdb(routine, adb);
           else if (routine.action.type === 'lembrete') result = await executeLembrete(routine, lembrete);
+          else if (routine.action.type === 'rede') result = await executeRede(routine, rede);
           else throw new Error(`Executor não implementado: ${routine.action.type}`);
           execution.attempts.push({ number: attempt + 1, ok: true, finishedAt: now().toISOString() });
           break;
@@ -369,4 +394,4 @@ function createRoutineRunner({ store, maxRetries = 2, baseRetryMs = 500, now = (
   return { execute, tick, start, inFlight };
 }
 
-module.exports = { createRoutineRunner, executeHttpCheck, executeAgente, executeAdb, executeLembrete, notificarSistema, ensurePublicTarget, privateAddress, zonedMinuteKey, INSTRUCAO_ROTINA };
+module.exports = { createRoutineRunner, executeHttpCheck, executeAgente, executeAdb, executeLembrete, executeRede, notificarSistema, ensurePublicTarget, privateAddress, zonedMinuteKey, INSTRUCAO_ROTINA };

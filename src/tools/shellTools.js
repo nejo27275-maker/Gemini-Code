@@ -144,7 +144,8 @@ function grupoTemProcessoNaoZumbi(pgid) {
 }
 
 function encerrarGrupo(item) {
-  if (item.sandbox) sandbox.matarDescendentes(item.filho.pid);
+  // v0.47.0: matarSandbox também pega o bwrap de dentro que nasceu órfão no meio do encerrar (ver src/sandbox.js)
+  if (item.sandbox) sandbox.matarSandbox(item.filho.pid, item.sbxId);
   if (process.platform === 'win32') {
     if (item.codigo === null) { try { item.filho.kill('SIGTERM'); } catch { /* já saiu */ } }
     return;
@@ -170,7 +171,7 @@ function iniciarSegundoPlano(command, cwd, prep = null) {
     : spawn(command, { shell: true, cwd: cwd || undefined, detached: process.platform !== 'win32', stdio: ['ignore', fd, fd] });
   fs.closeSync(fd);
   if (prep) { filho.stdio[3].on('error', () => { /* bwrap saiu antes de ler o filtro */ }); filho.stdio[3].end(prep.bpf); }
-  const item = { id, command, log, filho, inicio: Date.now(), codigo: null, sandbox: Boolean(prep) };
+  const item = { id, command, log, filho, inicio: Date.now(), codigo: null, sandbox: Boolean(prep), sbxId: prep ? prep.id : null };
   filho.on('exit', (codigo, sinal) => { item.codigo = codigo === null ? `sinal ${sinal}` : codigo; });
   filho.on('error', (err) => { item.codigo = `erro: ${err.message}`; });
   segundoPlano.set(id, item);

@@ -47,6 +47,7 @@ const DESCRICAO_PRESETS = {
   saude: 'diário de saúde (anota e consulta medições, sintomas e remédios; só este aliado lê) + web para conferir fontes',
   midia: 'cria e melhora imagens e vídeos, e usa a câmera (pergunta toda vez) + web',
   compras: 'cuida da lista de compras do mês (não compra nem paga) + web',
+  redes: 'escreve e publica nas suas redes sociais (sempre pergunta antes de publicar), cria imagens + web',
   completo: 'todas as ferramentas da sessão (grava arquivos e roda comandos, com as confirmações de sempre)',
 };
 

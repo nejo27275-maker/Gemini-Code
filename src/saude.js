@@ -334,54 +334,13 @@ function createSaudeStore({ arquivo, clock = () => new Date() } = {}) {
 
 const DATA_INVALIDA = 'Data inválida em "quando": use 2026-11-02 08:00, 02/11/2026 08:00, 02/11 8h, "hoje 8h" ou "ontem 20h30".';
 
-/** Uma data no relógio local, conferindo que dia/mês/hora existem (o Date "conserta" 31/02 para 03/03 sem avisar). */
-function dataLocal(ano, mes, dia, h = 0, min = 0, seg = 0) {
-  const d = new Date(ano, mes - 1, dia, h, min, seg);
-  if (d.getFullYear() !== ano || d.getMonth() !== mes - 1 || d.getDate() !== dia || d.getHours() !== h || d.getMinutes() !== min) erro(DATA_INVALIDA);
-  return d;
-}
-
 /**
  * v0.46.1: o "quando" de uma anotação. Antes ia direto para new Date(), que adivinha: "02/11/2026" virava 11 de
  * FEVEREIRO (formato americano), "2026-02-31" virava 3 de março, "-1" virava 2001 e o número -1, 31/12/1969.
- * Agora só valem: 2026-11-02[ 08:00[:00]][Z|-03:00], 02/11[/2026][ 8h|08:00|20h30] e hoje/ontem/anteontem[ 8h].
- * Sem fuso, é a hora local deste aparelho. Lança Error.
+ * v0.47.0: o leitor rígido virou src/datas.js (as rotinas e o post agendado usam o mesmo). Aqui: nada no futuro.
  */
 function lerQuando(valor, agora = new Date()) {
-  if (typeof valor !== 'string' || !valor.trim()) erro(DATA_INVALIDA);
-  const s = semAcentos(valor.trim().toLowerCase()).replace(/\s+/g, ' ').replace(/ (as|a) /, ' ');
-  const hora = (hh, mm) => [hh === undefined ? 0 : Number(hh), mm === undefined ? 0 : Number(mm)];
-  let m = /^(\d{4})-(\d{2})-(\d{2})(?:[ t](\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,3})?)?)?(?: ?(z|[+-]\d{2}:?\d{2}))?$/.exec(s);
-  let data;
-  if (m) {
-    const [ano, mes, dia] = [Number(m[1]), Number(m[2]), Number(m[3])];
-    const [h, min] = hora(m[4], m[5]);
-    const seg = m[6] === undefined ? 0 : Number(m[6]);
-    if (m[7]) {
-      // com fuso: confere os números no próprio fuso e converte
-      const off = m[7] === 'z' ? 0 : (m[7][0] === '-' ? -1 : 1) * (Number(m[7].slice(1, 3)) * 60 + Number(m[7].slice(-2)));
-      const utc = new Date(Date.UTC(ano, mes - 1, dia, h, min, seg));
-      if (utc.getUTCFullYear() !== ano || utc.getUTCMonth() !== mes - 1 || utc.getUTCDate() !== dia || utc.getUTCHours() !== h || utc.getUTCMinutes() !== min || Math.abs(off) > 14 * 60) erro(DATA_INVALIDA);
-      data = new Date(utc.getTime() - off * 60000);
-    } else {
-      data = dataLocal(ano, mes, dia, h, min, seg);
-    }
-  } else if ((m = /^(\d{1,2})\/(\d{1,2})(?:\/(\d{2}|\d{4}))?(?:,? (\d{1,2})(?:[:h](\d{2}))?h?)?$/.exec(s))) {
-    const ano = m[3] === undefined ? agora.getFullYear() : m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]);
-    data = dataLocal(ano, Number(m[2]), Number(m[1]), ...hora(m[4], m[5]));
-  } else if ((m = /^(hoje|ontem|anteontem)(?: (\d{1,2})(?:[:h](\d{2}))?h?)?$/.exec(s))) {
-    const recuo = { hoje: 0, ontem: 1, anteontem: 2 }[m[1]];
-    const base = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate() - recuo);
-    const [h, min] = m[2] === undefined ? [agora.getHours(), agora.getMinutes()] : hora(m[2], m[3]);
-    data = dataLocal(base.getFullYear(), base.getMonth() + 1, base.getDate(), h, min);
-  } else if (s === 'agora') {
-    data = new Date(agora.getTime());
-  } else {
-    erro(DATA_INVALIDA);
-  }
-  if (data.getTime() > agora.getTime() + 5 * 60000) erro('A data não pode estar no futuro.');
-  if (data.getFullYear() < 1900) erro(DATA_INVALIDA);
-  return data;
+  return require('./datas').lerDataHora(valor, { agora, futuro: 'proibido', erroFormato: DATA_INVALIDA });
 }
 
 /** "8", "08:00", "8h30", "20h" -> "08:00". Lança Error. */

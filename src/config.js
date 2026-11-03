@@ -23,6 +23,10 @@ const ROUTINES_PATH = path.join(HOME_DIR, 'routines.json'); // v0.44.0: em PROTE
 // v0.46.0: dados de saúde (src/saude.js) — pessoais e sensíveis: só pelas ferramentas saude_*, nunca por read_file etc.
 const SAUDE_DIR = path.join(HOME_DIR, 'saude');
 const SAUDE_PATH = path.join(SAUDE_DIR, 'saude.json');
+// v0.47.0: credenciais das redes sociais (src/redes.js): tokens, senhas de app, URL de webhook. Pasta inteira, para
+// cobrir também os temporários da gravação (redes.json.tmp-PID).
+const REDES_DIR = path.join(HOME_DIR, 'redes');
+const REDES_PATH = path.join(REDES_DIR, 'redes.json');
 
 // Arquivos que o modelo nunca pode gravar sozinho (write_file/edit_file) e que
 // forçam confirmação no run_shell. Cada um, se reescrito, dá ao modelo mais
@@ -52,11 +56,12 @@ const PROTECTED_PATHS = Object.freeze([
 // instruções e as ferramentas que ele recebe, a memória que entra no prompt de toda conversa com ele
 // e o histórico. Se o modelo pudesse gravar ali, plantaria instruções ou se daria ferramentas para as
 // próximas sessões; a memória só muda pela ferramenta memory_save (que pergunta ao usuário por padrão).
-const PROTECTED_DIRS = Object.freeze([ALIADOS_DIR, SAUDE_DIR]);
+const PROTECTED_DIRS = Object.freeze([ALIADOS_DIR, SAUDE_DIR, REDES_DIR]);
 
 // v0.46.0: pastas inteiras que o modelo nem LÊ pelas ferramentas de arquivo (read_file, search_files, read_skill,
 // imagem): dados de saúde. O aliado de saúde lê pelas ferramentas saude_*, que só existem para ele.
-const SECRET_DIRS = Object.freeze([SAUDE_DIR]);
+// v0.47.0: e as credenciais das redes sociais — o modelo publica pela ferramenta "redes", que nunca devolve um token.
+const SECRET_DIRS = Object.freeze([SAUDE_DIR, REDES_DIR]);
 
 // v0.41.0: destes o modelo nem LÊ (read_file, search_files, read_skill): guardam a API
 // key em texto puro, segredos de servidores MCP ou tokens que dão o agente inteiro pela
@@ -323,6 +328,8 @@ module.exports = {
   ROUTINES_PATH,
   SAUDE_DIR,
   SAUDE_PATH,
+  REDES_DIR,
+  REDES_PATH,
   PROTECTED_PATHS,
   PROTECTED_DIRS,
   SECRET_PATHS,
