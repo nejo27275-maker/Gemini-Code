@@ -17,7 +17,7 @@
   - `routines create --at` lia "04/11/2026" como 11 de abril;
   - o bwrap de dentro podia ficar órfão ao encerrar um comando da sandbox;
   - o temporário dos arquivos com segredo nascia 0644 por um instante.
-- **Testes:** novos: `redes` (17), `adbTela` (7), `computador` (9), `desafios` (7), `v047` (3), mais o navegador (2). Estresse das ferramentas novas: 24.094 chamadas, 0 problemas.
+- **Testes:** novos: `redes` (17), `adbTela` (7), `computador` (9), `desafios` (7), `v047` (3), mais o navegador (2). Estresse das ferramentas novas: 24.094 chamadas, 0 problemas. Total: 964 testes no Node 20 e 22 (963 passando, 1 pulado como root); CI verde nos Node 20, 22 e 24 (964/964 no Node 22).
 - **Não testado aqui:**
   - **Redes de verdade:** usei um servidor falso que imita cada API, e a assinatura do X foi conferida com o exemplo oficial.
   - **Tela de computador de verdade e Mac/Windows:** os comandos foram conferidos e a execução testada com programas falsos.

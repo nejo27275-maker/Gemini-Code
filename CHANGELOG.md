@@ -46,7 +46,7 @@ Base: a 0.46.1 (mesmo branch, ainda sem PR).
 
 **Estresse:** 24.094 chamadas às ferramentas novas com argumentos ruins: 0 problemas no fim.
 
-**Testes:** 964 (963 passando, 1 pulado como root) no Node 20 e no 22, com a sandbox e o ImageMagick/ffmpeg de verdade. Novos: `redes` (17), `adbTela` (7), `computador` (9), `desafios` (7), `v047` (3), navegador (+2). ESLint 0 problemas.
+**Testes:** 964 (963 passando, 1 pulado como root) no Node 20 e no 22, com a sandbox e o ImageMagick/ffmpeg de verdade. Novos: `redes` (17), `adbTela` (7), `computador` (9), `desafios` (7), `v047` (3), navegador (+2). ESLint 0 problemas. **CI (commit 7648c9a):** verde nos Node 20, 22 e 24 — 964/964 no Node 22, nenhum pulado.
 
 **NetoLang:** este repositório só tem o modelo em branco (`knowledge-exemplo/netolang.md`). Não há outra versão da linguagem aqui para atualizar.
 
