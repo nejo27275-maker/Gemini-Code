@@ -176,6 +176,7 @@ No modo "chat", digite /help para ver os comandos de sessão (/clear, /model, /s
   gemini-code computador status | tela | clicar X Y   Usa o computador como você: print, mouse, teclado e janelas (Linux, Mac, Windows)
   gemini-code adb ui | tocar "Enviar" | deslizar cima  Celular/TV: lê o que está na tela e toca pelo texto do botão
   gemini-code desafio criar "30 dias de caminhada"  Desafios: lembrete diário, marcar o dia, sequência e postar o progresso
+  gemini-code site --abrir [--aliado central]  Modo site: conversa por VOZ no navegador, com a esfera animada (só neste aparelho)
   gemini-code imagem gerar|editar|melhorar|descrever   Imagens com IA ou, para melhorar, sem IA (ImageMagick)
   gemini-code video melhorar|slideshow|gerar   Vídeos: melhorar e slideshow no aparelho (ffmpeg); gerar com IA (Veo)
   gemini-code camera foto|analisar|vigiar      Câmera do celular/webcam; vigiar avisa quando algo muda
@@ -917,6 +918,43 @@ async function main() {
       const r = await require('../src/comprasCommands').executar(rest);
       imprimirLinhas(r.linhas);
       if (r.codigo) process.exitCode = r.codigo;
+      return;
+    }
+
+    case 'site':
+    case 'web':
+    case 'painel': {
+      // v0.48.0: modo site — conversar com o agente pelo navegador, por texto ou voz, com a esfera animada (src/site/)
+      const USO = 'Uso: gemini-code site [--abrir] [--porta 8765] [--aliado NOME]   (porta 0 = qualquer uma livre)';
+      const flags = { _: [] };
+      for (let i = 0; i < rest.length; i++) {
+        if (rest[i] === '--abrir') flags.abrir = true;
+        else if (rest[i].startsWith('--') && i + 1 < rest.length) flags[rest[i].slice(2)] = rest[++i];
+        else flags._.push(rest[i]);
+      }
+      if (['ajuda', 'help', '--help'].includes(flags._[0])) { console.log(USO); return; }
+      const porta = flags.porta === undefined ? 8765 : Number(flags.porta);
+      if (!Number.isInteger(porta) || porta < 0 || porta > 65535) { console.error(chalk.red(`Erro: --porta inválida. ${USO}`)); process.exitCode = 1; return; }
+      const site = require('../src/site/servidor');
+      let aliado = null;
+      if (flags.aliado !== undefined) {
+        const store = personalAgents.defaultStore;
+        let agente = null;
+        try { agente = store.carregar(String(flags.aliado)); } catch { /* nome inválido */ }
+        if (!agente) { console.error(chalk.red(`Erro: aliado "${paraTerminal(String(flags.aliado))}" não encontrado. Veja os seus com: gemini-code aliados listar`)); process.exitCode = 1; return; }
+        aliado = { store, agente };
+      }
+      const s = site.criarServidorSite({ conversar: site.conversarComAgente({ aliado }), log: (m) => console.log(chalk.dim(paraTerminal(m))) });
+      s.servidor.on('error', (e) => {
+        console.error(chalk.red(`Erro: ${e.code === 'EADDRINUSE' ? `a porta ${porta} está em uso (use --porta 8766, ou --porta 0 para qualquer uma livre)` : e.message}`));
+        process.exitCode = 1;
+      });
+      s.servidor.listen(porta, '127.0.0.1', async () => {
+        const url = s.endereco();
+        console.log(chalk.green(`Modo site${aliado ? ` com o aliado "${aliado.agente.name}"` : ''}: ${url}`));
+        console.log(chalk.dim('Só neste aparelho (127.0.0.1). A chave no fim do endereço (#t=...) muda a cada vez: não compartilhe. Voz: Chrome ou Edge. As confirmações das ferramentas aparecem na página. Ctrl+C para parar.'));
+        if (flags.abrir && !(await require('../src/abrir').abrir(url))) console.log(chalk.dim('Não consegui abrir o navegador sozinho: copie o endereço acima.'));
+      });
       return;
     }
 

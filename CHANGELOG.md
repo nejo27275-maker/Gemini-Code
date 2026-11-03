@@ -1,3 +1,37 @@
+## 0.48.0 — modo site: conversa por voz com a esfera
+
+Base: a 0.47.0 (mesmo branch, ainda sem PR).
+
+**Novo: `gemini-code site`** (`src/site/`, guia `docs/MODO_SITE.md`): uma página no navegador para conversar com o agente por voz ou texto.
+- **A esfera** (canvas, desenho próprio no estilo dos assistentes de filmes de ficção): núcleo brilhante com volume, anéis e arcos que giram, uma moldura com marcações, partículas em órbita e um **círculo de 120 risquinhos que reagem ao som**. Cada estado tem um visual:
+  - ouvindo: os risquinhos seguem o espectro do microfone;
+  - pensando: violeta, com uma onda girando;
+  - falando: pulsa a cada palavra;
+  - pedindo permissão: âmbar.
+- **Voz:** usa o próprio navegador (Chrome ou Edge, no PC ou no Android): reconhecimento de fala em português e leitura das respostas sem os blocos de código.
+- **Controles:**
+  - modo **contínuo**, para conversar sem as mãos;
+  - teclas espaço (falar) e Esc (parar);
+  - histórico da sessão e campo de texto.
+- **Resposta:** aparece aos poucos, enquanto chega, e a ferramenta em uso aparece na tela.
+- **Permissões das ferramentas na própria página:** "Sim", "Não" ou outra resposta. Sem resposta em 2 min, ou com a página fechada, conta como "não".
+- **`--aliado NOME`:** conversa com um aliado (ex.: `central`, para comandar computador, celular, sites e redes pela voz), com o alerta de emergência da saúde na tela.
+- **Segurança:**
+  - **Endereço:** só `127.0.0.1`.
+  - **Chave por execução:** vai no fragmento do endereço (não vai para log) e sai da barra de endereço.
+  - **Outros sites:** Host conferido (contra DNS rebinding), Origin conferida e nunca CORS.
+  - **Página:** CSP fechada (só os três arquivos do próprio servidor), sem moldura, e todo texto do modelo entra como texto.
+  - **Limites:** uma conversa por vez; mensagem de até 4.000 caracteres; corpo do pedido de até 64 KB.
+- **Por dentro:** `src/ui/prompt.js` ganhou `definirPerguntador`, por onde as confirmações vão para a página (uma rotina rodando continua com prioridade). `runOnce` ganhou `onFerramenta`.
+
+**Verificado:**
+- `tests/site.test.js` (8): segurança, conversa, confirmações, aliado e **a página num Chromium de verdade**, conversando com um agente falso.
+- Prints de todos os estados, no PC e no celular, com a voz simulada.
+
+**Limites:** este ambiente não tem microfone nem alto-falante, então a voz foi testada simulada no navegador. O reconhecimento real depende do Chrome/Edge e usa a internet.
+
+**Testes:** 972 (971 passando, 1 pulado como root) no Node 20 e no 22 — e a suíte inteira também no fuso de São Paulo (`TZ=America/Sao_Paulo`), além do UTC do CI. ESLint 0 problemas.
+
 ## 0.47.0 — redes sociais, celular e computador pela tela, sites e desafios
 
 Base: a 0.46.1 (mesmo branch, ainda sem PR).

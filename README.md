@@ -60,6 +60,19 @@ O modelo GGUF é o mesmo, mas os históricos e as memórias do CLI e do app aind
   faz uma tarefa sozinho no horário marcado e avisa por notificação.
 - **Saúde, compras, imagem, vídeo, câmera, TV e criar site/app** (v0.46.0): veja abaixo.
 - **Redes sociais, controle do celular/computador/sites e desafios** (v0.47.0): veja abaixo, `docs/REDES_SOCIAIS.md` e `docs/CONTROLE.md`.
+- **Modo site com voz** (v0.48.0): `gemini-code site --abrir` — converse falando, com a esfera animada (`docs/MODO_SITE.md`).
+
+## Modo site: conversa por voz com a esfera — v0.48.0
+
+```bash
+gemini-code site --abrir                    # abre a página no navegador (só neste aparelho)
+gemini-code site --aliado central --abrir   # pela voz: computador, celular/TV, sites, redes e desafios
+```
+
+Uma esfera brilhante com anéis e um círculo de risquinhos que reagem à sua voz (ouvindo), giram em violeta (pensando),
+pulsam com a fala (respondendo) e ficam âmbar quando o agente precisa da sua permissão — que você dá **na própria
+página**. Microfone com **espaço**, **Esc** para parar, modo **contínuo** para conversar sem as mãos. Voz pelo Chrome ou
+Edge (PC ou Android). O servidor só atende em `127.0.0.1`, com uma chave nova a cada vez. Guia: `docs/MODO_SITE.md`.
 
 ## Redes sociais, celular, computador, sites e desafios — v0.47.0
 

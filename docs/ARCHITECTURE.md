@@ -57,6 +57,10 @@ documento é sobre como o código por trás disso está organizado.
   `src/datas.js` (data digitada por uma pessoa, sem adivinhar). Ferramentas sob demanda novas: `redes`,
   `computador`, `desafio`; o `adb` ganhou `ui`/`tocar`/`deslizar`/`segurar` e o `browser`, `selecionar`/`esperar`,
   janela visível e o aviso de verificação humana. Guia de controle: `docs/CONTROLE.md`.
+- **v0.48.0** — `src/site/servidor.js` + `src/site/publico/` (modo site: servidor local com chave por execução,
+  Host/Origin conferidos e CSP fechada; a página com a esfera animada em canvas, reconhecimento e síntese de voz do
+  navegador e a conversa em eventos NDJSON; as confirmações das ferramentas chegam à página pelo
+  `definirPerguntador` de `src/ui/prompt.js`). Guia: `docs/MODO_SITE.md`.
 - **`src/routineRunner.js`** — executor das rotinas: `http-check` e, desde a v0.44.0,
   `agente` (o agente roda sozinho; `src/ui/prompt.js` responde "não" a toda confirmação).
 - Os provedores `llamacpp`, `ollama` e `openai` pedem **sempre** em streaming; o
@@ -208,6 +212,7 @@ extra). Cobertura atual:
 | computador: comandos de Linux X11/Wayland, macOS e Windows; execução com programas falsos; abrir sem rodar comando; ferramenta que pergunta (v0.47.0) | `computador.test.js` |
 | desafios: progresso, sequência, calendário, lembrete que se encerra, postar o progresso, ferramenta (v0.47.0) | `desafios.test.js` |
 | sandbox sem órfão no encerrar, marca única por execução, `--at` das rotinas sem adivinhar a data (v0.47.0) | `v047.test.js` |
+| modo site: segurança do servidor (chave, Origin, Host/DNS rebinding, CORS, CSP, tamanhos), conversa em eventos, uma por vez, confirmações na página (expiram em "não"), aliado, e a página num Chromium de verdade (v0.48.0) | `site.test.js` |
 | hooks `UserPromptSubmit`, `SessionStart`, `Stop` | `hooksEventos.test.js` |
 | subagentes do usuário (`.md`) | `subagentesDoUsuario.test.js` |
 | anti-SSRF com IPv6 (`privateAddress`) e DNS rebinding nas rotinas (`src/redeSegura.js`) | `ssrfIpv6.test.js` |

@@ -197,7 +197,8 @@ function podarHistorico(convo) {
  */
 async function runOnce(userMessage, opts = {}) {
   // `imagens` (v0.41.0): [{ inlineData: {mimeType, data} }] de src/imagens.js, enviadas junto com a mensagem.
-  const { history = [], modelName, extraSystemInstruction, allowedTools, onText, deps = {}, maxSteps = 60, logPrefix = '', imagens = [] } = opts;
+  // `onFerramenta` (v0.48.0): avisa o nome de cada ferramenta usada (o modo site mostra na tela)
+  const { history = [], modelName, extraSystemInstruction, allowedTools, onText, onFerramenta, deps = {}, maxSteps = 60, logPrefix = '', imagens = [] } = opts;
   const loadConfigFn = deps.loadConfig || loadConfig;
   const chatWithToolsFn = deps.chatWithTools || chatWithTools;
   const getAllDeclarationsFn = deps.getAllDeclarations || tools.getAllDeclarations;
@@ -282,6 +283,7 @@ async function runOnce(userMessage, opts = {}) {
     // Executa UMA chamada e devolve o functionResponse correspondente.
     const executarChamada = async (call) => {
       console.log(chalk.dim(`\n${logPrefix}→ usando ferramenta: ${paraTerminal(call.name)}(${paraTerminal(JSON.stringify(call.args))})`));
+      if (typeof onFerramenta === 'function') { try { onFerramenta(String(call.name)); } catch { /* quem ouve não derruba o agente */ } }
       let result;
       let ap;
       // v0.41.0: regras "negar" do config (src/permissions.js) valem antes de tudo.

@@ -42,6 +42,17 @@ function suspenderPerguntas() {
 /** v0.45.0: há uma rotina rodando (ninguém para responder)? O run_shell usa a sandbox em vez de recusar. */
 function perguntasSuspensas() { return suspensas > 0; }
 
+// v0.48.0: modo site (src/site/servidor.js) — durante uma conversa pela página, as confirmações das ferramentas vão
+// para a página (a pessoa responde lá), não para o terminal. Uma rotina rodando (suspensas) continua tendo prioridade.
+let perguntadorExterno = null;
+/** Liga um perguntador (pergunta -> Promise<resposta>); devolve a função que volta ao anterior. */
+function definirPerguntador(fn) {
+  const antes = perguntadorExterno;
+  perguntadorExterno = typeof fn === 'function' ? fn : null;
+  let desfeito = false;
+  return () => { if (!desfeito) { desfeito = true; perguntadorExterno = antes; } };
+}
+
 function getShared() {
   if (!rl) {
     const atual = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -57,6 +68,11 @@ function getShared() {
 /** Pergunta algo e devolve a resposta (trim), usando a interface compartilhada. */
 function ask(question) {
   return new Promise((resolve) => {
+    if (suspensas === 0 && perguntadorExterno) {
+      const fn = perguntadorExterno;
+      Promise.resolve().then(() => fn(String(question))).then((r) => resolve(String(r ?? '').trim()), () => resolve(''));
+      return;
+    }
     if (suspensas > 0 || semEntrada) {
       process.stdout.write(`${question}\n${suspensas > 0 ? AVISO_ROTINA : AVISO_SEM_ENTRADA}`);
       return resolve('');
@@ -167,4 +183,4 @@ function closeShared() {
   }
 }
 
-module.exports = { getShared, ask, closeShared, perguntarColando, suspenderPerguntas, perguntasSuspensas, perguntarSegredos };
+module.exports = { getShared, ask, closeShared, perguntarColando, suspenderPerguntas, perguntasSuspensas, perguntarSegredos, definirPerguntador };
