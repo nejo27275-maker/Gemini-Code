@@ -285,3 +285,49 @@ test('navegador real: print só cria .png novo fora das áreas protegidas; fecha
   assert.equal(fs.existsSync(path.join(os.tmpdir(), novos[0])), false, 'perfil apagado e não recriado');
   assert.match(await f.execute('browser', { acao: 'ler' }), /Nenhuma página aberta/);
 });
+
+// ---------------------------------------------------------------------------
+// v0.47.0: selecionar, esperar, verificação humana (para e pede à pessoa), janela visível
+// ---------------------------------------------------------------------------
+
+test('navegador: com janela (visível) o Chrome sobe sem --headless; o resto das travas é igual', () => {
+  const { argsDoChrome } = require('../src/navegador');
+  const sem = argsDoChrome({ perfil: '/p', portaProxy: 9, visivel: false, root: false });
+  const com = argsDoChrome({ perfil: '/p', portaProxy: 9, visivel: true, root: false });
+  assert.ok(sem.includes('--headless=new'));
+  assert.ok(!com.includes('--headless=new'));
+  for (const a of ['--remote-debugging-pipe', '--proxy-server=http://127.0.0.1:9', '--disable-extensions', '--disable-quic']) assert.ok(com.includes(a), a);
+  const configCommands = require('../src/configCommands');
+  const salvos = [];
+  assert.match(configCommands.aplicar('set-navegador-visivel', ['on'], (x) => salvos.push(x)), /abre com janela/);
+  assert.deepEqual(salvos, [{ navegadorVisivel: true }]);
+  assert.match(configCommands.aplicar('set-navegador-visivel', ['talvez'], () => {}), /^Uso:/);
+});
+
+test('navegador real: selecionar opção, esperar texto que chega depois, verificação humana avisada', { skip: pular }, async (t) => {
+  const srv = http.createServer((req, res) => {
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+    if (req.url === '/lento') return res.end('<title>Lento</title><p id="p">carregando</p><select name="tam"><option>P</option><option>M</option><option>G</option></select><script>setTimeout(() => { document.getElementById("p").textContent = "Pedido confirmado"; }, 700)</script>');
+    if (req.url === '/captcha') return res.end('<title>Just a moment...</title><div class="cf-turnstile"></div><p>Verifying you are human.</p>');
+    return res.end('<title>Normal</title><p>Oi</p>');
+  });
+  const porta = await escutar(srv);
+  const f = criarFerramenta({ ask: async () => 's', loadConfig: () => ({ navegadorPermitirLocal: true }) });
+  t.after(async () => { await f.encerrar(); srv.close(); });
+  const base = `http://127.0.0.1:${porta}`;
+  let r = await f.execute('browser', { acao: 'abrir', url: `${base}/lento` });
+  assert.match(r, /\[1\] lista "/);
+  assert.ok(!/VERIFICAÇÃO HUMANA/.test(r));
+  r = await f.execute('browser', { acao: 'selecionar', elemento: 1, texto: 'g' });
+  assert.match(r, /escolhido: "G"/);
+  r = await f.execute('browser', { acao: 'esperar', texto: 'pedido confirmado', segundos: 5 });
+  assert.match(r, /^"pedido confirmado" apareceu na página\./);
+  r = await f.execute('browser', { acao: 'esperar', texto: 'nunca vai aparecer', segundos: 1 });
+  assert.match(r, /não apareceu em 1 s/);
+  assert.match(await f.execute('browser', { acao: 'esperar' }), /precisa de "texto"/);
+  assert.match(await f.execute('browser', { acao: 'selecionar', elemento: 99, texto: 'x' }), /não achei o elemento \[99\]/);
+  r = await f.execute('browser', { acao: 'abrir', url: `${base}/captcha` });
+  assert.match(r, /^ATENÇÃO — VERIFICAÇÃO HUMANA: .*Não tente resolver nem contornar\. Pare e peça ao usuário/);
+  r = await f.execute('browser', { acao: 'abrir', url: `${base}/normal` });
+  assert.ok(!/VERIFICAÇÃO HUMANA/.test(r));
+});

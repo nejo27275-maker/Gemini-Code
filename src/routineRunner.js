@@ -247,10 +247,16 @@ async function executeAdb(routine, {
 // v0.46.0: ação "lembrete" — só a notificação (remédio, conta, compromisso). Sem notificação disponível, a
 // execução falha (e aparece em "routines logs"): um lembrete que ninguém vê não lembrou nada.
 // ---------------------------------------------------------------------------
-async function executeLembrete(routine, { notificarFn = notificarSistema, log = (m) => console.log(m) } = {}) {
+async function executeLembrete(routine, { notificarFn = notificarSistema, log = (m) => console.log(m), agora = () => new Date() } = {}) {
   const { paraTerminal } = require('./ui/textoSeguro');
   const action = require('./routines').validarAcao(routine.action);
   const started = Date.now();
+  // v0.47.0: lembrete com data final ("ate", dia local): passado o último dia, não notifica e a rotina se encerra
+  if (action.ate) {
+    const d = agora();
+    const hoje = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    if (hoje > action.ate) return { ok: true, encerrar: true, message: `O período do lembrete terminou (${action.ate}).`, durationMs: Date.now() - started, checkedAt: new Date().toISOString() };
+  }
   log(`[lembrete] ${paraTerminal(action.titulo)}: ${paraTerminal(action.texto)}`);
   const notificacao = await notificarFn(action.titulo, action.texto);
   const result = { ok: notificacao === 'enviada', message: notificacao === 'enviada' ? 'Lembrete enviado.' : 'Não deu para mostrar a notificação (no celular: instale o Termux:API — pkg install termux-api).', notificacao, durationMs: Date.now() - started, checkedAt: new Date().toISOString() };
@@ -339,7 +345,8 @@ function createRoutineRunner({ store, maxRetries = 2, baseRetryMs = 500, now = (
       store.updateExecution(execution.id, { status: 'concluida', finishedAt: now().toISOString(), attempts: execution.attempts, result, error: null });
       const current = store.get(id);
       if (current && current.status !== STATUSES.PAUSED) {
-        const isOnce = routine.trigger.type === 'once';
+        // v0.47.0: uma ação pode dizer que acabou (lembrete com data final, ex.: o de um desafio de 30 dias)
+        const isOnce = routine.trigger.type === 'once' || (result && result.encerrar === true);
         const patch = { lastRunAt: now().toISOString(), lastResult: result };
         if (current.status !== STATUSES.PAUSED) patch.status = isOnce ? STATUSES.COMPLETED : (priorStatus === STATUSES.DRAFT ? STATUSES.DRAFT : STATUSES.ACTIVE);
         if (routine.trigger.type === 'interval') patch.nextRunAt = new Date(now().getTime() + routine.trigger.intervalMs).toISOString();

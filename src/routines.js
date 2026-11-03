@@ -209,7 +209,13 @@ function validarAcaoLembrete(action) {
   const texto = typeof action.texto === 'string' ? semControlesInvisiveis(action.texto).trim() : '';
   if (!texto || texto.length > MAX_TEXTO_LEMBRETE) throw new Error(`O lembrete precisa de um texto com até ${MAX_TEXTO_LEMBRETE} caracteres.`);
   const titulo = typeof action.titulo === 'string' ? semControlesInvisiveis(action.titulo).trim().slice(0, MAX_TITULO_LEMBRETE) : '';
-  return { type: 'lembrete', titulo: titulo || 'Lembrete', texto };
+  const out = { type: 'lembrete', titulo: titulo || 'Lembrete', texto };
+  // v0.47.0: último dia (local, AAAA-MM-DD) — depois dele o lembrete se encerra sozinho (ex.: desafio de 30 dias)
+  if (action.ate !== undefined && action.ate !== null && action.ate !== '') {
+    if (typeof action.ate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(action.ate)) throw new Error('"ate" do lembrete é uma data AAAA-MM-DD.');
+    out.ate = action.ate;
+  }
+  return out;
 }
 
 // v0.47.0: rotina "rede" — um post agendado nas redes sociais (src/redes.js). Quem cria aprova o texto, as redes e a

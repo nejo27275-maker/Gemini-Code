@@ -173,6 +173,9 @@ No modo "chat", digite /help para ver os comandos de sessão (/clear, /model, /s
   gemini-code redes conectar bluesky           Redes sociais pelas APIs oficiais (Bluesky, Mastodon, Telegram, Discord, Facebook,
   gemini-code redes postar "texto" --em a,b    Instagram, Threads, X): publica em várias ao mesmo tempo (pergunta antes),
   gemini-code redes compartilhar "t" --em whatsapp   abre WhatsApp/LinkedIn/... com o texto pronto, lê menções e agenda posts
+  gemini-code computador status | tela | clicar X Y   Usa o computador como você: print, mouse, teclado e janelas (Linux, Mac, Windows)
+  gemini-code adb ui | tocar "Enviar" | deslizar cima  Celular/TV: lê o que está na tela e toca pelo texto do botão
+  gemini-code desafio criar "30 dias de caminhada"  Desafios: lembrete diário, marcar o dia, sequência e postar o progresso
   gemini-code imagem gerar|editar|melhorar|descrever   Imagens com IA ou, para melhorar, sem IA (ImageMagick)
   gemini-code video melhorar|slideshow|gerar   Vídeos: melhorar e slideshow no aparelho (ffmpeg); gerar com IA (Veo)
   gemini-code camera foto|analisar|vigiar      Câmera do celular/webcam; vigiar avisa quando algo muda
@@ -917,6 +920,16 @@ async function main() {
       return;
     }
 
+    case 'desafio':
+    case 'desafios': {
+      // v0.47.0: desafios pessoais (src/desafios.js, src/desafiosCommands.js)
+      const r = await require('../src/desafiosCommands').executar(rest);
+      imprimirLinhas(r.linhas);
+      if (r.codigo) process.exitCode = r.codigo;
+      require('../src/ui/prompt').closeShared();
+      return;
+    }
+
     case 'redes':
     case 'rede': {
       // v0.47.0: redes sociais pelas APIs oficiais (src/redes.js, src/redesCommands.js)
@@ -1143,6 +1156,46 @@ async function main() {
         console.error(chalk.red(`Erro: ${err.message}`));
         process.exitCode = 1;
       }
+      return;
+    }
+
+    case 'computador':
+    case 'pc': {
+      // v0.47.0: usar o computador como uma pessoa (src/computador.js) — o que você digita aqui roda direto, sem perguntar
+      const c = require('../src/computador');
+      const [sub = 'status', ...resto] = rest;
+      const amb = c.ambiente();
+      const USO = 'Uso: gemini-code computador status | tela [arquivo.png] | janelas | clicar X Y [--direito] [--duplo] | mover X Y | digitar "texto" | tecla ctrl+c | rolar baixo [N] | focar "título" | abrir ALVO';
+      if (['status', 'ajuda', 'help', '--help'].includes(sub)) {
+        const linhas = [];
+        if (!amb.sessao) linhas.push(chalk.yellow(c.SEM_TELA));
+        else {
+          linhas.push(`Sistema: ${{ x11: 'Linux (X11)', wayland: 'Linux (Wayland)', mac: 'macOS', windows: 'Windows' }[amb.sessao]}`);
+          linhas.push(`Mouse e teclado: ${amb.mouse ? chalk.green('ok') : chalk.yellow(`falta — ${c.dicaInstalar(amb, 'mouse')}`)}`);
+          linhas.push(`Print da tela: ${amb.print ? chalk.green(typeof amb.print === 'string' ? amb.print : 'ok') : chalk.yellow(`falta — ${c.dicaInstalar(amb, 'print')}`)}`);
+        }
+        linhas.push(USO);
+        linhas.push(chalk.dim('No chat, um aliado com o preset "computador" (ou "central") faz isso pedindo confirmação a cada ação: gemini-code aliados criar pc --ferramentas computador'));
+        console.log(linhas.join('\n'));
+        return;
+      }
+      const flags = { _: [] };
+      for (const x of resto) {
+        if (x === '--direito') flags.botao = 'direito';
+        else if (x === '--meio') flags.botao = 'meio';
+        else if (x === '--duplo') flags.duplo = true;
+        else flags._.push(x);
+      }
+      const p = flags._;
+      const args = {
+        tela: { arquivo: p[0] }, janelas: {}, clicar: { x: Number(p[0]), y: Number(p[1]), botao: flags.botao, duplo: flags.duplo },
+        mover: { x: Number(p[0]), y: Number(p[1]) }, digitar: { texto: p.join(' ') }, tecla: { tecla: p.join('') },
+        rolar: { direcao: p[0], quantidade: p[1] }, focar: { titulo: p.join(' ') }, abrir: { alvo: p.join(' ') },
+      }[sub];
+      if (!args) { process.exitCode = 1; console.log(USO); return; }
+      const r = await c.executar(sub, args, { amb });
+      console.log(r.ok ? paraTerminal(r.texto) : chalk.red(paraTerminal(r.texto)));
+      if (!r.ok) process.exitCode = 1;
       return;
     }
 

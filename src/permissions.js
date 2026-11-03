@@ -36,6 +36,8 @@ function alvos(nome, args = {}) {
   // v0.44.1: no adb, o comando como se escreve ("tecla ok", "abrir_app com.netflix.ninja") — antes só o JSON
   // ({"acao":"tecla",...}) e os exemplos "adb(tecla*)" da documentação nunca batiam. O JSON continua valendo.
   if (nome === 'adb') return [textoAdb(args), JSON.stringify(args)];
+  // v0.47.0: no computador, também o comando como se escreve ("tecla ctrl+c", "clicar 100 200", "tela")
+  if (nome === 'computador') return [require('./computador').textoDaAcao(String(args.acao || ''), args), JSON.stringify(args)];
   if (nome === 'edit_files' && Array.isArray(args.edits)) return args.edits.flatMap((e) => caminhos(e && e.path));
   if (CAMPOS_CAMINHO.has(nome)) return caminhos(args.path || '.');
   return [JSON.stringify(args)];
@@ -43,7 +45,8 @@ function alvos(nome, args = {}) {
 
 // URL como o modelo escreveu e normalizada (HTTPS://Exemplo.COM:443/x → https://exemplo.com/x): sem isso
 // variações de maiúsculas/porta padrão escapavam de web_fetch(https://exemplo.com/*).
-const CAMPOS_ADB = ['tecla', 'app', 'link', 'texto', 'espaco', 'chave', 'valor', 'comando', 'arquivo', 'porta', 'linhas'];
+// v0.47.0: + direcao/x/y/x2/y2 ("tocar 540 1210", "tocar Enviar", "deslizar cima")
+const CAMPOS_ADB = ['tecla', 'app', 'link', 'texto', 'espaco', 'chave', 'valor', 'comando', 'arquivo', 'porta', 'linhas', 'direcao', 'x', 'y', 'x2', 'y2'];
 function textoAdb(args) {
   const partes = [String(args.acao || '')];
   // conectar/desconectar/parear: o alvo é o assunto do comando ("conectar 192.168.0.50")

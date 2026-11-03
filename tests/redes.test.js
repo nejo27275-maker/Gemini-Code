@@ -487,6 +487,6 @@ test('ferramentas sob demanda: "redes" só existe num aliado que a use (ou em fe
   const todas = (await tools.getAllDeclarations()).map((d) => d.name);
   assert.ok(!todas.includes('redes'), 'o chat comum não vê a ferramenta de redes');
   const doAliado = (await tools.getAllDeclarations(require('../src/personalAgents').PRESETS.redes)).map((d) => d.name);
-  assert.deepEqual(doAliado.sort(), ['imagem', 'redes', 'web_fetch']);
+  assert.deepEqual(doAliado.sort(), ['desafio', 'imagem', 'redes', 'web_fetch']);
   await assert.rejects(() => tools.execute('redes', { acao: 'status' }), /não está ligada nesta conversa/);
 });

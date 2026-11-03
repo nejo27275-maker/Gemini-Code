@@ -188,7 +188,12 @@ const SCRIPT_RETRATO = `(() => {
     itens.push('[' + n + '] ' + tipo + ' "' + rotulo + '"' + extra);
   }
   const texto = (document.body ? document.body.innerText : '').replace(/\\n{3,}/g, '\\n\\n').trim();
-  return { titulo: document.title, url: location.href, itens, texto };
+  // v0.47.0: verificação humana (CAPTCHA / desafio anti-robô): o agente para e pede à pessoa — nunca tenta resolver
+  const captcha = document.querySelector('iframe[src*="recaptcha"], .g-recaptcha, iframe[src*="hcaptcha"], .h-captcha, '
+    + 'iframe[src*="challenges.cloudflare.com"], .cf-turnstile, #challenge-form, #cf-challenge-running, iframe[src*="arkoselabs"], iframe[src*="funcaptcha"]');
+  const amostra = (document.title + ' ' + texto.slice(0, 3000)).toLowerCase();
+  const frase = /just a moment|verify(ing)? (that )?you are (a )?human|checking your browser|i'?m not a robot|n[aã]o sou um rob[oô]|confirme que voc[eê] [eé] (um )?humano|verificando se voc[eê] [eé] (um )?humano|unusual traffic|tr[aá]fego incomum|attention required/.test(amostra);
+  return { titulo: document.title, url: location.href, itens, texto, desafio: Boolean(captcha) || frase };
 })()`;
 
 const scriptAlvo = (n) => `(() => {
@@ -256,6 +261,28 @@ function explicarFalha(saida) {
   return ` — ${detalhe}.${dica}`;
 }
 
+/**
+ * Argumentos do Chrome. Perfil temporário, todo o tráfego pelo nosso proxy (que confere o endereço), sem QUIC/WebRTC
+ * fora dele, sem extensões/sincronização. v0.47.0: `visivel` abre COM janela (sem --headless) — a pessoa vê, entra
+ * na conta ou resolve uma verificação humana; as mesmas regras de rede e de sites aprovados continuam valendo.
+ */
+function argsDoChrome({ perfil, portaProxy, visivel = false, root = typeof process.getuid === 'function' && process.getuid() === 0 }) {
+  const args = [
+    ...(visivel ? [] : ['--headless=new', '--hide-scrollbars']), '--remote-debugging-pipe', `--user-data-dir=${perfil}`,
+    `--proxy-server=http://127.0.0.1:${portaProxy}`, '--proxy-bypass-list=<-loopback>',
+    '--disable-quic', '--force-webrtc-ip-handling-policy=disable_non_proxied_udp', '--webrtc-ip-handling-policy=disable_non_proxied_udp',
+    '--no-first-run', '--no-default-browser-check', '--disable-background-networking', '--disable-component-update',
+    '--disable-sync', '--disable-default-apps', '--disable-extensions', '--no-pings', '--disable-domain-reliability',
+    '--disable-client-side-phishing-detection', '--disable-breakpad', '--metrics-recording-only', '--password-store=basic',
+    '--use-mock-keychain', '--mute-audio', '--window-size=1280,900',
+    '--disable-features=Translate,OptimizationHints,MediaRouter,AutofillServerCommunication',
+  ];
+  // Como root (contêiner, Termux com proot) o Chrome não sobe com a própria sandbox.
+  if (root) args.push('--no-sandbox');
+  args.push('about:blank');
+  return args;
+}
+
 // ---------------------------------------------------------------------------
 // O navegador
 // ---------------------------------------------------------------------------
@@ -267,9 +294,10 @@ class Navegador {
    * @param {boolean} [o.permitirLocal] libera o loopback (127.0.0.1/localhost) no proxy
    * @param {(url: URL) => string|null} o.navegacaoBarrada motivo para recusar a navegação da página principal, ou null
    */
-  constructor({ executavel, permitirLocal = false, navegacaoBarrada }) {
+  constructor({ executavel, permitirLocal = false, navegacaoBarrada, visivel = false }) {
     this.executavel = executavel;
     this.permitirLocal = permitirLocal;
+    this.visivel = visivel; // v0.47.0: com janela (a pessoa entra na conta ou resolve uma verificação humana ali)
     this.navegacaoBarrada = navegacaoBarrada;
     this.avisos = [];
     this.proximoId = 0;
@@ -286,19 +314,7 @@ class Navegador {
     this.proxy = criarProxy({ permitirLocal: this.permitirLocal, aoBloquear: (host, motivo) => this.aviso(`Bloqueado: ${motivo} (o navegador não acessa a rede local).`) });
     await new Promise((ok, falha) => { this.proxy.once('error', falha); this.proxy.listen(0, '127.0.0.1', ok); });
     this.perfil = fs.mkdtempSync(path.join(os.tmpdir(), 'gemini-code-navegador-'));
-    const args = [
-      '--headless=new', '--remote-debugging-pipe', `--user-data-dir=${this.perfil}`,
-      `--proxy-server=http://127.0.0.1:${this.proxy.address().port}`, '--proxy-bypass-list=<-loopback>',
-      '--disable-quic', '--force-webrtc-ip-handling-policy=disable_non_proxied_udp', '--webrtc-ip-handling-policy=disable_non_proxied_udp',
-      '--no-first-run', '--no-default-browser-check', '--disable-background-networking', '--disable-component-update',
-      '--disable-sync', '--disable-default-apps', '--disable-extensions', '--no-pings', '--disable-domain-reliability',
-      '--disable-client-side-phishing-detection', '--disable-breakpad', '--metrics-recording-only', '--password-store=basic',
-      '--use-mock-keychain', '--mute-audio', '--hide-scrollbars', '--window-size=1280,900',
-      '--disable-features=Translate,OptimizationHints,MediaRouter,AutofillServerCommunication',
-    ];
-    // Como root (contêiner, Termux com proot) o Chrome não sobe com a própria sandbox.
-    if (typeof process.getuid === 'function' && process.getuid() === 0) args.push('--no-sandbox');
-    args.push('about:blank');
+    const args = argsDoChrome({ perfil: this.perfil, portaProxy: this.proxy.address().port, visivel: this.visivel });
     this.processo = spawn(this.executavel, args, { stdio: ['ignore', 'ignore', 'pipe', 'pipe', 'pipe'] });
     let erroSaida = '';
     this.processo.stderr.on('data', (d) => { if (erroSaida.length < 20000) erroSaida += d; });
@@ -397,6 +413,17 @@ class Navegador {
     if (!motivo) return continuar();
     this.aviso(`A página tentou ir para ${String(request.url).slice(0, 200)} e foi barrada: ${motivo}`);
     return this.enviar('Fetch.failRequest', { requestId, errorReason: 'BlockedByClient' }).catch(() => {});
+  }
+
+  /** v0.47.0: espera um texto aparecer na página (sites que carregam aos poucos). Devolve se apareceu. */
+  async esperarTexto(texto, ms) {
+    const expr = `(() => (document.body ? document.body.innerText : '').toLowerCase().includes(${JSON.stringify(String(texto).toLowerCase())}))()`;
+    const fim = Date.now() + ms;
+    while (Date.now() < fim && !this.fechado) {
+      try { if (await this.avaliar(expr)) return true; } catch { /* a página está trocando */ }
+      await dormir(300);
+    }
+    return false;
   }
 
   /** Roda a ação e espera a página assentar (carregamento que ela tenha disparado). */
@@ -501,4 +528,4 @@ class Navegador {
   }
 }
 
-module.exports = { Navegador, acharNavegador, criarProxy, conectarConferido, explicarFalha, TECLAS, NOMES };
+module.exports = { Navegador, acharNavegador, criarProxy, conectarConferido, explicarFalha, argsDoChrome, TECLAS, NOMES };

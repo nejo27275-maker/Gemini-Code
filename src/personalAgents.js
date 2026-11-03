@@ -60,7 +60,13 @@ const PRESETS = Object.freeze({
   // v0.46.0: aliado das compras — a lista do mês (não compra nem paga) e a web para receitas e preços
   compras: Object.freeze(['compras', 'web_fetch']),
   // v0.47.0: aliado das redes sociais — publica pela ferramenta "redes" (sempre pergunta), cria imagens e confere fontes
-  redes: Object.freeze(['redes', 'imagem', 'web_fetch']),
+  redes: Object.freeze(['redes', 'desafio', 'imagem', 'web_fetch']),
+  // v0.47.0: aliado dos desafios — marca o dia, lembra, comemora a sequência e posta o progresso (perguntando)
+  desafios: Object.freeze(['desafio', 'redes', 'web_fetch']),
+  // v0.47.0: aliado do computador — mouse, teclado e print (pergunta a cada ação), vê o print pela imagem, sites pelo navegador
+  computador: Object.freeze(['computador', 'imagem', 'browser', 'web_fetch']),
+  // v0.47.0: a central — computador, celular/TV, sites e redes sociais na mesma conversa (cada ação com a confirmação dela)
+  central: Object.freeze(['computador', 'adb', 'browser', 'redes', 'desafio', 'imagem', 'web_fetch']),
   completo: null,
 });
 const PRESET_PADRAO = 'pesquisa';

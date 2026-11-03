@@ -26,8 +26,10 @@ const imagemTools = require('./imagemTools');
 // v0.46.0: câmera e vídeo (sob demanda: aliado com o preset "midia") e a lista de compras (preset "compras").
 const midiaTools = require('./midiaTools');
 const comprasTools = require('./comprasTools');
-// v0.47.0: redes sociais (publica só com o usuário confirmando; sob demanda)
+// v0.47.0: redes sociais (publica só com o usuário confirmando) e o computador (mouse, teclado, tela) — sob demanda
 const redesTools = require('./redesTools');
+const computadorTools = require('./computadorTools');
+const desafioTools = require('./desafioTools');
 
 // v0.41.0: lista VAZIA significa "nenhuma ferramenta"; só a AUSÊNCIA de lista
 // (undefined/null) libera todas. Antes `[]` liberava tudo: um passo de workflow
@@ -37,7 +39,7 @@ const semRestricao = (allowedNames) => allowedNames == null;
 // v0.46.0: ferramentas SOB DEMANDA — só entram quando a lista de ferramentas as cita (um aliado com o preset
 // "saude", "compras" ou "midia") ou quando o usuário as liga no config (ferramentasExtras). O chat comum não as
 // carrega: cada declaração custa tokens em todo pedido, e dado de saúde não entra numa conversa qualquer.
-const SOB_DEMANDA = [saudeTools, midiaTools, comprasTools, redesTools];
+const SOB_DEMANDA = [saudeTools, midiaTools, comprasTools, redesTools, computadorTools, desafioTools];
 const nomeSobDemanda = (nome) => SOB_DEMANDA.some((m) => m.declarations.some((d) => d.name === nome));
 function extrasLigados() {
   try {

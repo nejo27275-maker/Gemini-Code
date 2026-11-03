@@ -48,6 +48,9 @@ const DESCRICAO_PRESETS = {
   midia: 'cria e melhora imagens e vídeos, e usa a câmera (pergunta toda vez) + web',
   compras: 'cuida da lista de compras do mês (não compra nem paga) + web',
   redes: 'escreve e publica nas suas redes sociais (sempre pergunta antes de publicar), cria imagens + web',
+  computador: 'usa o computador como você: print da tela, mouse, teclado e janelas (pergunta a cada ação) + navegador e web',
+  central: 'computador, celular/TV (adb), sites (navegador), redes sociais e desafios na mesma conversa — cada ação com a confirmação dela',
+  desafios: 'acompanha seus desafios (marca o dia, lembrete, sequência) e posta o progresso nas redes (pergunta antes)',
   completo: 'todas as ferramentas da sessão (grava arquivos e roda comandos, com as confirmações de sempre)',
 };
 

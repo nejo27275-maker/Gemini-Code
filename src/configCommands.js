@@ -43,6 +43,12 @@ function aplicar(sub, args, saveConfig) {
     saveConfig({ navegadorPermitirLocal: a[0] === 'on' });
     return a[0] === 'on' ? 'O navegador do agente agora abre 127.0.0.1/localhost (para testar o seu app). O resto da rede local continua bloqueado.' : 'O navegador do agente voltou a bloquear 127.0.0.1/localhost.';
   }
+  // v0.47.0: navegador do agente com janela (a pessoa vê, entra na conta, resolve uma verificação humana)
+  if (sub === 'set-navegador-visivel') {
+    if (!['on', 'off'].includes(a[0])) return 'Uso: gemini-code config set-navegador-visivel on|off   (on: o Chrome do agente abre com janela — você acompanha, entra na conta ou resolve um CAPTCHA ali)';
+    saveConfig({ navegadorVisivel: a[0] === 'on' });
+    return a[0] === 'on' ? 'O navegador do agente agora abre com janela (precisa de tela; as mesmas regras de sites aprovados e de rede valem).' : 'O navegador do agente voltou a rodar sem janela.';
+  }
   // v0.45.0: sandbox do run_shell (src/sandbox.js) e pastas onde o agente grava sem perguntar.
   if (sub === 'set-sandbox') {
     if (!['auto', 'sempre', 'off'].includes(a[0])) {
