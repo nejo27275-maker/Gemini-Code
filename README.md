@@ -59,6 +59,48 @@ O modelo GGUF é o mesmo, mas os históricos e as memórias do CLI e do app aind
 - **Rotinas com agente** (`gemini-code routines create --prompt ...`): o agente
   faz uma tarefa sozinho no horário marcado e avisa por notificação.
 - **Saúde, compras, imagem, vídeo, câmera, TV e criar site/app** (v0.46.0): veja abaixo.
+- **Redes sociais, controle do celular/computador/sites e desafios** (v0.47.0): veja abaixo, `docs/REDES_SOCIAIS.md` e `docs/CONTROLE.md`.
+
+## Redes sociais, celular, computador, sites e desafios — v0.47.0
+
+**Redes sociais ao mesmo tempo, pelas APIs oficiais** (com tokens seus — nunca a sua senha): Bluesky, Mastodon,
+Telegram, Discord, Facebook (Página), Instagram (conta profissional), Threads e X. Publica em várias de uma vez (em
+paralelo), com foto, lê menções e agenda posts; para WhatsApp, LinkedIn, Reddit, TikTok... abre o app com o texto pronto.
+Mostra o post e pergunta antes de sair; trava contra repetir o mesmo texto e um teto diário. Guia: `docs/REDES_SOCIAIS.md`.
+
+```bash
+gemini-code redes conectar bluesky                 # senha de APP, perguntada sem aparecer na tela
+gemini-code redes postar "Promoção de sábado! #pães" --em bluesky,mastodon,telegram --foto pao.jpg
+gemini-code redes compartilhar "Chegou pão!" --em whatsapp
+gemini-code redes notificacoes
+gemini-code redes agendar "Bom dia!" --em bluesky --at "amanhã 9h"
+```
+
+**Controlar o celular, o computador e sites** (guia: `docs/CONTROLE.md`) — cada ação pergunta antes:
+
+```bash
+gemini-code adb ui                                 # o que está na tela do celular/TV, com a posição de cada botão
+gemini-code adb tocar Enviar                       # toca pelo texto do botão; também deslizar e segurar
+gemini-code computador tela                        # print do computador (Linux, Mac, Windows); clicar, digitar, tecla, rolar...
+gemini-code computador tecla ctrl+s
+gemini-code config set-navegador-visivel on        # o navegador do agente com janela (você entra na conta ali)
+```
+
+O navegador do agente ganhou "selecionar" (lista) e "esperar" (um texto aparecer). Quando um site pede **verificação
+humana (CAPTCHA)**, o agente para e pede para você resolver — não tenta burlar.
+
+**Desafios** ("30 dias de caminhada", "21 dias sem açúcar"): lembrete diário que se encerra no fim, marcar o dia,
+sequência, calendário e postar o progresso nas redes.
+
+```bash
+gemini-code desafio criar "30 dias de caminhada" --hora 07:00 --redes bluesky --hashtag desafio30dias
+gemini-code desafio feito --nota "5 km"            # marca hoje e oferece postar "Dia 5/30 ✅" (pergunta antes)
+gemini-code desafio ver
+```
+
+**Tudo numa conversa:** `gemini-code aliados criar central --ferramentas central` → `gemini-code aliados chat central`
+(computador, celular/TV, sites, redes e desafios; cada ação com a confirmação dela). Outros aliados prontos:
+`gemini-code redes aliado`, `gemini-code desafio aliado`, `--ferramentas computador`.
 
 ## Saúde, compras, imagem, vídeo, câmera, TV e sites — v0.46.0
 

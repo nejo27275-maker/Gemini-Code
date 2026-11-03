@@ -1,3 +1,55 @@
+## 0.47.0 — redes sociais, celular e computador pela tela, sites e desafios
+
+Base: a 0.46.1 (mesmo branch, ainda sem PR).
+
+**Novo: redes sociais ao mesmo tempo, pelas APIs oficiais** (`src/redes.js`, guia `docs/REDES_SOCIAIS.md`):
+- **Redes:** Bluesky (senha de app; links e #hashtags clicáveis), Mastodon, Telegram (bot), Discord (webhook), Facebook (Página), Instagram (conta profissional) e Threads (Graph API), e X (OAuth 1.0a — a assinatura confere com o exemplo oficial da documentação).
+- **O que faz:** publica em várias de uma vez, em paralelo, com foto; lê menções no Bluesky, no Mastodon e no Telegram; agenda posts com a rotina nova `rede`.
+- **Sem conta:** WhatsApp, LinkedIn, Reddit, TikTok e outras abrem o app com o texto pronto.
+- **Credenciais:**
+  - ficam em `~/.gemini-code/redes/` (0600), pasta que as ferramentas de arquivo do agente não leem nem gravam;
+  - são perguntadas sem aparecer na tela e nunca como argumento do comando;
+  - nunca aparecem em resposta da ferramenta nem em mensagem de erro.
+- **Rede:** cada rede fala só com o endereço oficial e não segue redirecionamento.
+- **Confirmação:** publicar sempre mostra o post e pergunta. A ferramenta `redes` recusa em rotina e para convidado.
+- **Contra spam:** o mesmo texto na mesma rede só 1 vez por hora, no máximo 30 posts por rede em 24 h.
+- **O que não faz:** não entra com a sua senha, não imita o app e não segue, curte ou manda mensagem em massa.
+
+**Novo: celular e TV pela tela** (ferramenta `adb`):
+- **`ui`:** lista o que está na tela, com texto e posição de cada botão, pelo uiautomator. O conteúdo de campo de senha nunca aparece, e o texto da tela chega ao modelo marcado como conteúdo de terceiros.
+- **Tocar, deslizar, segurar:** `tocar` pelo texto do botão ou em x,y; `deslizar` por direção ou entre pontos; `segurar` é o toque longo. Perguntam antes; uma regra `adb(tocar *)` libera.
+- **Termux:** pode controlar o próprio celular via `localhost` (Depuração por Wi-Fi).
+
+**Novo: computador e notebook** (`src/computador.js`, ferramenta sob demanda `computador`, comando `gemini-code computador`):
+- **Ações:** print da tela, clicar, mover, digitar, teclas e combinações, rolar, janelas, focar e abrir (site, arquivo ou app instalado — nunca um comando).
+- **Sistemas:** Linux X11 e Wayland, macOS e Windows. Os comandos de cada sistema são montados por uma função pura, sempre por argumento.
+- **Achado na revisão:** no macOS, um texto começando com "-e" viraria outro comando AppleScript. Agora vai com prefixo.
+- **Confirmação:** cada ação pergunta, inclusive o print. Nunca roda em rotina nem para convidado.
+
+**Sites:**
+- **Ações novas no navegador:** `selecionar` (opção de lista) e `esperar` (um texto aparecer).
+- **Modo com janela:** `config set-navegador-visivel on`, para você entrar na conta ali.
+- **Verificação humana (CAPTCHA):** a leitura avisa em destaque, e o agente para e pede a você. Não tenta resolver nem contornar.
+
+**Novo: desafios** (`gemini-code desafio`, ferramenta `desafio`):
+- **Acompanhamento:** marcar o dia, sequência e melhor sequência, e um calendário.
+- **Lembrete diário:** a rotina `lembrete` ganhou data final e se encerra sozinha depois do último dia.
+- **Progresso nas redes:** postar o dia, perguntando antes.
+
+**Aliados:** presets `computador`, `desafios` e `central`. A `central` junta computador, celular/TV, sites, redes e desafios na mesma conversa, cada ação com a confirmação dela.
+
+**Corrigido:**
+- **`routines create --at`:** "04/11/2026" virava 11 de ABRIL. Agora usa o leitor de data rígido `src/datas.js`, o mesmo da saúde e dos posts agendados.
+- **Sandbox:** encerrar um comando podia deixar o bwrap de dentro órfão, vivo para sempre (visto uma vez numa suíte carregada). Agora cada execução tem uma marca única, e o encerrar varre os órfãos.
+- **Gravação de arquivos:** o arquivo temporário nascia 0644 e só depois virava 0600; agora nasce 0600. Valia para tokens e dados de saúde.
+- **Mensagens:** um alvo de adb que não era texto aparecia como "[object Object]".
+
+**Estresse:** 24.094 chamadas às ferramentas novas com argumentos ruins: 0 problemas no fim.
+
+**Testes:** 964 (963 passando, 1 pulado como root) no Node 20 e no 22, com a sandbox e o ImageMagick/ffmpeg de verdade. Novos: `redes` (17), `adbTela` (7), `computador` (9), `desafios` (7), `v047` (3), navegador (+2). ESLint 0 problemas.
+
+**NetoLang:** este repositório só tem o modelo em branco (`knowledge-exemplo/netolang.md`). Não há outra versão da linguagem aqui para atualizar.
+
 ## 0.46.1 — polimento das novidades da 0.46.0
 
 Base: a 0.46.0 (mesmo branch, ainda sem PR).
@@ -62,7 +114,7 @@ Base: a 0.46.0 (mesmo branch, ainda sem PR).
 
 **Node 18:** nenhuma API exclusiva do Node 20+ no código (busca e análise com a gramática ES2022).
 
-**Testes:** 919 (918 passando, 1 pulado por rodar como root). Novos: `tests/polimento0461.test.js` (13).
+**Testes:** 919 (918 passando, 1 pulado por rodar como root). Novos: `tests/polimento0461.test.js` (13). **CI:** verde nos Node 20, 22 e 24 (919/919 no Node 22).
 
 ## 0.46.0 — saúde, compras do mês, imagem, vídeo, câmera, TV e criar site/app
 

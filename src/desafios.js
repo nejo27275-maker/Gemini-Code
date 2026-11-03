@@ -86,7 +86,7 @@ function createDesafiosStore({ arquivo, clock = () => new Date() } = {}) {
   const gravar = (x) => escreverJson(caminho, x, { mode: 0o600 });
 
   function achar(x, ref) {
-    const r = semAcento(typeof ref === 'string' || typeof ref === 'number' ? String(ref) : '');
+    const r = semAcento(typeof ref === 'string' ? ref : typeof ref === 'number' && Number.isFinite(ref) ? String(ref) : '');
     const ativos = x.desafios.filter((d) => d.ativo);
     if (!r) {
       if (ativos.length === 1) return ativos[0];

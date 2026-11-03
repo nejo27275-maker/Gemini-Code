@@ -117,6 +117,8 @@ const declarations = [
 // ---------------------------------------------------------------------------
 
 function validarAlvo(alvo) {
+  // v0.47.0: um objeto virava "[object Object]" na mensagem
+  if (alvo !== undefined && alvo !== null && typeof alvo !== 'string') throw new Error('alvo inválido: use serial, ip ou ip:porta (um texto).');
   const v = String(alvo || '').trim();
   if (!v) return '';
   if (!ALVO_OK.test(v)) throw new Error(`alvo inválido: "${paraExibir(alvo)}". Use serial, ip ou ip:porta (sem espaços nem "-" no começo).`);

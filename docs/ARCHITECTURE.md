@@ -50,6 +50,13 @@ documento é sobre como o código por trás disso está organizado.
   `src/criador.js` (site/app PWA e o servidor local), `src/schemaGemini.js` (v0.45.1) e `src/abrir.js`
   (abrir arquivo/link e copiar). Ferramentas novas: `imagem` (sempre) e, sob demanda, `saude_*`,
   `camera`, `video` e `compras` (só quando a lista de ferramentas de um aliado as cita).
+- **v0.47.0** — `src/redes.js` + `src/redesCommands.js` (redes sociais pelas APIs oficiais: contas em
+  `~/.gemini-code/redes/`, plano → publicação em paralelo, menções, links de compartilhar; guia
+  `docs/REDES_SOCIAIS.md`), `src/computador.js` (mouse, teclado, print e janelas por sistema; comandos montados
+  por uma função pura), `src/desafios.js` + `src/desafiosCommands.js` (desafios com lembrete que se encerra),
+  `src/datas.js` (data digitada por uma pessoa, sem adivinhar). Ferramentas sob demanda novas: `redes`,
+  `computador`, `desafio`; o `adb` ganhou `ui`/`tocar`/`deslizar`/`segurar` e o `browser`, `selecionar`/`esperar`,
+  janela visível e o aviso de verificação humana. Guia de controle: `docs/CONTROLE.md`.
 - **`src/routineRunner.js`** — executor das rotinas: `http-check` e, desde a v0.44.0,
   `agente` (o agente roda sozinho; `src/ui/prompt.js` responde "não" a toda confirmação).
 - Os provedores `llamacpp`, `ollama` e `openai` pedem **sempre** em streaming; o
@@ -196,6 +203,11 @@ extra). Cobertura atual:
 | câmera e vídeo: fotografar por sistema, vigia com ImageMagick de verdade, ffmpeg de verdade (melhorar, slideshow), ferramentas (v0.46.0) | `cameraVideo.test.js` |
 | melhorador de TV com o adb falso: diagnóstico só lê, otimizar pergunta cada passo (v0.46.0) | `tvOtimizar.test.js` |
 | criar site/app, servidor local (fuga de pasta, 400), compras e iFood, skill com descrição em bloco YAML (v0.46.0) | `criadorCompras.test.js` |
+| redes sociais contra um servidor falso que imita cada API: formato dos pedidos, publicação em paralelo, foto, assinatura OAuth 1.0a do X (exemplo oficial), erros sem token, sem seguir redirecionamento, travas contra spam, menções marcadas, ferramenta que sempre pergunta, post agendado (v0.47.0) | `redes.test.js` |
+| celular pela tela com o adb falso: ler (uiautomator), tocar pelo texto/posição, deslizar, segurar, regras (v0.47.0) | `adbTela.test.js` |
+| computador: comandos de Linux X11/Wayland, macOS e Windows; execução com programas falsos; abrir sem rodar comando; ferramenta que pergunta (v0.47.0) | `computador.test.js` |
+| desafios: progresso, sequência, calendário, lembrete que se encerra, postar o progresso, ferramenta (v0.47.0) | `desafios.test.js` |
+| sandbox sem órfão no encerrar, marca única por execução, `--at` das rotinas sem adivinhar a data (v0.47.0) | `v047.test.js` |
 | hooks `UserPromptSubmit`, `SessionStart`, `Stop` | `hooksEventos.test.js` |
 | subagentes do usuário (`.md`) | `subagentesDoUsuario.test.js` |
 | anti-SSRF com IPv6 (`privateAddress`) e DNS rebinding nas rotinas (`src/redeSegura.js`) | `ssrfIpv6.test.js` |
