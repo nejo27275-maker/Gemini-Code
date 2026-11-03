@@ -30,7 +30,7 @@ Base: a 0.47.0 (mesmo branch, ainda sem PR).
 
 **Limites:** este ambiente não tem microfone nem alto-falante, então a voz foi testada simulada no navegador. O reconhecimento real depende do Chrome/Edge e usa a internet.
 
-**Testes:** 972 (971 passando, 1 pulado como root) no Node 20 e no 22 — e a suíte inteira também no fuso de São Paulo (`TZ=America/Sao_Paulo`), além do UTC do CI. ESLint 0 problemas.
+**Testes:** 972 (971 passando, 1 pulado como root) no Node 20 e no 22 — e a suíte inteira também no fuso de São Paulo (`TZ=America/Sao_Paulo`), além do UTC do CI. ESLint 0 problemas. **CI (commit c658277):** 972/972 nos Node 20, 22 e 24, nenhum pulado — inclusive a página no Chrome do GitHub.
 
 ## 0.47.0 — redes sociais, celular e computador pela tela, sites e desafios
 

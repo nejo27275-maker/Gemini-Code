@@ -14,5 +14,5 @@
   - Host e Origin conferidos, e nunca CORS;
   - CSP fechada, e a página mostra tudo como texto;
   - uma conversa por vez.
-- **Testes:** 972 no Node 20 e no 22, e também no fuso de São Paulo (971 passando, 1 pulado como root). Novos: `tests/site.test.js` (8), com a página num Chromium de verdade. Prints de todos os estados, no PC e no celular.
+- **Testes:** 972 no Node 20 e no 22, e também no fuso de São Paulo (971 passando, 1 pulado como root). Novos: `tests/site.test.js` (8), com a página num Chromium de verdade. Prints de todos os estados, no PC e no celular. CI: 972/972 nos Node 20, 22 e 24.
 - **Não testado aqui:** microfone e alto-falante de verdade (a voz foi simulada no navegador).
