@@ -48,23 +48,27 @@ const api = (porta, caminho, obj, headers = {}) => pedir(porta, {
 });
 const eventos = (r) => r.corpo.split('\n').filter(Boolean).map((l) => JSON.parse(l));
 
-test('página: só os três arquivos, com CSP fechada, sem moldura, nosniff e no-referrer', async () => {
+test('páginas: só os nossos arquivos (voz e chat), com CSP fechada, sem moldura, nosniff e no-referrer', async () => {
   const { porta } = await subir({ conversar: async () => ({ texto: 'x', historico: [] }) });
-  const r = await pedir(porta);
-  assert.equal(r.status, 200);
-  assert.match(r.headers['content-type'], /text\/html/);
-  assert.equal(r.headers['content-security-policy'], CSP);
   assert.match(CSP, /default-src 'none'/);
   assert.match(CSP, /script-src 'self'/);
   assert.match(CSP, /frame-ancestors 'none'/);
-  assert.equal(r.headers['x-frame-options'], 'DENY');
-  assert.equal(r.headers['x-content-type-options'], 'nosniff');
-  assert.equal(r.headers['referrer-policy'], 'no-referrer');
-  assert.match(r.corpo, /<canvas id="orbe"/);
-  assert.ok(!/<script>/.test(r.corpo) && !/ on[a-z]+="/.test(r.corpo), 'nada de script inline nem onclick (a CSP bloquearia)');
-  assert.match((await pedir(porta, { caminho: '/app.js' })).headers['content-type'], /javascript/);
-  assert.match((await pedir(porta, { caminho: '/app.css' })).headers['content-type'], /text\/css/);
-  for (const c of ['/../../etc/passwd', '/%2e%2e/%2e%2e/etc/passwd', '/servidor.js', '/publico/app.js', '/api/conversa']) {
+  for (const [caminho, marca] of [['/', /<canvas id="orbe"/], ['/chat', /<ol id="mensagens"/]]) {
+    const r = await pedir(porta, { caminho });
+    assert.equal(r.status, 200, caminho);
+    assert.match(r.headers['content-type'], /text\/html/);
+    assert.equal(r.headers['content-security-policy'], CSP);
+    assert.equal(r.headers['x-frame-options'], 'DENY');
+    assert.equal(r.headers['x-content-type-options'], 'nosniff');
+    assert.equal(r.headers['referrer-policy'], 'no-referrer');
+    assert.match(r.corpo, marca);
+    assert.ok(!/<script>/.test(r.corpo) && !/ on[a-z]+="/.test(r.corpo) && !/ style="/.test(r.corpo), `${caminho}: nada de script/estilo inline nem onclick (a CSP bloquearia)`);
+    assert.match(r.corpo, /<script src="\/comum\.js"><\/script>/, `${caminho}: usa o comum.js`);
+  }
+  assert.doesNotMatch((await pedir(porta, { caminho: '/chat' })).corpo, /orbe|esfera/i, 'a versão chat não tem nada da esfera');
+  for (const c of ['/app.js', '/chat.js', '/comum.js']) assert.match((await pedir(porta, { caminho: c })).headers['content-type'], /javascript/, c);
+  for (const c of ['/app.css', '/chat.css']) assert.match((await pedir(porta, { caminho: c })).headers['content-type'], /text\/css/, c);
+  for (const c of ['/../../etc/passwd', '/%2e%2e/%2e%2e/etc/passwd', '/servidor.js', '/publico/app.js', '/api/conversa', '/chat/', '/chat.html', '/index.html']) {
     assert.equal((await pedir(porta, { caminho: c })).status, 404, c);
   }
 });
@@ -85,7 +89,8 @@ test('API: sem token/token errado 401; outro site (Origin) 403; DNS rebinding (H
   assert.equal((await pedir(porta, { metodo: 'POST', caminho: '/api/conversa', corpo: '{quebrado', headers: { 'content-type': 'application/json', authorization: `Bearer ${TOKEN}` } })).status, 400);
   assert.equal((await api(porta, '/api/conversa', { texto: 'x'.repeat(70 * 1024) })).status, 413);
   assert.equal((await api(porta, '/api/conversa', { texto: '   ' })).status, 400);
-  assert.equal((await api(porta, '/api/conversa', { texto: 'x'.repeat(4001) })).status, 400);
+  assert.equal((await api(porta, '/api/conversa', { texto: 'x'.repeat(16001) })).status, 400);
+  assert.equal((await pedir(porta, { metodo: 'POST', caminho: '/api/historico', corpo: '{}', headers: { 'content-type': 'application/json' } })).status, 401, 'o histórico também exige a chave');
   assert.equal((await api(porta, '/api/conversa', [1, 2])).status, 400);
   assert.equal((await api(porta, '/api/nada', {})).status, 404);
   assert.equal(chamadas, 0, 'nenhum pedido barrado chegou ao agente');
@@ -331,4 +336,216 @@ test('navegador real: enquanto o agente trabalha o microfone vira "Parar", e par
   assert.match(r, /"Parado" apareceu na página/, r);
   assert.equal(vistos[0].aborted, true, 'o servidor parou o agente');
   assert.match(r, /\[\d+\] botão "Falar \(espaço\)"/, 'o botão volta a ser o microfone');
+});
+
+// ---------------------------------------------------------------------------
+// v0.49.0: versão chat, histórico ao recarregar e o Markdown seguro (comum.js)
+// ---------------------------------------------------------------------------
+const { paraExibicao, AVISO_INTERROMPIDO } = require('../src/site/servidor');
+
+test('histórico para a página: falas, respostas e ferramentas; nada de resultado de ferramenta, pensamento ou hook', () => {
+  assert.equal(AVISO_INTERROMPIDO, require('../src/agent').AVISO_INTERROMPIDO, 'o mesmo aviso do agente');
+  const h = [
+    { role: 'user', parts: [{ text: 'oi\n\n[contexto adicionado por hook do usuário]\nsegredo do hook' }] },
+    { role: 'model', parts: [{ text: 'Vou ver.' }, { functionCall: { name: 'read_file', args: {} } }] },
+    { role: 'user', parts: [{ functionResponse: { name: 'read_file', response: { result: 'conteúdo do arquivo' } } }] },
+    { role: 'model', parts: [{ text: 'pensando alto', thought: true }, { functionCall: { name: 'browser', args: {} } }, { functionCall: { name: 'read_file', args: {} } }] },
+    { role: 'user', parts: [{ functionResponse: { name: 'browser', response: {} } }, { functionResponse: { name: 'read_file', response: {} } }] },
+    { role: 'user', parts: [{ text: '[hook Stop do usuário] A tarefa ainda não terminou' }] },
+    { role: 'model', parts: [{ text: 'Pronto: o arquivo diz **oi**.‮' }] },
+    { role: 'user', parts: [{ text: '[...histórico do meio da conversa foi omitido para economizar contexto...]' }] },
+    { role: 'user', parts: [{ text: 'faz outra coisa' }] },
+    { role: 'model', parts: [{ text: AVISO_INTERROMPIDO }] },
+    null, { role: 'model' }, { role: 'user', parts: [{ text: '   ' }] },
+  ];
+  const m = paraExibicao(h);
+  assert.deepEqual(m, [
+    { quem: 'voce', texto: 'oi' },
+    { quem: 'agente', texto: 'Vou ver.\n\nPronto: o arquivo diz **oi**.', ferramentas: ['read_file', 'browser'] },
+    { quem: 'aviso', texto: 'O meio desta conversa foi resumido para caber.' },
+    { quem: 'voce', texto: 'faz outra coisa' },
+    { quem: 'agente', texto: '', interrompido: true },
+  ]);
+  assert.ok(!JSON.stringify(m).includes('conteúdo do arquivo') && !JSON.stringify(m).includes('pensando alto') && !JSON.stringify(m).includes('segredo do hook'));
+  assert.equal(paraExibicao(Array.from({ length: 500 }, (_, i) => ({ role: 'user', parts: [{ text: `m${i}` }] }))).length, 200, 'só as últimas 200');
+  assert.deepEqual(paraExibicao(undefined), []);
+});
+
+test('/api/historico: a conversa volta para a página (e diz se ainda está respondendo e com qual aliado)', async () => {
+  let liberar;
+  const { porta } = await subir({
+    aliado: 'central‮',
+    conversar: async (texto, { historico }) => {
+      if (texto === 'longa') await new Promise((r) => { liberar = r; });
+      return { texto: `resposta a ${texto}`, historico: [...historico, { role: 'user', parts: [{ text: texto }] }, { role: 'model', parts: [{ text: `resposta a ${texto}` }] }] };
+    },
+  });
+  const vazio = JSON.parse((await api(porta, '/api/historico', {})).corpo);
+  assert.deepEqual(vazio, { mensagens: [], ocupado: false, aliado: 'central' }, 'controle de direção (que reordena o texto) sai');
+  await api(porta, '/api/conversa', { texto: 'primeira' });
+  const longa = api(porta, '/api/conversa', { texto: 'longa' });
+  await dormir(60);
+  const durante = JSON.parse((await api(porta, '/api/historico', {})).corpo);
+  assert.equal(durante.ocupado, true);
+  assert.deepEqual(durante.mensagens, [{ quem: 'voce', texto: 'primeira' }, { quem: 'agente', texto: 'resposta a primeira' }]);
+  liberar();
+  await longa;
+  const depois = JSON.parse((await api(porta, '/api/historico', {})).corpo);
+  assert.equal(depois.ocupado, false);
+  assert.equal(depois.mensagens.length, 4);
+  await api(porta, '/api/limpar', {});
+  assert.deepEqual(JSON.parse((await api(porta, '/api/historico', {})).corpo).mensagens, []);
+});
+
+/** Carrega comum.js (o script da página) num contexto isolado, sem navegador: só as funções puras. */
+function carregarComum() {
+  const vm = require('vm');
+  const ctx = { window: {}, URL, TextDecoder, setTimeout, clearTimeout };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'site', 'publico', 'comum.js'), 'utf8'), ctx);
+  return ctx.window.GeminiSite;
+}
+/** Todos os nós (blocos e inline) de uma análise, para conferir que só existem tipos conhecidos. */
+function nos(blocos) {
+  const out = [];
+  const inl = (xs) => { for (const x of xs || []) { out.push(x.t); inl(x.filhos); } };
+  for (const b of blocos) {
+    out.push(b.tipo);
+    inl(b.inline);
+    if (b.blocos) out.push(...nos(b.blocos));
+    for (const it of b.itens || []) inl(it.inline);
+    for (const c of b.cabecalho || []) inl(c);
+    for (const l of b.linhas || []) for (const c of l) inl(c);
+  }
+  return out;
+}
+
+test('Markdown seguro: blocos e ênfases do dia a dia', () => {
+  const { analisarMarkdown: md } = carregarComum();
+  const simples = (x) => JSON.parse(JSON.stringify(x)); // os objetos vêm de outro contexto (vm)
+  assert.deepEqual(simples(md('# Título\n\nUm **negrito**, um *itálico*, ~~riscado~~ e `código`.\nNova linha.')), [
+    { tipo: 'titulo', nivel: 1, inline: [{ t: 'texto', v: 'Título' }] },
+    { tipo: 'paragrafo', inline: [
+      { t: 'texto', v: 'Um ' }, { t: 'negrito', filhos: [{ t: 'texto', v: 'negrito' }] }, { t: 'texto', v: ', um ' },
+      { t: 'italico', filhos: [{ t: 'texto', v: 'itálico' }] }, { t: 'texto', v: ', ' }, { t: 'riscado', filhos: [{ t: 'texto', v: 'riscado' }] },
+      { t: 'texto', v: ' e ' }, { t: 'codigo', v: 'código' }, { t: 'texto', v: '.' }, { t: 'quebra' }, { t: 'texto', v: 'Nova linha.' },
+    ] },
+  ]);
+  // nome_com_sublinhado e 2 * 3 * 4 não viram itálico; \* escapa; *** é negrito + itálico
+  assert.deepEqual(simples(md('use nome_da_variavel e 2 * 3 * 4 e \\*literal\\*')[0].inline), [{ t: 'texto', v: 'use nome_da_variavel e 2 * 3 * 4 e *literal*' }]);
+  assert.deepEqual(simples(md('***forte***')[0].inline), [{ t: 'negrito', filhos: [{ t: 'italico', filhos: [{ t: 'texto', v: 'forte' }] }] }]);
+  // código: cercado, com a língua; ainda aberto (a resposta chegando) também vira código; nada dentro é interpretado
+  assert.deepEqual(simples(md('```js\nconst a = **1**;\n```\ndepois')), [
+    { tipo: 'codigo', lingua: 'js', texto: 'const a = **1**;', aberto: false },
+    { tipo: 'paragrafo', inline: [{ t: 'texto', v: 'depois' }] },
+  ]);
+  assert.deepEqual(simples(md('~~~\nmeio')), [{ tipo: 'codigo', lingua: '', texto: 'meio', aberto: true }]);
+  // listas: ordenada com sublista e continuação; tarefas; numeração que não começa em 1
+  const l = simples(md('Passos:\n1. um\n2. dois\n   - dois-a\n   continua\n\n3. três\n\n- [x] feito\n- [ ] falta\n\n5. cinco'));
+  assert.deepEqual(l.map((b) => b.tipo), ['paragrafo', 'lista', 'lista', 'lista']);
+  assert.deepEqual(l[1].itens.map((i) => [i.nivel, i.ordenada, i.numero]), [[0, true, 1], [0, true, 2], [1, false, 0], [0, true, 3]]);
+  assert.deepEqual(l[1].itens[2].inline, [{ t: 'texto', v: 'dois-a' }, { t: 'quebra' }, { t: 'texto', v: 'continua' }]);
+  assert.deepEqual(l[2].itens.map((i) => i.marcado), [true, false]);
+  assert.equal(l[3].itens[0].numero, 5);
+  // tabela com alinhamento; citação; régua
+  const t = simples(md('| A | B | C |\n|:--|:-:|--:|\n| 1 | `x\\|y` | **3** |\n\n> citação\n> > dentro\n\n---'));
+  assert.deepEqual(t.map((b) => b.tipo), ['tabela', 'citacao', 'regua']);
+  assert.deepEqual(t[0].alinhamentos, ['', 'centro', 'direita']);
+  assert.deepEqual(t[0].linhas[0][1], [{ t: 'codigo', v: 'x\\|y' }]);
+  assert.deepEqual(t[1].blocos.map((b) => b.tipo), ['paragrafo', 'citacao']);
+});
+
+test('Markdown seguro: links só http/https, domínio de verdade à mostra, e nada vira HTML', () => {
+  const { analisarMarkdown: md, linkSeguro } = carregarComum();
+  const simples = (x) => JSON.parse(JSON.stringify(x));
+  assert.deepEqual(simples(md('[site](https://exemplo.com/a_(b)) e https://x.com/caminho. Fim')[0].inline), [
+    { t: 'link', href: 'https://exemplo.com/a_(b)', nu: false, filhos: [{ t: 'texto', v: 'site' }] },
+    { t: 'texto', v: ' e ' },
+    { t: 'link', href: 'https://x.com/caminho', nu: true, filhos: [{ t: 'texto', v: 'https://x.com/caminho' }] },
+    { t: 'texto', v: '. Fim' },
+  ]);
+  // javascript:, data:, file: e afins: fica só o texto, sem link
+  for (const perigoso of ['javascript:alert(1)', 'JaVaScRiPt:alert(1)', 'data:text/html,<b>x</b>', 'file:///etc/passwd', 'vbscript:x', '//evil.example/x']) {
+    const r = simples(md(`[clique](${perigoso})`)[0].inline);
+    assert.ok(!r.some((n) => n.t === 'link'), perigoso);
+    assert.equal(linkSeguro(perigoso), '', perigoso);
+  }
+  assert.equal(linkSeguro('https://banco.example@evil.example/'), 'https://banco.example@evil.example/', 'aceito, mas a página mostra o domínio de verdade');
+  // imagem: não carrega nada de fora — vira link com o texto alternativo
+  assert.deepEqual(simples(md('![gato](https://img.example/g.png)')[0].inline), [{ t: 'link', href: 'https://img.example/g.png', nu: false, filhos: [{ t: 'texto', v: 'gato' }] }]);
+  // HTML e scripts ficam como texto puro (um endereço https solto no meio vira link comum, e só ele)
+  const hostil = simples(md('<script>alert(1)</script> <img src=x onerror=alert(1)> <a href="javascript:x">a</a>\n\n<iframe src="https://x"></iframe>'));
+  assert.ok(nos(hostil).every((t) => ['paragrafo', 'texto', 'quebra', 'link'].includes(t)), JSON.stringify(nos(hostil)));
+  assert.equal(hostil[0].inline.length, 1, 'o primeiro parágrafo é um texto só, tal e qual');
+  assert.equal(hostil[0].inline[0].v, '<script>alert(1)</script> <img src=x onerror=alert(1)> <a href="javascript:x">a</a>');
+  assert.deepEqual(hostil[1].inline.filter((n) => n.t === 'link').map((n) => n.href), ['https://x/']);
+  const tipos = new Set(['paragrafo', 'titulo', 'regua', 'codigo', 'citacao', 'lista', 'tabela', 'texto', 'quebra', 'negrito', 'italico', 'riscado', 'link']);
+  assert.ok(nos(md('# a\n- b\n> c\n```\nd\n```\n|e|f|\n|-|-|\n|g|h|\n**i** *j* ~~k~~ `l` [m](https://n.o)')).every((t) => tipos.has(t)));
+});
+
+test('Markdown seguro: texto hostil ou enorme não trava a página', () => {
+  const { analisarMarkdown: md } = carregarComum();
+  const casos = [
+    '*a '.repeat(30000), '**a '.repeat(30000), '_'.repeat(100000), '`'.repeat(50000), '['.repeat(50000) + ']('.repeat(20000),
+    '> '.repeat(5000) + 'x', '- '.repeat(20000), '|'.repeat(50000) + '\n|-|\n', 'https://'.repeat(20000), '*'.repeat(100000),
+    Array.from({ length: 20000 }, (_, i) => `${' '.repeat(i % 12)}- item ${i}`).join('\n'), '~~a '.repeat(30000),
+  ];
+  for (const c of casos) {
+    const inicio = Date.now();
+    md(c);
+    assert.ok(Date.now() - inicio < 2000, `demorou ${Date.now() - inicio} ms: ${c.slice(0, 20)}...`);
+  }
+  // além de 200 mil caracteres, o resto entra como texto simples
+  const grande = md('a'.repeat(250000));
+  assert.equal(grande.length, 2);
+  assert.equal(grande[1].inline[0].v.length, 50000);
+});
+
+test('navegador real: a versão chat — Markdown, ferramenta, permissão no meio, recarregar e parar', { skip: pular }, async (t) => {
+  const { criarFerramenta } = require('../src/tools/browserTools');
+  const respostas = [];
+  const sinais = [];
+  const s = await subir({
+    conversar: async (texto, { historico, onText, onFerramenta, signal }) => {
+      sinais.push(signal);
+      if (texto === 'longa') {
+        onText('Procurando');
+        await new Promise((r) => signal.addEventListener('abort', r, { once: true }));
+        return { texto: '(interrompido por você)', historico, interrompido: true };
+      }
+      onFerramenta('web_fetch');
+      onText('Lista de **compras**:\n\n- arroz\n- feijão\n\n```bash\necho pronto\n```');
+      respostas.push(await prompt.ask('O agente quer abrir o app da loja. Permitir? (s/n) '));
+      onText('Depois da permissão.');
+      const final = 'Lista de **compras**:\n\n- arroz\n- feijão\n\n```bash\necho pronto\n```\n\nDepois da permissão.';
+      return { texto: final, historico: [...historico, { role: 'user', parts: [{ text: texto }] }, { role: 'model', parts: [{ text: final }] }] };
+    },
+  });
+  const f = criarFerramenta({ ask: async () => 's', loadConfig: () => ({ navegadorPermitirLocal: true }) });
+  t.after(() => f.encerrar());
+  const numero = (r, re) => Number((re.exec(r) || [])[1]);
+  let r = await f.execute('browser', { acao: 'abrir', url: s.endereco('/chat') });
+  assert.match(r, /Como posso ajudar\?/, 'a página de chat subiu (CSP deixou o script rodar)');
+  assert.ok(!r.includes(TOKEN), 'a chave sai da barra de endereço');
+  await f.execute('browser', { acao: 'digitar', elemento: numero(r, /\[(\d+)\] campo texto "Mensagem para o agente"/), texto: 'faz a lista' });
+  await f.execute('browser', { acao: 'clicar', elemento: numero(r, /\[(\d+)\] botão "Enviar"/) });
+  r = await f.execute('browser', { acao: 'esperar', texto: 'O agente pede a sua permissão', segundos: 10 });
+  assert.match(r, /Lista de compras:/, 'o Markdown virou formatação (sem os asteriscos)');
+  assert.match(r, /\[\d+\] botão "Copiar"/, 'o bloco de código tem o botão de copiar');
+  assert.match(r, /web_fetch/);
+  await f.execute('browser', { acao: 'clicar', elemento: numero(r, /\[(\d+)\] botão "Permitir"/) });
+  r = await f.execute('browser', { acao: 'esperar', texto: 'Depois da permissão.', segundos: 10 });
+  assert.match(r, /Você permitiu\./);
+  assert.deepEqual(respostas, ['s']);
+  // recarregar: a conversa volta
+  await f.execute('browser', { acao: 'abrir', url: `http://127.0.0.1:${s.porta}/chat` });
+  r = await f.execute('browser', { acao: 'esperar', texto: 'Depois da permissão.', segundos: 10 });
+  assert.match(r, /faz a lista/);
+  // parar no meio
+  await f.execute('browser', { acao: 'digitar', elemento: numero(r, /\[(\d+)\] campo texto "Mensagem para o agente"/), texto: 'longa' });
+  await f.execute('browser', { acao: 'clicar', elemento: numero(r, /\[(\d+)\] botão "Enviar"/) });
+  r = await f.execute('browser', { acao: 'esperar', texto: 'Procurando', segundos: 10 });
+  await f.execute('browser', { acao: 'clicar', elemento: numero(r, /\[(\d+)\] botão "Parar a resposta \(Esc\)"/) });
+  r = await f.execute('browser', { acao: 'esperar', texto: 'Você parou a resposta.', segundos: 10 });
+  assert.match(r, /"Você parou a resposta\." apareceu/);
+  assert.equal(sinais.at(-1).aborted, true, 'o servidor parou o agente');
 });

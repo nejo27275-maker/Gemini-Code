@@ -15,7 +15,7 @@
     <div class="marca" aria-label="Gemini Code, modo voz">
       <span class="marca-ponto" aria-hidden="true"></span>
       <span class="marca-nome">GEMINI CODE</span>
-      <span class="marca-modo">modo voz</span>
+      <span id="marca-modo" class="marca-modo">modo voz</span>
     </div>
     <nav class="topo-acoes" aria-label="Opções">
       <button id="btn-continuo" class="chip" type="button" aria-pressed="false" title="Conversa contínua: volta a ouvir depois de responder">Contínuo</button>
@@ -52,7 +52,7 @@
 
   <footer class="controles">
     <form id="form" class="entrada" autocomplete="off">
-      <input id="texto" type="text" maxlength="4000" placeholder="Fale ou digite aqui…" aria-label="Mensagem para o agente">
+      <input id="texto" type="text" maxlength="16000" placeholder="Fale ou digite aqui…" aria-label="Mensagem para o agente">
       <button class="enviar" type="submit" aria-label="Enviar">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 20.5 3.5 14 21l-2.6-7.4z"/></svg>
       </button>
@@ -71,6 +71,7 @@
     <ol id="historico-lista" class="historico-lista"></ol>
   </aside>
 </div>
+<script src="/comum.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>

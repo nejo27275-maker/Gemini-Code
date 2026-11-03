@@ -11,6 +11,8 @@
 //    expiram em "não". O texto mostrado passa por paraExibir; a página só usa textContent (nada vira HTML).
 // v0.48.1: "Parar" de verdade — /api/parar (botão, Esc) e a página fechada no meio param o agente (runOnce com
 // signal): nada de seguir rodando ferramentas e gastando cota com ninguém olhando; a pergunta aberta vira "não".
+// v0.49.0: duas páginas com a mesma API e a mesma segurança — "/" (voz, com a esfera) e "/chat" (conversa por texto,
+// comum) — e /api/historico, para a conversa voltar à tela depois de recarregar a página.
 'use strict';
 
 const crypto = require('crypto');
@@ -19,18 +21,27 @@ const http = require('http');
 const path = require('path');
 
 const PUBLICO = path.join(__dirname, 'publico');
+const HTML = 'text/html; charset=utf-8';
+const JS = 'text/javascript; charset=utf-8';
+const CSS = 'text/css; charset=utf-8';
 const ARQUIVOS = Object.freeze({
-  '/': ['index.html', 'text/html; charset=utf-8'],
-  '/app.js': ['app.js', 'text/javascript; charset=utf-8'],
-  '/app.css': ['app.css', 'text/css; charset=utf-8'],
+  '/': ['index.html', HTML],
+  '/app.js': ['app.js', JS],
+  '/app.css': ['app.css', CSS],
+  '/chat': ['chat.html', HTML],
+  '/chat.js': ['chat.js', JS],
+  '/chat.css': ['chat.css', CSS],
+  '/comum.js': ['comum.js', JS],
 });
 const CSP = [
   "default-src 'none'", "script-src 'self'", "style-src 'self'", "img-src 'self' data:", "connect-src 'self'",
   "media-src 'self' blob: mediastream:", "base-uri 'none'", "form-action 'none'", "frame-ancestors 'none'",
 ].join('; ');
 const MAX_CORPO = 64 * 1024;
-const MAX_TEXTO = 4000;
+const MAX_TEXTO = 16000; // v0.49.0: cabe colar um trecho de código no chat (16 mil caracteres ainda cabem no corpo de 64 KB)
 const PRAZO_PERGUNTA_MS = 120000;
+const AVISO_INTERROMPIDO = '(interrompido por você)'; // o mesmo de src/agent.js (conferido em teste)
+const MARCA_HOOK = '\n\n[contexto adicionado por hook do usuário]\n';
 
 const BASE = Object.freeze({
   'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer', 'cache-control': 'no-store',
@@ -62,6 +73,50 @@ function lerCorpo(req, max) {
 }
 
 /**
+ * O histórico do agente (formato do Gemini) -> o que a página mostra: as falas da pessoa e as respostas do agente, com
+ * as ferramentas que ele usou. Resultados de ferramenta, pensamentos do modelo e instruções internas (hooks) ficam de
+ * fora. Um turno com vários textos (antes e depois das ferramentas) vira uma mensagem só, como aparece ao vivo.
+ * @returns {{ quem: 'voce'|'agente'|'aviso', texto: string, ferramentas?: string[], interrompido?: true }[]}
+ */
+function paraExibicao(historico, { max = 200 } = {}) {
+  const { semControlesInvisiveis } = require('../ui/textoSeguro');
+  const out = [];
+  let agente = null;
+  const fecharAgente = () => {
+    if (agente && (agente.texto || agente.ferramentas.length || agente.interrompido)) out.push(agente);
+    agente = null;
+  };
+  for (const m of Array.isArray(historico) ? historico : []) {
+    if (!m || !Array.isArray(m.parts)) continue;
+    const textos = m.parts.filter((p) => p && typeof p.text === 'string' && !p.thought).map((p) => p.text);
+    if (m.role === 'user') {
+      if (m.parts.some((p) => p && p.functionResponse)) continue; // resultado de ferramenta: não é fala de ninguém
+      const t = textos.join('\n');
+      if (!t.trim() || t.startsWith('[hook Stop do usuário]')) continue;
+      fecharAgente();
+      if (t.startsWith('[...histórico do meio da conversa foi omitido')) { out.push({ quem: 'aviso', texto: 'O meio desta conversa foi resumido para caber.' }); continue; }
+      const corte = t.indexOf(MARCA_HOOK);
+      out.push({ quem: 'voce', texto: corte >= 0 ? t.slice(0, corte) : t });
+    } else if (m.role === 'model') {
+      if (!agente) agente = { quem: 'agente', texto: '', ferramentas: [] };
+      for (const p of m.parts) {
+        const nome = p && p.functionCall && p.functionCall.name;
+        if (nome && agente.ferramentas.length < 20 && !agente.ferramentas.includes(String(nome).slice(0, 80))) agente.ferramentas.push(String(nome).slice(0, 80));
+      }
+      const t = textos.join('').trim();
+      if (t === AVISO_INTERROMPIDO) agente.interrompido = true;
+      else if (t) agente.texto = agente.texto ? `${agente.texto}\n\n${t}` : t;
+    }
+  }
+  fecharAgente();
+  return out.slice(-max).map((x) => {
+    const y = { ...x, texto: semControlesInvisiveis(String(x.texto)).slice(0, 50000) };
+    if (y.quem === 'agente' && !y.ferramentas.length) delete y.ferramentas;
+    return y;
+  });
+}
+
+/**
  * Como o modo site conversa: o agente de sempre (runOnce) ou um aliado (mesmo caminho do "aliados chat").
  * @returns {(texto, { historico, onText, onFerramenta, onAlerta, signal }) => Promise<{ texto, historico, interrompido? }>}
  */
@@ -83,6 +138,7 @@ function conversarComAgente({ aliado = null, runOnce = (...a) => require('../age
  * @param {(fn) => () => void} [o.definirPerguntador]
  * @param {number} [o.prazoPerguntaMs]
  * @param {(texto: string) => void} [o.log] o que aparece no terminal (o pedido e o fim)
+ * @param {string|null} [o.aliado] nome do aliado, só para a página mostrar com quem você conversa
  */
 function criarServidorSite({
   token = crypto.randomBytes(24).toString('base64url'),
@@ -90,6 +146,7 @@ function criarServidorSite({
   definirPerguntador = (fn) => require('../ui/prompt').definirPerguntador(fn),
   prazoPerguntaMs = PRAZO_PERGUNTA_MS,
   log = () => {},
+  aliado = null,
 } = {}) {
   const { paraExibir, semControlesInvisiveis } = require('../ui/textoSeguro');
   const conteudo = {};
@@ -154,6 +211,9 @@ function criarServidorSite({
       return json(res, 200, { ok: true });
     }
     if (caminho === '/api/parar') return json(res, 200, { ok: true, parando: parar('pela página') });
+    if (caminho === '/api/historico') {
+      return json(res, 200, { mensagens: paraExibicao(historico), ocupado, aliado: aliado ? semControlesInvisiveis(String(aliado)).slice(0, 80) : null });
+    }
     if (caminho === '/api/limpar') {
       if (ocupado) return json(res, 409, { erro: 'espere a resposta terminar' });
       historico = [];
@@ -208,7 +268,9 @@ function criarServidorSite({
     }
   }
 
-  return { servidor, token, endereco: () => `http://127.0.0.1:${servidor.address().port}/#t=${token}` };
+  /** O endereço completo (com a chave) de uma das páginas: '/' (voz) ou '/chat'. */
+  const endereco = (pagina = '/') => `http://127.0.0.1:${servidor.address().port}${pagina === '/chat' ? '/chat' : '/'}#t=${token}`;
+  return { servidor, token, endereco };
 }
 
-module.exports = { criarServidorSite, conversarComAgente, CSP, MAX_TEXTO };
+module.exports = { criarServidorSite, conversarComAgente, paraExibicao, CSP, MAX_TEXTO, AVISO_INTERROMPIDO };

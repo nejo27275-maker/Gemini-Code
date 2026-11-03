@@ -61,8 +61,10 @@ O modelo GGUF é o mesmo, mas os históricos e as memórias do CLI e do app aind
 - **Saúde, compras, imagem, vídeo, câmera, TV e criar site/app** (v0.46.0): veja abaixo.
 - **Redes sociais, controle do celular/computador/sites e desafios** (v0.47.0): veja abaixo, `docs/REDES_SOCIAIS.md` e `docs/CONTROLE.md`.
 - **Modo site com voz** (v0.48.0): `gemini-code site --abrir` — converse falando, com a esfera animada (`docs/MODO_SITE.md`).
+- **Versão chat** (v0.49.0): `gemini-code site --chat --abrir` — um chat comum no navegador, com respostas formatadas,
+  permissões no meio da conversa, Parar e a conversa de volta ao recarregar.
 
-## Modo site: conversa por voz com a esfera — v0.48.0
+## Modo site: conversa por voz com a esfera — v0.48.0 (e a versão chat, v0.49.0)
 
 ```bash
 gemini-code site --abrir                    # abre a página no navegador (só neste aparelho)
@@ -72,7 +74,11 @@ gemini-code site --aliado central --abrir   # pela voz: computador, celular/TV, 
 Uma esfera brilhante com anéis e um círculo de risquinhos que reagem à sua voz (ouvindo), giram em violeta (pensando),
 pulsam com a fala (respondendo) e ficam âmbar quando o agente precisa da sua permissão — que você dá **na própria
 página**. Microfone com **espaço**; enquanto ele trabalha, o botão vira **Parar** (ou **Esc**) e para o agente de verdade
-(v0.48.1). Modo **contínuo** para conversar sem as mãos. Voz pelo Chrome ou Edge (PC ou Android). O servidor só atende em `127.0.0.1`, com uma chave nova a cada vez. Guia: `docs/MODO_SITE.md`.
+(v0.48.1). Modo **contínuo** para conversar sem as mãos. Voz pelo Chrome ou Edge (PC ou Android).
+
+Prefere digitar? `gemini-code site --chat --abrir` abre a **versão chat** (v0.49.0). É uma conversa comum, clara ou
+escura, sem a esfera. As respostas vêm formatadas (listas, tabelas, código com "Copiar"), e as permissões aparecem no meio
+da conversa. Tem também o botão Parar, a nova conversa, e a conversa volta ao recarregar a página. O servidor só atende em `127.0.0.1`, com uma chave nova a cada vez. Guia: `docs/MODO_SITE.md`.
 
 ## Redes sociais, celular, computador, sites e desafios — v0.47.0
 

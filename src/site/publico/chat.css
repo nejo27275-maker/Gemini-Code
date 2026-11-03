@@ -1,0 +1,246 @@
+/* versão chat do modo site (v0.49.0) — uma conversa comum, clara ou escura conforme o sistema */
+:root {
+  --fundo: #f6f7f9;
+  --superficie: #ffffff;
+  --superficie-2: #f0f2f5;
+  --borda: #e2e5ea;
+  --texto: #1c2026;
+  --texto-2: #5d6673;
+  --acento: #2f6feb;
+  --acento-forte: #1f58cc;
+  --acento-texto: #ffffff;
+  --voce: #e8efff;
+  --voce-texto: #11295a;
+  --codigo-inline: #eef0f3;
+  --codigo-fundo: #13171d;
+  --codigo-topo: #1d222a;
+  --codigo-texto: #e6e9ee;
+  --aviso-fundo: #fff8e8;
+  --aviso-borda: #f0c36d;
+  --aviso-texto: #5e4100;
+  --erro-fundo: #fdeef0;
+  --erro-borda: #efa4ae;
+  --erro-texto: #7d1b2a;
+  --sombra: 0 1px 2px rgba(16, 24, 40, 0.05), 0 2px 8px rgba(16, 24, 40, 0.06);
+  --largura: 820px;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fundo: #0f1115;
+    --superficie: #171a20;
+    --superficie-2: #1f232b;
+    --borda: #2b3039;
+    --texto: #e6e8ec;
+    --texto-2: #9ba4b0;
+    --acento: #6f9dff;
+    --acento-forte: #8db1ff;
+    --acento-texto: #0b1222;
+    --voce: #213052;
+    --voce-texto: #e4ecff;
+    --codigo-inline: #262b34;
+    --codigo-fundo: #0b0d11;
+    --codigo-topo: #161a20;
+    --aviso-fundo: #2a2210;
+    --aviso-borda: #6b5520;
+    --aviso-texto: #f3dca4;
+    --erro-fundo: #2c1519;
+    --erro-borda: #6e2a35;
+    --erro-texto: #ffc9d1;
+    --sombra: 0 1px 2px rgba(0, 0, 0, 0.3);
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--fundo);
+  color: var(--texto);
+  font: 15px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+button, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
+[hidden] { display: none !important; }
+svg { display: block; }
+
+.app { display: flex; flex-direction: column; height: 100%; height: 100dvh; }
+
+/* ---- topo ---- */
+.topo {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: max(10px, env(safe-area-inset-top)) 16px 10px;
+  background: var(--superficie); border-bottom: 1px solid var(--borda);
+}
+.identidade { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.logo {
+  flex: 0 0 auto; width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center;
+  background: var(--acento); color: var(--acento-texto); font-weight: 700;
+}
+.nome { margin: 0; font-size: 15px; line-height: 1.2; }
+.subtitulo { margin: 0; font-size: 12px; color: var(--texto-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.botao-sec {
+  display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto;
+  border: 1px solid var(--borda); background: var(--superficie); border-radius: 10px; padding: 7px 12px; font-size: 14px;
+}
+.botao-sec:hover:not(:disabled) { background: var(--superficie-2); }
+.botao-sec:disabled { opacity: 0.5; cursor: default; }
+.botao-sec svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+
+/* ---- conversa ---- */
+.conversa { flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; padding: 20px 16px 8px; }
+.mensagens { list-style: none; margin: 0 auto; padding: 0; max-width: var(--largura); display: flex; flex-direction: column; gap: 18px; }
+.msg { min-width: 0; }
+.msg-voce { align-self: flex-end; max-width: min(85%, 640px); }
+.balao {
+  background: var(--voce); color: var(--voce-texto); border-radius: 18px 18px 6px 18px; padding: 9px 14px;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.msg-agente { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 12px; align-items: start; }
+.avatar {
+  width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; font-size: 13px; font-weight: 700;
+  background: var(--superficie-2); color: var(--texto-2); border: 1px solid var(--borda);
+}
+.corpo { min-width: 0; padding-top: 3px; }
+.ferramentas { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.ferramenta {
+  font-size: 12px; color: var(--texto-2); background: var(--superficie); border: 1px solid var(--borda);
+  border-radius: 999px; padding: 2px 10px; font-family: var(--mono);
+}
+.ferramenta::before { content: "⚙ "; }
+.acoes-msg { margin-top: 6px; display: flex; gap: 6px; }
+.acao {
+  border: 1px solid transparent; background: transparent; color: var(--texto-2); border-radius: 8px; padding: 3px 8px; font-size: 12px;
+}
+.acao:hover { background: var(--superficie-2); border-color: var(--borda); }
+.nota-msg { margin: 6px 0 0; font-size: 13px; color: var(--texto-2); font-style: italic; }
+.erro-msg {
+  margin: 6px 0 0; padding: 8px 12px; border-radius: 10px; font-size: 14px;
+  background: var(--erro-fundo); border: 1px solid var(--erro-borda); color: var(--erro-texto); overflow-wrap: anywhere;
+}
+
+/* "digitando": três pontos enquanto a resposta não começa */
+.digitando { display: flex; gap: 5px; padding: 9px 0; }
+.digitando span { width: 7px; height: 7px; border-radius: 50%; background: var(--texto-2); opacity: 0.35; animation: ponto 1.2s infinite; }
+.digitando span:nth-child(2) { animation-delay: 0.15s; }
+.digitando span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes ponto { 0%, 60%, 100% { opacity: 0.25; transform: translateY(0); } 30% { opacity: 0.85; transform: translateY(-3px); } }
+
+/* avisos no meio da conversa (resumo do histórico, conversa terminando...) */
+.msg-aviso { align-self: center; font-size: 13px; color: var(--texto-2); text-align: center; max-width: 90%; }
+/* alerta de emergência (aliado de saúde): sempre visível e destacado */
+.msg-alerta {
+  padding: 12px 14px; border-radius: 12px; white-space: pre-wrap; overflow-wrap: anywhere; font-weight: 600;
+  background: var(--erro-fundo); border: 1px solid var(--erro-borda); color: var(--erro-texto);
+}
+
+/* ---- pedido de permissão ---- */
+.cartao {
+  margin-left: 42px; border: 1px solid var(--aviso-borda); background: var(--aviso-fundo); color: var(--aviso-texto);
+  border-radius: 14px; padding: 12px 14px; box-shadow: var(--sombra);
+}
+.cartao-titulo { margin: 0 0 6px; font-weight: 600; font-size: 14px; }
+.cartao-texto {
+  margin: 0 0 10px; white-space: pre-wrap; overflow-wrap: anywhere; font: 13px/1.5 var(--mono); color: var(--texto);
+  background: var(--superficie); border: 1px solid var(--borda); border-radius: 10px; padding: 8px 10px; max-height: 40vh; overflow: auto;
+}
+.cartao-botoes { display: flex; flex-wrap: wrap; gap: 8px; }
+.cartao-outra { display: flex; gap: 8px; margin-top: 8px; }
+.cartao-outra input {
+  flex: 1; min-width: 0; border: 1px solid var(--borda); background: var(--superficie); border-radius: 10px; padding: 7px 10px;
+}
+.cartao-estado { margin: 0; font-size: 13px; font-weight: 600; }
+.botao { border: 1px solid var(--borda); background: var(--superficie); border-radius: 10px; padding: 7px 14px; font-weight: 600; font-size: 14px; }
+.botao:hover { background: var(--superficie-2); }
+.botao-primario { background: var(--acento); border-color: var(--acento); color: var(--acento-texto); }
+.botao-primario:hover { background: var(--acento-forte); }
+
+/* ---- vazio ---- */
+.vazio { max-width: 560px; margin: 12vh auto 0; text-align: center; padding: 0 8px; }
+.vazio h2 { margin: 0 0 8px; font-size: 24px; letter-spacing: -0.01em; }
+.vazio p { margin: 0 0 18px; color: var(--texto-2); }
+.sugestoes { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.sugestao {
+  border: 1px solid var(--borda); background: var(--superficie); border-radius: 999px; padding: 7px 14px; font-size: 14px;
+  box-shadow: var(--sombra);
+}
+.sugestao:hover { border-color: var(--acento); color: var(--acento); }
+
+/* ---- rodapé: a caixa de mensagem ---- */
+.rodape { padding: 8px 16px max(12px, env(safe-area-inset-bottom)); }
+.caixa {
+  max-width: var(--largura); margin: 0 auto; display: flex; align-items: flex-end; gap: 8px;
+  background: var(--superficie); border: 1px solid var(--borda); border-radius: 22px; padding: 6px 6px 6px 16px; box-shadow: var(--sombra);
+}
+.caixa:focus-within { border-color: var(--acento); }
+.caixa textarea {
+  flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; resize: none; padding: 7px 0;
+  max-height: 200px; line-height: 1.5;
+}
+.caixa textarea::placeholder { color: var(--texto-2); }
+.enviar {
+  flex: 0 0 auto; width: 36px; height: 36px; border-radius: 50%; border: 0; display: grid; place-items: center;
+  background: var(--acento); color: var(--acento-texto);
+}
+.enviar:hover { background: var(--acento-forte); }
+.enviar svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.enviar .icone-parar { display: none; }
+.enviar .icone-parar rect { fill: currentColor; stroke: none; }
+.app[data-ocupado="true"] .enviar { background: var(--texto); color: var(--superficie); }
+.app[data-ocupado="true"] .enviar .icone-enviar { display: none; }
+.app[data-ocupado="true"] .enviar .icone-parar { display: block; }
+.dica { max-width: var(--largura); margin: 6px auto 0; text-align: center; font-size: 12px; color: var(--texto-2); }
+/* só para leitores de tela */
+.status { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* ---- Markdown das respostas (montado por comum.js) ---- */
+.md { overflow-wrap: anywhere; }
+.md > :first-child { margin-top: 0; }
+.md > :last-child { margin-bottom: 0; }
+.md p { margin: 0 0 0.75em; }
+.md .md-titulo { margin: 1em 0 0.4em; line-height: 1.3; }
+.md h3.md-titulo { font-size: 1.2em; }
+.md h4.md-titulo { font-size: 1.08em; }
+.md h5.md-titulo, .md h6.md-titulo { font-size: 1em; }
+.md ul, .md ol { margin: 0 0 0.75em; padding-left: 1.5em; }
+.md li { margin: 0.2em 0; }
+.md li > ul, .md li > ol { margin: 0.2em 0; }
+.md .md-tarefa { list-style: none; margin-left: -1.2em; }
+.md .md-caixa { color: var(--texto-2); }
+.md .md-feito { color: var(--acento); }
+.md blockquote { margin: 0 0 0.75em; padding: 2px 0 2px 12px; border-left: 3px solid var(--borda); color: var(--texto-2); }
+.md hr { border: 0; border-top: 1px solid var(--borda); margin: 1em 0; }
+.md a { color: var(--acento); text-decoration: underline; text-underline-offset: 2px; }
+.md .md-host { color: var(--texto-2); font-size: 0.85em; }
+.md code { font: 0.88em var(--mono); background: var(--codigo-inline); border-radius: 6px; padding: 0.12em 0.38em; }
+.md .md-codigo { margin: 0 0 0.75em; border-radius: 12px; overflow: hidden; background: var(--codigo-fundo); border: 1px solid var(--borda); }
+.md .md-codigo-topo {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 6px 4px 12px;
+  background: var(--codigo-topo); color: #aab3bf; font: 12px var(--mono);
+}
+.md .md-copiar { border: 0; background: transparent; color: #c9d1db; border-radius: 6px; padding: 3px 8px; font: 12px system-ui, sans-serif; }
+.md .md-copiar:hover { background: rgba(255, 255, 255, 0.08); }
+.md pre { margin: 0; padding: 12px 14px; overflow-x: auto; }
+.md pre code { background: none; padding: 0; border-radius: 0; color: var(--codigo-texto); font: 13px/1.55 var(--mono); white-space: pre; }
+.md .md-tabela { margin: 0 0 0.75em; overflow-x: auto; border: 1px solid var(--borda); border-radius: 10px; }
+.md table { border-collapse: collapse; width: 100%; font-size: 14px; }
+.md th, .md td { border-bottom: 1px solid var(--borda); padding: 7px 10px; text-align: left; vertical-align: top; }
+.md th { background: var(--superficie-2); font-weight: 600; }
+.md tr:last-child td { border-bottom: 0; }
+.md .md-centro { text-align: center; }
+.md .md-direita { text-align: right; }
+
+@media (max-width: 560px) {
+  .conversa { padding: 14px 12px 6px; }
+  .rodape { padding-left: 10px; padding-right: 10px; }
+  .msg-agente { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .avatar { display: none; }
+  .cartao { margin-left: 0; }
+  .botao-sec span { display: none; }
+  .botao-sec { padding: 8px; }
+  .vazio { margin-top: 8vh; }
+  .vazio h2 { font-size: 21px; }
+}
+@media (pointer: coarse) { .dica { display: none; } }
+@media (prefers-reduced-motion: reduce) { .digitando span { animation: none; opacity: 0.6; } }

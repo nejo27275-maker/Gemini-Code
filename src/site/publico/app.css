@@ -93,7 +93,30 @@ button { cursor: pointer; }
   padding: 14px 18px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
   box-shadow: 0 0 0 1px rgba(62, 230, 255, 0.05) inset, 0 12px 40px rgba(0, 0, 0, 0.45);
 }
-.resposta { white-space: pre-wrap; overflow-wrap: anywhere; }
+.resposta { overflow-wrap: anywhere; }
+/* v0.49.0: o Markdown das respostas (montado por comum.js), no visual do painel */
+.resposta > :first-child { margin-top: 0; }
+.resposta > :last-child { margin-bottom: 0; }
+.resposta p { margin: 0 0 0.6em; }
+.resposta .md-titulo { margin: 0.8em 0 0.3em; font-size: 1.05em; color: var(--ciano-forte); }
+.resposta ul, .resposta ol { margin: 0 0 0.6em; padding-left: 1.4em; }
+.resposta li { margin: 0.15em 0; }
+.resposta .md-tarefa { list-style: none; margin-left: -1.2em; }
+.resposta blockquote { margin: 0 0 0.6em; padding-left: 10px; border-left: 2px solid var(--borda); color: var(--texto-fraco); }
+.resposta hr { border: 0; border-top: 1px solid var(--borda); margin: 0.8em 0; }
+.resposta a { color: var(--ciano-forte); }
+.resposta .md-host { color: var(--texto-fraco); font-size: 0.85em; }
+.resposta code { font: 0.9em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: rgba(62, 230, 255, 0.1); border-radius: 5px; padding: 0.1em 0.35em; }
+.resposta .md-codigo { margin: 0 0 0.6em; border: 1px solid var(--borda); border-radius: 10px; overflow: hidden; background: rgba(0, 0, 0, 0.45); }
+.resposta .md-codigo-topo { display: flex; justify-content: space-between; align-items: center; padding: 3px 6px 3px 10px; font: 11px ui-monospace, Menlo, Consolas, monospace; color: var(--texto-fraco); border-bottom: 1px solid var(--borda); }
+.resposta .md-copiar { border: 0; background: transparent; color: var(--ciano-forte); font-size: 11px; border-radius: 6px; padding: 2px 8px; }
+.resposta pre { margin: 0; padding: 10px 12px; overflow-x: auto; }
+.resposta pre code { background: none; padding: 0; white-space: pre; }
+.resposta .md-tabela { margin: 0 0 0.6em; overflow-x: auto; }
+.resposta table { border-collapse: collapse; width: 100%; font-size: 14px; }
+.resposta th, .resposta td { border: 1px solid var(--borda); padding: 5px 8px; text-align: left; }
+.resposta .md-centro { text-align: center; }
+.resposta .md-direita { text-align: right; }
 .alerta {
   margin: 0 0 10px; padding: 10px 12px; border-radius: 12px; white-space: pre-wrap;
   background: rgba(255, 90, 110, 0.14); border: 1px solid rgba(255, 90, 110, 0.55); color: #ffd2d8; font-weight: 600;

@@ -1,21 +1,12 @@
 /* modo voz do gemini-code (v0.48.0) — a esfera, a voz do navegador e a conversa com o agente local.
- * Tudo que vem do servidor/modelo entra na página como texto (textContent): nada vira HTML. */
+ * Tudo que vem do servidor/modelo entra na página como texto (textContent): nada vira HTML. A chave, a API, os eventos e
+ * o Markdown das respostas vêm de comum.js (v0.49.0, o mesmo da versão chat). */
 (function () {
   'use strict';
 
-  // ---------------------------------------------------------------------------
-  // Token: vem no fragmento (#t=...), que não vai para o servidor nem para log; some da barra de endereço
-  // ---------------------------------------------------------------------------
-  const token = (() => {
-    const m = /[#&]t=([A-Za-z0-9_-]{16,})/.exec(location.hash);
-    let t = m ? m[1] : '';
-    try {
-      if (t) sessionStorage.setItem('gc-token', t);
-      else t = sessionStorage.getItem('gc-token') || '';
-    } catch { /* sem armazenamento: fica só em memória */ }
-    if (m) history.replaceState(null, '', location.pathname);
-    return t;
-  })();
+  const G = window.GeminiSite;
+  const token = G.lerToken();
+  const api = G.criarApi(token);
 
   const $ = (id) => document.getElementById(id);
   const app = $('app');
@@ -411,37 +402,12 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Conversa com o agente (o servidor manda os eventos linha a linha)
+  // Conversa com o agente (o servidor manda os eventos linha a linha: G.eventos)
   // ---------------------------------------------------------------------------
-  async function* eventos(res) {
-    const leitor = res.body.getReader();
-    const dec = new TextDecoder();
-    let buf = '';
-    for (;;) {
-      const { value, done } = await leitor.read();
-      if (done) break;
-      buf += dec.decode(value, { stream: true });
-      let i;
-      while ((i = buf.indexOf('\n')) >= 0) {
-        const linha = buf.slice(0, i).trim();
-        buf = buf.slice(i + 1);
-        if (linha) { try { yield JSON.parse(linha); } catch { /* linha quebrada: ignora */ } }
-      }
-    }
-  }
-
-  function api(caminho, corpo) {
-    return fetch(caminho, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
-      body: JSON.stringify(corpo),
-      cache: 'no-store',
-    });
-  }
-
   function mostrarResposta(texto) {
     elPainel.hidden = !texto && elAlerta.hidden; // sem nada para mostrar, sem a faixa vazia
-    elResposta.textContent = texto;
+    // v0.49.0: listas, código e negrito formatados (o Markdown de comum.js monta tudo como texto)
+    elResposta.replaceChildren(G.montarMarkdown(G.analisarMarkdown(texto), document));
     elPainel.scrollTop = elPainel.scrollHeight;
   }
 
@@ -488,6 +454,8 @@
       return;
     }
     marcarOcupado(true);
+    // o histórico entra primeiro: se a mensagem fosse antes, ela voltaria junto com o histórico e apareceria duas vezes
+    await pronto;
     pararDeOuvir();
     pararFala();
     elOuvido.textContent = texto;
@@ -504,7 +472,7 @@
         const erro = await res.json().catch(() => ({}));
         throw new Error(erro.erro || `HTTP ${res.status}`);
       }
-      for await (const ev of eventos(res)) {
+      for await (const ev of G.eventos(res)) {
         if (ev.tipo === 'parcial') { parcial += ev.texto; mostrarResposta(parcial); }
         else if (ev.tipo === 'ferramenta') { if (!parando) estado('pensando', `Usando: ${ev.nome}`); }
         else if (ev.tipo === 'alerta') { elAlerta.textContent = ev.texto; elAlerta.hidden = false; elPainel.hidden = false; }
@@ -597,10 +565,30 @@
     }
   });
 
+  // v0.49.0: a conversa volta para o histórico ao recarregar a página (e mostra com qual aliado você fala)
+  async function carregarHistorico() {
+    try {
+      const r = await api('/api/historico', {});
+      if (!r.ok) return;
+      const d = await r.json();
+      // o que a pessoa já mandou enquanto o histórico chegava continua depois dele
+      const depois = elLista.firstChild;
+      const inicio = elLista.childElementCount;
+      for (const m of d.mensagens || []) {
+        const t = m.texto || (m.interrompido ? '(interrompido por você)' : '');
+        if (t && (m.quem === 'voce' || m.quem === 'agente')) registrar(m.quem, t);
+      }
+      if (depois) for (const n of [...elLista.children].slice(inicio)) elLista.insertBefore(n, depois);
+      if (d.aliado) $('marca-modo').textContent = `aliado ${d.aliado}`;
+    } catch { /* sem histórico: segue vazio */ }
+  }
+
+  let pronto = Promise.resolve();
   if (!token) {
     estado('erro', 'Falta a chave da página');
     mostrarResposta('Abra o endereço completo que o terminal mostrou (com #t=...).');
   } else {
     estado('ocioso');
+    pronto = carregarHistorico();
   }
 })();

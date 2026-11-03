@@ -177,6 +177,7 @@ No modo "chat", digite /help para ver os comandos de sessão (/clear, /model, /s
   gemini-code adb ui | tocar "Enviar" | deslizar cima  Celular/TV: lê o que está na tela e toca pelo texto do botão
   gemini-code desafio criar "30 dias de caminhada"  Desafios: lembrete diário, marcar o dia, sequência e postar o progresso
   gemini-code site --abrir [--aliado central]  Modo site: conversa por VOZ no navegador, com a esfera animada (só neste aparelho)
+  gemini-code site --chat --abrir              Versão chat do modo site: uma conversa comum, por texto, no navegador
   gemini-code imagem gerar|editar|melhorar|descrever   Imagens com IA ou, para melhorar, sem IA (ImageMagick)
   gemini-code video melhorar|slideshow|gerar   Vídeos: melhorar e slideshow no aparelho (ffmpeg); gerar com IA (Veo)
   gemini-code camera foto|analisar|vigiar      Câmera do celular/webcam; vigiar avisa quando algo muda
@@ -924,15 +925,22 @@ async function main() {
     case 'site':
     case 'web':
     case 'painel': {
-      // v0.48.0: modo site — conversar com o agente pelo navegador, por texto ou voz, com a esfera animada (src/site/)
-      const USO = 'Uso: gemini-code site [--abrir] [--porta 8765] [--aliado NOME]   (porta 0 = qualquer uma livre)';
+      // v0.48.0: modo site — conversar com o agente pelo navegador, por voz (com a esfera animada) ou, desde a v0.49.0,
+      // pela versão chat (/chat: uma conversa comum, por texto). Mesmo servidor e mesma segurança (src/site/).
+      const USO = 'Uso: gemini-code site [--chat] [--abrir] [--porta 8765] [--aliado NOME]   (--chat: a versão chat, sem a esfera; porta 0 = qualquer uma livre)';
       const flags = { _: [] };
       for (let i = 0; i < rest.length; i++) {
-        if (rest[i] === '--abrir') flags.abrir = true;
-        else if (rest[i].startsWith('--') && i + 1 < rest.length) flags[rest[i].slice(2)] = rest[++i];
-        else flags._.push(rest[i]);
+        const a = rest[i];
+        if (a === '--abrir' || a === '--chat') flags[a.slice(2)] = true;
+        else if (a === '--porta' || a === '--aliado') {
+          // valor obrigatório: "--porta --abrir" não pode virar porta "--abrir"
+          if (i + 1 >= rest.length || rest[i + 1].startsWith('--')) { console.error(chalk.red(`Erro: ${a} precisa de um valor. ${USO}`)); process.exitCode = 1; return; }
+          flags[a.slice(2)] = rest[++i];
+        } else if (a === '--help' || !a.startsWith('--')) flags._.push(a);
+        else { console.error(chalk.red(`Erro: opção desconhecida ${paraTerminal(a)}. ${USO}`)); process.exitCode = 1; return; }
       }
       if (['ajuda', 'help', '--help'].includes(flags._[0])) { console.log(USO); return; }
+      if (flags._[0] === 'chat') flags.chat = true; // "gemini-code site chat" também vale
       const porta = flags.porta === undefined ? 8765 : Number(flags.porta);
       if (!Number.isInteger(porta) || porta < 0 || porta > 65535) { console.error(chalk.red(`Erro: --porta inválida. ${USO}`)); process.exitCode = 1; return; }
       const site = require('../src/site/servidor');
@@ -944,15 +952,23 @@ async function main() {
         if (!agente) { console.error(chalk.red(`Erro: aliado "${paraTerminal(String(flags.aliado))}" não encontrado. Veja os seus com: gemini-code aliados listar`)); process.exitCode = 1; return; }
         aliado = { store, agente };
       }
-      const s = site.criarServidorSite({ conversar: site.conversarComAgente({ aliado }), log: (m) => console.log(chalk.dim(paraTerminal(m))) });
+      const s = site.criarServidorSite({
+        conversar: site.conversarComAgente({ aliado }),
+        log: (m) => console.log(chalk.dim(paraTerminal(m))),
+        aliado: aliado ? aliado.agente.name : null,
+      });
       s.servidor.on('error', (e) => {
         console.error(chalk.red(`Erro: ${e.code === 'EADDRINUSE' ? `a porta ${porta} está em uso (use --porta 8766, ou --porta 0 para qualquer uma livre)` : e.message}`));
         process.exitCode = 1;
       });
       s.servidor.listen(porta, '127.0.0.1', async () => {
-        const url = s.endereco();
-        console.log(chalk.green(`Modo site${aliado ? ` com o aliado "${aliado.agente.name}"` : ''}: ${url}`));
-        console.log(chalk.dim('Só neste aparelho (127.0.0.1). A chave no fim do endereço (#t=...) muda a cada vez: não compartilhe. Voz: Chrome ou Edge. As confirmações das ferramentas aparecem na página. Ctrl+C para parar.'));
+        const voz = s.endereco('/');
+        const chat = s.endereco('/chat');
+        console.log(chalk.green(`Modo site${aliado ? ` com o aliado "${paraTerminal(aliado.agente.name)}"` : ''}:`));
+        console.log(`  ${flags.chat ? chalk.green('Chat') : 'Chat'} (conversa por texto):   ${chat}`);
+        console.log(`  ${flags.chat ? 'Voz' : chalk.green('Voz')} (com a esfera animada): ${voz}`);
+        console.log(chalk.dim('Só neste aparelho (127.0.0.1). A chave no fim do endereço (#t=...) muda a cada vez: não compartilhe. As duas páginas são a mesma conversa. Voz: Chrome ou Edge. As confirmações das ferramentas aparecem na página. Ctrl+C para parar.'));
+        const url = flags.chat ? chat : voz;
         if (flags.abrir && !(await require('../src/abrir').abrir(url))) console.log(chalk.dim('Não consegui abrir o navegador sozinho: copie o endereço acima.'));
       });
       return;

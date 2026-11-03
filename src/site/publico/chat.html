@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="color-scheme" content="light dark">
+<meta name="referrer" content="no-referrer">
+<title>Gemini Code — chat</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/chat.css">
+</head>
+<body>
+<div id="app" class="app">
+  <header class="topo">
+    <div class="identidade">
+      <span class="logo" aria-hidden="true">G</span>
+      <div>
+        <h1 class="nome">Gemini Code</h1>
+        <p id="subtitulo" class="subtitulo">Chat</p>
+      </div>
+    </div>
+    <button id="btn-nova" class="botao-sec" type="button" aria-label="Nova conversa" title="Começar uma conversa nova (a atual some desta tela e do agente)">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      <span>Nova conversa</span>
+    </button>
+  </header>
+
+  <main id="conversa" class="conversa">
+    <section id="vazio" class="vazio" aria-labelledby="vazio-titulo">
+      <h2 id="vazio-titulo">Como posso ajudar?</h2>
+      <p>Escreva o que você precisa. Quando uma ação precisar da sua permissão, eu pergunto aqui mesmo.</p>
+      <div class="sugestoes">
+        <button class="sugestao" type="button">O que você consegue fazer?</button>
+        <button class="sugestao" type="button">Explique o projeto desta pasta</button>
+        <button class="sugestao" type="button">Me ajude a escrever um e-mail</button>
+      </div>
+    </section>
+    <ol id="mensagens" class="mensagens" role="log" aria-label="Conversa"></ol>
+  </main>
+
+  <footer class="rodape">
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+    <form id="form" class="caixa" autocomplete="off">
+      <textarea id="texto" rows="1" maxlength="16000" placeholder="Escreva uma mensagem…" aria-label="Mensagem para o agente" enterkeyhint="send"></textarea>
+      <button id="btn-enviar" class="enviar" type="submit" aria-label="Enviar">
+        <svg class="icone-enviar" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5"/></svg>
+        <svg class="icone-parar" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>
+      </button>
+    </form>
+    <p class="dica">Enter envia · Shift+Enter quebra a linha · Esc para a resposta</p>
+  </footer>
+</div>
+<script src="/comum.js"></script>
+<script src="/chat.js"></script>
+</body>
+</html>

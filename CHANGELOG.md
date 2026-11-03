@@ -1,3 +1,44 @@
+## 0.49.0 — versão chat do modo site
+
+Base: a 0.48.1 (mesmo branch, ainda sem PR).
+
+**Novo: a versão chat** (`gemini-code site --chat --abrir`, página `/chat`). É um chat comum, que não tem nada da esfera:
+- **Visual:** claro ou escuro conforme o sistema, e funciona no celular.
+- **Respostas formatadas:** títulos, listas (inclusive dentro de listas e de tarefas), tabelas com alinhamento,
+  citações e blocos de código com o botão **Copiar**.
+- **Links:** só `http`/`https`. Um link com texto próprio mostra o domínio de verdade ao lado, e uma imagem não carrega
+  nada de fora (vira link). HTML e scripts aparecem como texto.
+- **Resposta ao vivo:** aparece conforme chega, com as ferramentas usadas.
+- **Permissões:** aparecem **no meio da conversa** (Permitir / Não permitir / outra resposta). O que vem depois aparece
+  abaixo do pedido.
+- **Parar:** enquanto responde, o botão de enviar vira **Parar** (ou Esc).
+- **Nova conversa** e **conversa de volta ao recarregar** a página.
+- **Enter:** no PC, Enter envia e Shift+Enter quebra a linha; no celular, Enter quebra a linha.
+- **Mesmo servidor e mesma conversa da página de voz:** a segurança é a mesma (só `127.0.0.1`, chave por execução, Host e
+  Origin conferidos, CSP fechada).
+
+**Melhorias:**
+- `src/site/publico/comum.js`: as duas páginas usam o mesmo código para a chave, a API, os eventos e o **Markdown
+  seguro**. A análise é pura (testada sem navegador) e a montagem cria um elemento de cada vez, nunca HTML, sempre
+  com limites contra texto hostil.
+- **Página de voz:** a resposta agora vem formatada (antes os `**` e as crases apareciam crus), e o histórico da conversa
+  volta ao recarregar, mostrando com qual aliado você fala.
+- **`/api/historico`:** devolve só o que é para mostrar, sem resultado de ferramenta, pensamento do modelo ou contexto de
+  hook. Também diz se ainda está respondendo, para a página esperar terminar.
+- **Opções do `gemini-code site`:** `--porta`/`--aliado` sem valor não engolem mais a opção seguinte, e uma opção
+  desconhecida dá erro claro em vez de passar em silêncio. O terminal mostra os dois endereços (chat e voz).
+- **Tamanho das mensagens:** até 16.000 caracteres (antes 4.000), para caber um trecho de código colado. Ainda cabe nos
+  64 KB do pedido.
+- **Bug achado pelos testes novos:** uma lista com marcadores logo depois de uma lista numerada entrava nela (e ganhava
+  números). Agora começa outra lista.
+- **Corrida achada na revisão:** uma mensagem mandada antes de o histórico chegar (um clique rápido numa sugestão, por
+  exemplo) podia sumir da tela ou aparecer duas vezes. Agora o envio espera o histórico, o que leva milissegundos (é
+  local), nas duas páginas. Conferido com uma reprodução no Chromium que atrasa o histórico de propósito.
+
+**Testes:** `tests/site.test.js` tem 6 testes novos, um deles com o chat de ponta a ponta num Chromium de verdade. Também
+foram tirados prints da versão chat no tema claro, no escuro e no celular. A suíte inteira tem 992 testes (991 passando,
+1 pulado como root) no Node 20 e no 22, e também no fuso de São Paulo. ESLint 0 problemas.
+
 ## 0.48.1 — "Parar" de verdade
 
 Base: a 0.48.0 (mesmo branch, ainda sem PR).
