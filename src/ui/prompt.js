@@ -79,9 +79,18 @@ function ask(question) {
     }
     const atual = getShared();
     let feito = false;
+    // v0.49.1: dá para cancelar (Ctrl+C no chat durante uma resposta): a pergunta some e vale "não"
+    const ctrl = new AbortController();
+    const cancelar = () => {
+      if (feito) return;
+      ctrl.abort();
+      process.stdout.write('\n');
+      terminar('');
+    };
     const terminar = (resposta) => {
       if (feito) return;
       feito = true;
+      abertas.delete(cancelar);
       atual.removeListener('close', aoFechar);
       resolve(resposta);
     };
@@ -89,9 +98,18 @@ function ask(question) {
       process.stdout.write(`\n${AVISO_SEM_ENTRADA}`);
       terminar('');
     }
+    abertas.add(cancelar);
     atual.once('close', aoFechar);
-    atual.question(question, (answer) => terminar(answer.trim()));
+    atual.question(question, { signal: ctrl.signal }, (answer) => terminar(answer.trim()));
   });
+}
+
+const abertas = new Set();
+/** v0.49.1: cancela as perguntas abertas no terminal (cada uma vale "não"); devolve quantas eram. */
+function cancelarPerguntas() {
+  const n = abertas.size;
+  for (const cancelar of [...abertas]) cancelar();
+  return n;
 }
 
 /**
@@ -183,4 +201,4 @@ function closeShared() {
   }
 }
 
-module.exports = { getShared, ask, closeShared, perguntarColando, suspenderPerguntas, perguntasSuspensas, perguntarSegredos, definirPerguntador };
+module.exports = { getShared, ask, closeShared, perguntarColando, suspenderPerguntas, perguntasSuspensas, perguntarSegredos, definirPerguntador, cancelarPerguntas };

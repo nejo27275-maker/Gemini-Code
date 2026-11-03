@@ -38,7 +38,8 @@ Um chat comum, claro ou escuro conforme o seu sistema, sem esfera nem voz:
 - **Falar:** toque no microfone (ou aperte **espaço**). Fale; quando você para, ele envia.
 - **Parar:** enquanto o agente trabalha, o botão do microfone vira **Parar** (um quadrado). Ele e o **Esc** param o
   agente de verdade: ele não chama o modelo de novo, não usa a próxima ferramenta e uma pergunta aberta conta como
-  "não". Uma ação que já começou (gravar um arquivo, por exemplo) termina antes, para não ficar pela metade.
+  "não". Um comando de terminal em andamento é interrompido, como o Ctrl+C de um terminal (v0.49.1). Já uma ação como
+  gravar um arquivo termina antes, para não ficar pela metade.
   Fechar a página no meio também para o agente. O espaço continua sendo só "falar".
 - **Contínuo:** depois de responder, ele volta a ouvir sozinho — uma conversa sem as mãos.
 - **Falar respostas:** liga/desliga a leitura em voz alta (o texto aparece sempre).

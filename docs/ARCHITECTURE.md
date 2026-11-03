@@ -69,6 +69,10 @@ documento é sobre como o código por trás disso está organizado.
   `src/site/publico/comum.js` (chave, API, eventos e o Markdown seguro, usado pelas duas páginas: análise pura em blocos
   e montagem elemento por elemento, sem HTML). `/api/historico` (`paraExibicao` em `src/site/servidor.js`) devolve a
   conversa para a página ao recarregar; `gemini-code site --chat`.
+- **v0.49.1** — `src/emAndamento.js`: os comandos de terminal em primeiro plano (`run_shell`, `run_checks`, direto ou na
+  sandbox) ficam registrados. O Ctrl+C e o "Parar" os interrompem como um terminal (SIGINT na árvore, SIGKILL em 2 s)
+  e, ao sair, nenhum fica órfão. No chat do terminal, um ouvinte de `SIGINT` na readline compartilhada para a resposta
+  (`runOnce({ signal })`) e cancela a confirmação aberta (`cancelarPerguntas` em `src/ui/prompt.js`).
 - **`src/routineRunner.js`** — executor das rotinas: `http-check` e, desde a v0.44.0,
   `agente` (o agente roda sozinho; `src/ui/prompt.js` responde "não" a toda confirmação).
 - Os provedores `llamacpp`, `ollama` e `openai` pedem **sempre** em streaming; o
@@ -221,6 +225,8 @@ extra). Cobertura atual:
 | desafios: progresso, sequência, calendário, lembrete que se encerra, postar o progresso, ferramenta (v0.47.0) | `desafios.test.js` |
 | sandbox sem órfão no encerrar, marca única por execução, `--at` das rotinas sem adivinhar a data (v0.47.0) | `v047.test.js` |
 | modo site: segurança do servidor (chave, Origin, Host/DNS rebinding, CORS, CSP, tamanhos), conversa em eventos, uma por vez, confirmações na página (expiram em "não"), aliado, e a página num Chromium de verdade (v0.48.0); "Parar" pela página, página fechada e o botão clicado no Chromium (v0.48.1) | `site.test.js` |
+| chat do terminal num pseudo-terminal de verdade (`script`): Ctrl+C para a resposta e corta a conexão, numa confirmação vale "não", interrompe o comando rodando, duas vezes sai sem órfão; no `você>`, sai (v0.49.1) | `chatTerminal.test.js` |
+| comandos em andamento: SIGINT como um terminal, SIGKILL em 2 s para quem ignora (com os filhos), nada órfão ao sair; `run_shell` (direto e na sandbox) e `run_checks` interrompidos (v0.49.1) | `emAndamento.test.js` |
 | versão chat (v0.49.0): páginas e CSP, histórico para a página (`paraExibicao`, `/api/historico`), Markdown seguro (blocos, links só http/https, HTML vira texto, texto hostil/enorme não trava) e o chat de ponta a ponta num Chromium de verdade | `site.test.js` |
 | "Parar": `runOnce` com signal (antes do modelo, durante a resposta, entre ferramentas; histórico consistente); provedores sem repetir, sem trocar de lado, sem reserva e sem ligar o llama.cpp depois do "Parar"; conexão cortada de verdade (v0.48.1) | `parar.test.js` |
 | hooks `UserPromptSubmit`, `SessionStart`, `Stop` | `hooksEventos.test.js` |

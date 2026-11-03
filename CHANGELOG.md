@@ -1,3 +1,37 @@
+## 0.49.1 — Ctrl+C de verdade no chat do terminal
+
+Base: a 0.49.0 (mesmo branch, ainda sem PR).
+
+**O problema** (reproduzido num pseudo-terminal de verdade, com um modelo falso que escreve devagar): no `gemini-code chat`,
+Ctrl+C no meio de uma resposta **não parava nada**. A resposta seguia até o fim (com ferramentas, se houvesse), e o chat
+fechava sozinho depois, sem aviso. O Ctrl+C só fechava a leitura do teclado.
+
+**Agora:**
+- **Ctrl+C durante uma resposta:** para a resposta, como o "Parar" do modo site. O agente não chama o modelo de novo, a
+  conexão com o modelo é cortada e você volta para o `você>`.
+- **Ctrl+C numa pergunta de permissão:** vale "não", e a ação não roda.
+- **Ctrl+C com um comando de terminal rodando** (`run_shell`, `run_checks`): o comando é interrompido como num terminal
+  comum, com SIGINT nele e em tudo que ele abriu (o git, por exemplo, ainda limpa o próprio lock). Quem ignora leva
+  SIGKILL em 2 s. O modelo fica sabendo que você interrompeu e vê o que o comando tinha mostrado até ali. O `run_checks`
+  não começa a próxima verificação.
+- **Ctrl+C de novo enquanto ele para,** ou Ctrl+C no `você>`: sai, encerrando os servidores MCP como deve.
+- **Nenhum comando fica órfão:** ao sair, nenhum comando em primeiro plano fica rodando sozinho (`src/emAndamento.js`).
+- **O "Parar" do modo site** também interrompe o comando em andamento.
+- **Vale também para o `/ciencia`.** O aviso de abertura e o `/help` explicam o novo Ctrl+C.
+
+**Testes:**
+- `tests/chatTerminal.test.js` (3) abre o chat de verdade num pseudo-terminal (`script`, do util-linux) e confere:
+  - Ctrl+C no meio da resposta (com a conexão cortada);
+  - Ctrl+C numa permissão (o comando não roda e o modelo não é chamado de novo);
+  - Ctrl+C com um comando rodando, e duas vezes sem deixar órfão;
+  - Ctrl+C no `você>`.
+- Rodados contra o chat antigo, os 3 falham.
+- `tests/emAndamento.test.js` (7): SIGINT, SIGKILL para quem ignora (com os filhos), nada órfão ao sair, e o
+  `run_shell` (direto e na sandbox) e o `run_checks` interrompidos de verdade.
+- Um teste antigo trocava o `rl.question` por uma versão de 2 argumentos. Agora ela usa a assinatura real (com opções).
+- Suíte inteira: 1002 testes (1001 passando, 1 pulado como root) no Node 20 e no 22, e no fuso de São Paulo. ESLint 0
+  problemas.
+
 ## 0.49.0 — versão chat do modo site
 
 Base: a 0.48.1 (mesmo branch, ainda sem PR).

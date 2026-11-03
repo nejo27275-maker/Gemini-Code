@@ -161,7 +161,9 @@ function criarServidorSite({
     if (!parador) return false;
     if (!parador.signal.aborted) {
       parador.abort();
-      log(`[site] parado (${motivo})`);
+      // v0.49.1: um comando de terminal em andamento é interrompido como num terminal (src/emAndamento.js)
+      const comandos = require('../emAndamento').interromperTodos();
+      log(`[site] parado (${motivo})${comandos ? ` — ${comandos} comando(s) interrompido(s)` : ''}`);
     }
     for (const [, p] of pendentes) p.responder('');
     return true;

@@ -24,6 +24,7 @@ const { loadConfig, PROTECTED_PATHS, PROTECTED_DIRS } = require('../config');
 const prompt = require('../ui/prompt'); // pelo objeto: os testes trocam prompt.ask
 const { paraExibir } = require('../ui/textoSeguro');
 const sandbox = require('../sandbox');
+const emAndamento = require('../emAndamento');
 
 // Achado num teste (set/2026): com confirmShell:false, o agente rodou um
 // "node -e ...fs.writeFileSync(configPath...)" via run_shell e reescreveu
@@ -237,11 +238,16 @@ function formatarResultado(err, stdout, stderr, timeoutMs) {
 
 function runCommand(command, { timeoutMs, maxBuffer, cwd }) {
   return new Promise((resolve) => {
+    let acompanhado = null; // v0.49.1: o Ctrl+C/"Parar" interrompe (src/emAndamento.js)
     const child = exec(
       command,
       { encoding: 'utf8', maxBuffer, timeout: timeoutMs, killSignal: 'SIGKILL', cwd: cwd || undefined },
-      (err, stdout, stderr) => resolve(formatarResultado(err, stdout, stderr, timeoutMs))
+      (err, stdout, stderr) => {
+        if (acompanhado) acompanhado.fim();
+        resolve(acompanhado && acompanhado.interrompido() ? emAndamento.textoInterrompido(stdout, stderr) : formatarResultado(err, stdout, stderr, timeoutMs));
+      }
     );
+    acompanhado = emAndamento.acompanhar(child);
     // Timeout extra de segurança: o `timeout` do próprio `exec` já cuida de
     // matar o processo, mas alguns ambientes (ex.: certas builds de Termux)
     // não repassam SIGKILL para netos do processo filho (ex.: um `sh -c`
@@ -256,8 +262,10 @@ function runCommand(command, { timeoutMs, maxBuffer, cwd }) {
 
 // v0.45.0: o mesmo que runCommand, mas pelo bwrap (src/sandbox.js, que também serve ao run_checks).
 async function rodarNaSandbox(prep, { timeoutMs, maxBuffer }) {
-  const { err, stdout, stderr } = await sandbox.rodar(prep, { timeoutMs, maxBuffer });
-  return formatarResultado(err, stdout, stderr, timeoutMs);
+  let acompanhado = null;
+  const { err, stdout, stderr } = await sandbox.rodar(prep, { timeoutMs, maxBuffer, aoComecar: (filho) => { acompanhado = emAndamento.acompanhar(filho, { sandboxId: prep.id }); } });
+  if (acompanhado) acompanhado.fim();
+  return acompanhado && acompanhado.interrompido() ? emAndamento.textoInterrompido(stdout, stderr) : formatarResultado(err, stdout, stderr, timeoutMs);
 }
 
 async function execute(name, args) {

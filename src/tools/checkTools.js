@@ -19,6 +19,7 @@ const { loadConfig } = require('../config');
 const prompt = require('../ui/prompt'); // pelo objeto: os testes trocam prompt.ask
 const { paraExibir } = require('../ui/textoSeguro');
 const sandbox = require('../sandbox');
+const emAndamento = require('../emAndamento');
 
 const TIMEOUT_MS = 120000;
 const MAX_BUFFER = 1024 * 1024 * 10;
@@ -60,7 +61,12 @@ function detectarComandos(cwd) {
 // shellTimeoutMs do config (suíte grande passava dos 2 min fixos e era morta no meio).
 function rodar(cmd, cwd, { prep = null, timeoutMs = TIMEOUT_MS } = {}) {
   return new Promise((resolve) => {
+    let acompanhado = null; // v0.49.1: o Ctrl+C/"Parar" interrompe (src/emAndamento.js)
     const tratar = (err, stdout, stderr) => {
+      if (acompanhado) acompanhado.fim();
+      if (acompanhado && acompanhado.interrompido()) {
+        return resolve({ ok: false, ignorado: null, interrompido: true, saida: emAndamento.textoInterrompido(stdout, stderr), motivo: 'interrompido pelo usuário' });
+      }
       const saida = [stdout, stderr].filter(Boolean).join('\n').trim() || '(sem saída)';
       // v0.3.7: nem todo exit code != 0 é falha do código do usuário.
       //  - pytest sai com 5 quando não encontrou nenhum teste;
@@ -78,11 +84,13 @@ function rodar(cmd, cwd, { prep = null, timeoutMs = TIMEOUT_MS } = {}) {
       });
     };
     if (prep) {
-      sandbox.rodar(prep, { timeoutMs, maxBuffer: MAX_BUFFER }).then(({ err, stdout, stderr }) => tratar(err, stdout, stderr));
+      const aoComecar = (filho) => { acompanhado = emAndamento.acompanhar(filho, { sandboxId: prep.id }); };
+      sandbox.rodar(prep, { timeoutMs, maxBuffer: MAX_BUFFER, aoComecar }).then(({ err, stdout, stderr }) => tratar(err, stdout, stderr));
       return;
     }
     // CI=true evita o modo watch (jest/vitest/react-scripts) que ficava pendurado até o timeout.
-    exec(cmd, { cwd, timeout: timeoutMs, maxBuffer: MAX_BUFFER, killSignal: 'SIGKILL', env: { ...process.env, CI: 'true' } }, tratar);
+    const filho = exec(cmd, { cwd, timeout: timeoutMs, maxBuffer: MAX_BUFFER, killSignal: 'SIGKILL', env: { ...process.env, CI: 'true' } }, tratar);
+    acompanhado = emAndamento.acompanhar(filho);
   });
 }
 
@@ -161,6 +169,7 @@ async function execute(name, args) {
 
   const partes = [];
   let algumFalhou = false;
+  let interrompido = false;
   for (const { label, cmd } of comandos) {
     const prep = decisao.naSandbox ? sandbox.montar(cmd, { info: decisao.info, cfg, cwd, env: { ...process.env, CI: 'true' } }) : null;
     const resultado = await rodar(cmd, cwd, { prep, timeoutMs });
@@ -168,7 +177,10 @@ async function execute(name, args) {
     partes.push(
       `--- ${label} (${resultado.ignorado ? `ignorado: ${resultado.ignorado}` : resultado.ok ? 'passou' : `falhou: ${resultado.motivo}`}) ---\n${resultado.saida}`
     );
+    // v0.49.1: Ctrl+C/"Parar" — não começa a próxima verificação
+    if (resultado.interrompido) { interrompido = true; break; }
   }
+  if (interrompido) return `Verificações interrompidas pelo usuário (Ctrl+C ou "Parar"). Não rode de novo sem ele pedir.\n\n${partes.join('\n\n')}`;
   const cabecalho = algumFalhou
     ? 'Alguma verificação falhou — corrija o problema e rode run_checks de novo antes de concluir.'
     : 'Todas as verificações passaram.';

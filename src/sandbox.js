@@ -333,7 +333,8 @@ function montar(comando, {
  * no FIM da montagem: encerrado logo no começo, o de fora morria e o comando seguia vivo, órfão. Matar o
  * processo 1 do namespace de PID derruba tudo o que roda lá dentro. Só Linux (/proc); devolve quantos achou.
  */
-function matarDescendentes(pid) {
+// v0.49.1: `sinal` (padrão SIGKILL) — o "Parar" manda SIGINT primeiro, como um terminal (src/emAndamento.js)
+function matarDescendentes(pid, sinal = 'SIGKILL') {
   try {
     const porPai = new Map();
     for (const n of fs.readdirSync('/proc')) {
@@ -351,7 +352,7 @@ function matarDescendentes(pid) {
       todos.push(p);
       fila.push(...(porPai.get(p) || []));
     }
-    for (const p of todos) { try { process.kill(p, 'SIGKILL'); } catch { /* já saiu */ } }
+    for (const p of todos) { try { process.kill(p, sinal); } catch { /* já saiu */ } }
     return todos.length;
   } catch { return 0; }
 }
@@ -391,7 +392,7 @@ function matarSandbox(pid, id) {
  * fechado, prazo e limite de saída. Devolve { err, stdout, stderr } com err no formato do exec (null,
  * { code }, { killed: true } ou { code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' }). Nunca lança.
  */
-function rodar(prep, { timeoutMs, maxBuffer = 10 * 1024 * 1024 } = {}) {
+function rodar(prep, { timeoutMs, maxBuffer = 10 * 1024 * 1024, aoComecar } = {}) {
   return new Promise((resolve) => {
     const saidas = [[], []];
     let tamanho = 0;
@@ -404,6 +405,8 @@ function rodar(prep, { timeoutMs, maxBuffer = 10 * 1024 * 1024 } = {}) {
     } catch (err) {
       return resolve({ err: { code: err.code || err.message }, stdout: '', stderr: '' });
     }
+    // v0.49.1: quem chama acompanha o processo (src/emAndamento.js: o "Parar" interrompe, e ao sair nada fica órfão)
+    if (typeof aoComecar === 'function') { try { aoComecar(filho); } catch { /* quem acompanha não derruba o comando */ } }
     const matar = () => matarSandbox(filho.pid, prep.id);
     const relogio = timeoutMs ? setTimeout(() => { expirou = true; matar(); }, timeoutMs) : null;
     const acabar = (err) => {

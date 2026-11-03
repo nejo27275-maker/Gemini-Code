@@ -148,7 +148,8 @@ test('run_checks cancelado quando o usuário responde n, e liberado (uma vez) co
   // então simulamos a leitura direto no readline compartilhado.
   const rl = ui.getShared();
   const questionOriginal = rl.question.bind(rl);
-  rl.question = (q, cb) => { perguntas++; cb(resposta); };
+  // assinatura real do readline: (pergunta, [opções], callback) — desde a v0.49.1 o ask() passa { signal }
+  rl.question = (q, opcoes, cb) => { perguntas++; (typeof opcoes === 'function' ? opcoes : cb)(resposta); };
   try {
     checkTools.sessao.confirmado = false;
     const negado = await checkTools.execute('run_checks', { cwd: d });

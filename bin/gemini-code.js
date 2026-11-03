@@ -275,7 +275,7 @@ Comandos disponíveis no chat:
   /aliado NOME       a conversa passa a ser com esse aliado (instruções, memória e conhecimento dele); /aliado off volta
   @NOME mensagem     manda só esta mensagem para o aliado NOME
   /memoria [esquecer ID]   o que o aliado ativo guardou sobre você
-  Ctrl+C             sai
+  Ctrl+C             para a resposta em andamento (e o comando que ela estiver rodando); no "você>", sai
 `;
 
 // Linhas { nivel, texto } dos módulos de comando (src/workflowCommands.js, src/personalAgentCommands.js).
@@ -338,7 +338,7 @@ async function chatLoop({ agente: nomeAgente } = {}) {
   const aliadosStore = personalAgents.defaultStore;
   let agenteAtivo = nomeAgente ? aliadosStore.obter(nomeAgente) : null;
   const sessoes = agenteAtivo ? aliadosStore.sessoes(agenteAtivo.name) : sessions;
-  console.log(chalk.bold(`gemini-code v${PACKAGE_JSON.version} — modo conversa. Ctrl+C para sair, /help para comandos.\n`));
+  console.log(chalk.bold(`gemini-code v${PACKAGE_JSON.version} — modo conversa. Ctrl+C para uma resposta (no "você>", sai), /help para comandos.\n`));
   if (require('../src/solo').ativo()) console.log(chalk.green('[solo] code-ia sozinho: nenhuma outra IA (Gemini, llama.cpp, Ollama) é usada.\n'));
   const primeiraMensagem = await perguntarConfiancaNoProjeto();
   // Item 8 da revisão: usa a MESMA interface de readline que a confirmação
@@ -360,6 +360,20 @@ async function chatLoop({ agente: nomeAgente } = {}) {
   let modoPlano = false;
   stepApproval.configurar({ ativo: loadConfig().confirmarEscrita === true, perguntar: (q) => (fechado ? Promise.resolve('n') : require('../src/ui/prompt').ask(q)) });
   rl.on('close', () => { fechado = true; });
+  // v0.49.1: Ctrl+C durante uma resposta PARA a resposta (o agente para no próximo ponto seguro, como o "Parar" do
+  // modo site; uma confirmação aberta vale "não") e o chat continua. Ctrl+C de novo enquanto ele para, ou no "você>",
+  // sai. Antes, o Ctrl+C só fechava a leitura do teclado: a resposta seguia até o fim (com ferramentas!) e o chat
+  // fechava sozinho depois, sem aviso.
+  let respostaEmAndamento = null; // AbortController da resposta atual
+  rl.on('SIGINT', () => {
+    if (!respostaEmAndamento) { process.stdout.write('\n'); encerrarComLimpeza(); return; }
+    if (respostaEmAndamento.signal.aborted) { process.stdout.write(chalk.dim('\n(saindo)\n')); encerrarComLimpeza(); return; }
+    respostaEmAndamento.abort();
+    require('../src/ui/prompt').cancelarPerguntas();
+    // um comando de terminal em andamento é interrompido como num terminal; gravar um arquivo, por exemplo, termina antes
+    const comandos = require('../src/emAndamento').interromperTodos();
+    process.stdout.write(chalk.yellow(`\n(parando a resposta${comandos ? ' e o comando em andamento' : ''} — Ctrl+C de novo para sair)\n`));
+  });
 
   const tratarLinha = async (line) => {
     const cmd = line.trim();
@@ -621,18 +635,25 @@ async function chatLoop({ agente: nomeAgente } = {}) {
         console.log(chalk.dim('Uso: /ciencia pergunta (ex.: /ciencia quanto tempo passa em 1 segundo perto de um buraco negro?)\n'));
         return ask();
       }
+      const parar = new AbortController(); // v0.49.1: Ctrl+C para esta resposta também
+      respostaEmAndamento = parar;
       try {
         process.stdout.write(chalk.green('\ngemini-code> '));
         let streamed = false;
-        const { text } = await runOnce(pergunta, {
+        const { text, interrompido } = await runOnce(pergunta, {
           extraSystemInstruction: INSTRUCAO_MODO_CIENCIA,
-          onText: (pedaco) => { streamed = true; process.stdout.write(paraTerminal(pedaco)); },
+          onText: (pedaco) => { if (parar.signal.aborted) return; streamed = true; process.stdout.write(paraTerminal(pedaco)); },
+          signal: parar.signal,
         });
-        if (!streamed) process.stdout.write(paraTerminal(text));
-        console.log('\n');
+        if (interrompido) console.log(chalk.yellow('(resposta parada)\n'));
+        else {
+          if (!streamed) process.stdout.write(paraTerminal(text));
+          console.log('\n');
+        }
       } catch (err) {
         console.error(chalk.red('Erro: ' + err.message));
       }
+      respostaEmAndamento = null;
       return ask();
     }
 
@@ -695,28 +716,36 @@ async function chatLoop({ agente: nomeAgente } = {}) {
       if (turno && turno.alerta) console.log(chalk.red(`\n${turno.alerta}`));
       process.stdout.write(chalk.green(`\n${agenteDoTurno ? agenteDoTurno.name : 'gemini-code'}> `));
       let streamed = false;
+      const parar = new AbortController();
+      respostaEmAndamento = parar;
       const rodar = () => runOnce(textoEnviado, {
         history,
         modelName: modeloAtual,
         imagens: imagensDoTurno,
         ...(turno ? turno.opcoes : restricao),
         onText: (pedaco) => {
+          if (parar.signal.aborted) return; // o que ainda chegar depois do Ctrl+C não aparece
           streamed = true;
           process.stdout.write(paraTerminal(pedaco));
         },
+        signal: parar.signal,
       });
-      const { text, history: newHistory } = await (turno ? personalAgents.comAgente(turno.ctx, rodar) : rodar());
+      const { text, history: newHistory, interrompido } = await (turno ? personalAgents.comAgente(turno.ctx, rodar) : rodar());
       history = newHistory;
       sessaoAtual = sessoes.save(sessaoAtual.id, { history, modelName: modeloAtual });
       try { artifacts.createArtifact({ title: line.slice(0, 120), type: 'turno-chat', status: 'concluido', summary: text.slice(0, 1000), content: text, taskId: sessaoAtual.id, cwd: process.cwd(), metadata: { sessionId: sessaoAtual.id, ...(agenteDoTurno ? { agentePessoal: agenteDoTurno.name } : {}) } }); } catch { /* relatório é best-effort e não pode travar o chat */ }
       // Se nada foi impresso via streaming (ex.: resposta veio só como
       // functionCalls sem texto acompanhando, ou streaming desabilitado),
       // imprime o texto completo agora.
-      if (!streamed) process.stdout.write(paraTerminal(text));
-      console.log('\n');
+      if (interrompido) console.log(chalk.yellow('(resposta parada)\n'));
+      else {
+        if (!streamed) process.stdout.write(paraTerminal(text));
+        console.log('\n');
+      }
     } catch (err) {
       console.error(chalk.red('Erro: ' + err.message));
     }
+    respostaEmAndamento = null;
     if (modoPlano) console.log(chalk.dim('(modo plano: nada foi alterado. /aprovar executa, /plano off cancela)\n'));
     const rw = rewind.finalizarTurno();
     if (autoGit) { const f = snapshots.tirar({ rotulo: `depois: ${line}` }); if (f) console.log(chalk.dim(`(foto ${f.curto} salva — /snapshots lista, /snapshots restaurar N volta)`)); }
