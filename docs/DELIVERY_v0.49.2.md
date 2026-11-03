@@ -9,3 +9,4 @@
   runner.
 - **Testes:** +1 no `chatTerminal.test.js` e +1 no `emAndamento.test.js`. Os dois falham no código anterior.
 - Suíte inteira: 1004 no Node 20 e no 22, e no fuso de São Paulo (1003 passando, 1 pulado como root); ESLint 0 problemas.
+- CI do PR #7 (commit 456774a): 1004/1004 nos Node 20, 22 e 24, nenhum pulado.

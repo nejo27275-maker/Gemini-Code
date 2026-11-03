@@ -33,6 +33,8 @@ rodar. Os dois passos com `apt` ficaram assim:
   testes de ponta a ponta pegaram isso. Agora o `perguntarColando` avisa na hora que a primeira linha chegou.
 - Suíte inteira: 1004 testes (1003 passando, 1 pulado como root) no Node 20 e no 22, e no fuso de São Paulo. ESLint 0
   problemas.
+- **CI do PR #7 (commit 456774a):** 1004/1004 nos Node 20, 22 e 24, nenhum pulado. Os passos com `apt` levaram de 8 a
+  27 s, sem travar.
 
 ## 0.49.1 — Ctrl+C de verdade no chat do terminal
 
