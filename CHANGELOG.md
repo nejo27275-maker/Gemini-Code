@@ -31,6 +31,7 @@ fechava sozinho depois, sem aviso. O Ctrl+C só fechava a leitura do teclado.
 - Um teste antigo trocava o `rl.question` por uma versão de 2 argumentos. Agora ela usa a assinatura real (com opções).
 - Suíte inteira: 1002 testes (1001 passando, 1 pulado como root) no Node 20 e no 22, e no fuso de São Paulo. ESLint 0
   problemas.
+- **CI (commit bac4963):** 1002/1002 nos Node 20, 22 e 24, nenhum pulado, inclusive o chat no pseudo-terminal do GitHub.
 
 ## 0.49.0 — versão chat do modo site
 

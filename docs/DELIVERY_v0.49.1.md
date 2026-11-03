@@ -13,3 +13,4 @@
   - `chatTerminal.test.js` (3): o chat de verdade num pseudo-terminal. Contra o código antigo, os 3 falham.
   - `emAndamento.test.js` (7).
   - Suíte inteira: 1002 no Node 20 e no 22, e no fuso de São Paulo (1001 passando, 1 pulado como root); ESLint 0 problemas.
+  - CI (commit bac4963): 1002/1002 nos Node 20, 22 e 24, nenhum pulado.
