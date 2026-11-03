@@ -37,7 +37,9 @@ Base: a 0.48.1 (mesmo branch, ainda sem PR).
 
 **Testes:** `tests/site.test.js` tem 6 testes novos, um deles com o chat de ponta a ponta num Chromium de verdade. Também
 foram tirados prints da versão chat no tema claro, no escuro e no celular. A suíte inteira tem 992 testes (991 passando,
-1 pulado como root) no Node 20 e no 22, e também no fuso de São Paulo. ESLint 0 problemas.
+1 pulado como root) no Node 20 e no 22, e também no fuso de São Paulo. ESLint 0 problemas. **CI (commit 3f4d1c9):**
+992/992 nos Node 20, 22 e 24, nenhum pulado, inclusive o chat de ponta a ponta no Chrome do GitHub. O job do Node 22
+travou uma vez instalando o ImageMagick (antes de qualquer teste) e passou ao rodar de novo.
 
 ## 0.48.1 — "Parar" de verdade
 

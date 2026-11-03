@@ -20,4 +20,5 @@
   - `site.test.js` tem 6 testes novos, com o chat de ponta a ponta num Chromium de verdade;
   - o Markdown foi testado com texto hostil e enorme;
   - prints no tema claro, no escuro e no celular;
-  - suíte inteira: 992 no Node 20 e no 22, e no fuso de São Paulo (991 passando, 1 pulado como root); ESLint 0 problemas.
+  - suíte inteira: 992 no Node 20 e no 22, e no fuso de São Paulo (991 passando, 1 pulado como root); ESLint 0 problemas;
+  - CI (commit 3f4d1c9): 992/992 nos Node 20, 22 e 24, nenhum pulado.
