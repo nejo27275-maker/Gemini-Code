@@ -1,3 +1,39 @@
+## 0.49.2 — o "você>" à prova de dedo e a pasta do usuário sempre certa
+
+Base: a 0.49.1 (no PR [#7](https://github.com/nejo27275-maker/Gemini-Code/pull/7)). Três problemas reproduzidos num
+pseudo-terminal de verdade antes da correção:
+
+- **Ctrl+C com texto digitado no `você>` fechava o chat** e perdia a mensagem pela metade. Agora só apaga a linha, como
+  num terminal. Com a linha vazia, Ctrl+C sai como antes.
+- **Ctrl+D no `você>` com um servidor MCP rodando deixava o chat pendurado para sempre.** O fim da entrada só marcava
+  "fechado", e o servidor MCP mantinha o processo vivo. Agora sai pelo `encerrarComLimpeza`, que encerra os servidores
+  MCP. Com a entrada vindo de um pipe (`echo "pergunta" | gemini-code chat`), a mensagem continua sendo respondida antes
+  de sair, como antes (conferido).
+- **(segurança) Com `HOME` vazio, a `.gemini-code`, com a config e a chave da API, ia para a PASTA ATUAL.** Num projeto,
+  ela ficava pronta para entrar num commit. E a sandbox escondia `.ssh`, `.aws` etc. relativos à pasta atual, deixando os
+  de verdade visíveis.
+  - Agora `pastaDoUsuario()` (src/config.js) usa o `HOME` só quando ele é absoluto; senão, a pasta do usuário no sistema.
+  - Também está no `localServer.js` e nos padrões da sandbox.
+
+**CI:** a instalação do ImageMagick/ffmpeg travou duas vezes no runner, até o limite do job, antes de qualquer teste
+rodar. Os dois passos com `apt` ficaram assim:
+- sem perguntas e sem os pacotes "recomendados" (os testes só usam jpg, png, gif e mp4);
+- sem atualizar o man-db;
+- com prazo de rede e prazo por comando;
+- com uma nova tentativa;
+- com um limite no próprio passo. Se algo travar, o job cai rápido em vez de ficar pendurado.
+
+**Testes:**
+- `chatTerminal.test.js` (+1): Ctrl+C com texto, e Ctrl+D com um servidor MCP vivo, que precisa ser encerrado junto.
+- `emAndamento.test.js` (+1): com `HOME` vazio ou relativo, a config não vai para a pasta atual e a sandbox não esconde a
+  pasta errada.
+- Os dois falham no código anterior (conferido).
+- Achado ao rodar a suíte antes do commit: na primeira versão da correção do Ctrl+D, uma mensagem chegando por pipe
+  podia ser cortada. A colagem junta as linhas por 150 ms, e o fim da entrada chegava antes da resposta começar. Três
+  testes de ponta a ponta pegaram isso. Agora o `perguntarColando` avisa na hora que a primeira linha chegou.
+- Suíte inteira: 1004 testes (1003 passando, 1 pulado como root) no Node 20 e no 22, e no fuso de São Paulo. ESLint 0
+  problemas.
+
 ## 0.49.1 — Ctrl+C de verdade no chat do terminal
 
 Base: a 0.49.0 (mesmo branch, ainda sem PR).

@@ -130,3 +130,24 @@ test('run_checks: interrompido, não começa a próxima verificação', { skip: 
   assert.match(r, /^Verificações interrompidas pelo usuário/);
   assert.doesNotMatch(r, /LINT-RODOU/, 'o lint não começou');
 });
+
+test('pasta do usuário sempre absoluta: com HOME vazio a config não vai para a pasta atual, nem a sandbox esconde a pasta errada', { skip: linux }, () => {
+  const projeto = fs.mkdtempSync(path.join(os.tmpdir(), 'gemini-code-home-vazio-'));
+  fs.mkdirSync(path.join(projeto, '.ssh')); // isca: com HOME vazio, o código antigo "escondia" ESTA, e não a de verdade
+  try {
+    const codigo = `const c = require(${JSON.stringify(path.join(__dirname, '..', 'src', 'config'))});
+      const s = require(${JSON.stringify(path.join(__dirname, '..', 'src', 'sandbox'))});
+      console.log(JSON.stringify({ home: c.pastaDoUsuario(), dir: c.HOME_DIR, escondidos: s.caminhosEscondidos().map((x) => x.caminho) }));`;
+    for (const HOMEteste of ['', 'pasta/relativa']) {
+      const r = JSON.parse(execFileSync(process.execPath, ['-e', codigo], { cwd: projeto, env: { ...process.env, HOME: HOMEteste } }).toString());
+      assert.ok(path.isAbsolute(r.home), `${JSON.stringify(HOMEteste)} -> ${r.home}`);
+      assert.ok(path.isAbsolute(r.dir) && !r.dir.startsWith(projeto), `a config não vai para a pasta atual: ${r.dir}`);
+      assert.ok(r.escondidos.every((x) => path.isAbsolute(x) && !x.startsWith(projeto)), `a sandbox esconde as pastas do usuário de verdade: ${r.escondidos}`);
+    }
+    const r = JSON.parse(execFileSync(process.execPath, ['-e', codigo], { cwd: projeto, env: { ...process.env, HOME: projeto } }).toString());
+    assert.equal(r.dir, path.join(projeto, '.gemini-code'), 'um HOME absoluto continua valendo');
+    assert.ok(r.escondidos.includes(fs.realpathSync(path.join(projeto, '.ssh'))));
+  } finally {
+    fs.rmSync(projeto, { recursive: true, force: true });
+  }
+});

@@ -41,7 +41,7 @@ async function modeloFalso(t) {
         res.end('data: [DONE]\n\n');
         return;
       }
-      eventos.push('texto');
+      eventos.push(`texto: ${String(ultima.content || '').slice(0, 80)}`);
       let i = 0;
       const tique = setInterval(() => {
         if (++i > 80) { clearInterval(tique); eventos.push('terminou'); res.end('data: [DONE]\n\n'); return; }
@@ -55,8 +55,19 @@ async function modeloFalso(t) {
   return { porta: srv.address().port, eventos };
 }
 
+/** Servidor MCP mínimo (stdio): responde initialize e tools/list e fica vivo; grava o próprio pid. */
+const MCP_FALSO = `const fs = require('fs');
+fs.writeFileSync(process.argv[2], String(process.pid));
+require('readline').createInterface({ input: process.stdin }).on('line', (l) => {
+  let m; try { m = JSON.parse(l); } catch { return; }
+  if (m.id === undefined) return;
+  const r = m.method === 'initialize' ? { protocolVersion: '2024-11-05', capabilities: { tools: {} }, serverInfo: { name: 'falso', version: '1' } }
+    : m.method === 'tools/list' ? { tools: [] } : {};
+  process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: m.id, result: r }) + '\\n');
+});`;
+
 /** Abre o chat num pseudo-terminal; devolve como escrever, esperar um texto na tela e saber se saiu. */
-function abrirChat(t, porta) {
+function abrirChat(t, porta, { mcp = false } = {}) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'gemini-code-pty-home-'));
   const projeto = fs.mkdtempSync(path.join(os.tmpdir(), 'gemini-code-pty-proj-'));
   t.after(() => { fs.rmSync(home, { recursive: true, force: true }); fs.rmSync(projeto, { recursive: true, force: true }); });
@@ -65,6 +76,11 @@ function abrirChat(t, porta) {
     configVersion: 99, provider: 'openai', openaiBaseUrl: `http://127.0.0.1:${porta}/v1`, openaiApiKey: 'sk-teste',
     openaiModel: 'modelo-falso', autoGit: false, confiancaProjeto: 'sempre', shellSandbox: 'off',
   }));
+  const pidMcp = path.join(home, 'mcp.pid');
+  if (mcp) {
+    fs.writeFileSync(path.join(home, 'mcp-falso.js'), MCP_FALSO);
+    fs.writeFileSync(path.join(home, '.gemini-code', 'mcp.json'), JSON.stringify({ mcpServers: { falso: { command: process.execPath, args: [path.join(home, 'mcp-falso.js'), pidMcp] } } }));
+  }
   const env = { ...process.env, HOME: home, USERPROFILE: home, TERM: 'xterm-256color', COLUMNS: '160', LINES: '40' };
   for (const k of ['GEMINI_API_KEY', 'GOOGLE_API_KEY', 'GEMINI_CODE_OPENAI_KEY', 'GEMINI_CODE_OPENAI_URL', 'NO_COLOR']) delete env[k];
   const p = spawn('script', ['-qfec', `'${process.execPath}' '${CLI}' chat`, '/dev/null'], { cwd: projeto, env, stdio: ['pipe', 'pipe', 'pipe'] });
@@ -88,7 +104,7 @@ function abrirChat(t, porta) {
     while (Date.now() < fim && !saiu) await dormir(30);
     return saiu;
   };
-  return { escrever: (s) => p.stdin.write(s), esperar, esperarSair, projeto, tela: () => tela };
+  return { escrever: (s) => p.stdin.write(s), esperar, esperarSair, projeto, tela: () => tela, pidMcp };
 }
 
 test('chat no terminal: Ctrl+C durante a resposta para a resposta e corta a conexão; o chat segue; no "você>", sai', { skip: pular }, async (t) => {
@@ -158,4 +174,31 @@ test('chat no terminal: Ctrl+C interrompe o comando rodando; duas vezes sai sem 
     try { return fs.readFileSync(`/proc/${n}/cmdline`, 'utf8') === `sleep\u0000${duracao}\u0000`; } catch { return false; }
   });
   assert.deepEqual(sobrou, [], 'nenhum comando órfão');
+});
+
+test('chat no terminal: no "você>", Ctrl+C com texto digitado só apaga a linha; Ctrl+D sai mesmo com um servidor MCP vivo', { skip: pular }, async (t) => {
+  const modelo = await modeloFalso(t);
+  const chat = abrirChat(t, modelo.porta, { mcp: true });
+  let pos = await chat.esperar(/você> /, 20000);
+  // Ctrl+C com uma mensagem pela metade: antes saía (e a mensagem se perdia); agora só limpa a linha
+  chat.escrever('mensagem pela metade');
+  await dormir(300);
+  chat.escrever('\x03');
+  assert.equal(await chat.esperarSair(1000), false, 'o chat continua aberto');
+  chat.escrever('oi\r');
+  pos = await chat.esperar(/palavra 1 /, 15000, pos);
+  assert.deepEqual(modelo.eventos.filter((e) => e.startsWith('texto')), ['texto: oi'], 'a mensagem enviada foi só "oi"');
+  chat.escrever('\x03');
+  await chat.esperar(/resposta parada[\s\S]*você> /, 5000, pos);
+  // o servidor MCP subiu com a primeira mensagem e segue vivo; Ctrl+D (fim da entrada) no "você>" tem de sair
+  const pid = Number(fs.readFileSync(chat.pidMcp, 'utf8'));
+  assert.ok(pid > 0);
+  chat.escrever('\x04');
+  assert.equal(await chat.esperarSair(5000), true, 'saiu com Ctrl+D (antes ficava pendurado pelo servidor MCP)');
+  await dormir(300);
+  // morto = sumiu, ou virou zumbi (estado Z: já encerrado, só esperando quem o recolha — num contêiner o processo 1
+  // nem sempre recolhe órfãos)
+  let estado = '';
+  try { estado = fs.readFileSync(`/proc/${pid}/stat`, 'utf8').split(') ')[1].charAt(0); } catch { /* já sumiu */ }
+  assert.ok(estado === '' || estado === 'Z', `e o servidor MCP foi encerrado junto (estado: ${estado})`);
 });

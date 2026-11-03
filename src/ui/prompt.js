@@ -123,8 +123,10 @@ function cancelarPerguntas() {
  * (colar entrega tudo de uma vez) e junta tudo com \n. Digitar uma linha
  * normal só custa esse atraso pequeno.
  */
-function perguntarColando(rl, promptText, callback, janelaMs = 150) {
+function perguntarColando(rl, promptText, callback, janelaMs = 150, aoChegar = null) {
   rl.question(promptText, (primeira) => {
+    // v0.49.2: avisa na hora que a primeira linha chegou (o callback só vem depois da janela da colagem)
+    if (typeof aoChegar === 'function') aoChegar();
     const extras = [];
     const onLine = (linha) => extras.push(linha);
     rl.on('line', onLine);

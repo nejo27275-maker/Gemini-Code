@@ -7,7 +7,24 @@ const path = require('path');
 const os = require('os');
 const ConfigManager = require('../config-manager');
 
-const HOME_DIR = path.join(os.homedir(), '.gemini-code');
+/**
+ * v0.49.2: a pasta do usuário, sempre um caminho absoluto. Com `HOME` vazio (ou relativo), o `os.homedir()` devolve
+ * '' e a `.gemini-code` — com a config e a chave da API — ia parar na PASTA ATUAL (num projeto, pronta para um commit).
+ * Agora: o HOME quando é absoluto; senão a pasta do usuário no sistema; em último caso, uma pasta só dele no /tmp.
+ */
+function pastaDoUsuario() {
+  const h = os.homedir();
+  if (h && path.isAbsolute(h)) return h;
+  try {
+    const u = os.userInfo().homedir;
+    if (u && path.isAbsolute(u)) return u;
+  } catch { /* sem conta no sistema (contêiner sem passwd) */ }
+  let id = 'usuario';
+  try { id = String(os.userInfo().uid); } catch { /* idem */ }
+  return path.join(os.tmpdir(), `gemini-code-home-${id}`);
+}
+
+const HOME_DIR = path.join(pastaDoUsuario(), '.gemini-code');
 const CONFIG_PATH = path.join(HOME_DIR, 'config.json');
 const MCP_PATH = path.join(HOME_DIR, 'mcp.json');
 const SKILLS_DIR = path.join(HOME_DIR, 'skills');
@@ -313,6 +330,7 @@ function loadMcpServers() {
 }
 
 module.exports = {
+  pastaDoUsuario,
   HOME_DIR,
   CONFIG_PATH,
   MCP_PATH,

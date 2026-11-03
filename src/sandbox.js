@@ -112,7 +112,7 @@ const LOCAIS_BWRAP = Object.freeze(['/usr/bin/bwrap', '/usr/local/bin/bwrap', '/
  * Onde o modelo grava sem perguntar (projeto, temporária, pastas liberadas; a HOME se o projeto a contém).
  * Um "bwrap" ali pode ter sido plantado por ele — e o gemini-code o rodaria FORA de qualquer sandbox.
  */
-function areasDoModelo({ cwd = process.cwd(), home = os.homedir(), extras = [] } = {}) {
+function areasDoModelo({ cwd = process.cwd(), home = homeUsuario(), extras = [] } = {}) {
   const r = (p) => real(p) || path.resolve(p);
   const homeReal = r(home);
   const cwdReal = r(cwd);
@@ -219,7 +219,7 @@ function expandirHome(p, home) {
  * qualquer pasta que contenha a HOME (gravar ~/.bashrc é sair da sandbox no próximo terminal).
  * @returns {{gravaveis:string[], avisos:string[]}}
  */
-function areasGravaveis({ projeto = process.cwd(), extras = [], home = os.homedir(), escondidos = [] } = {}) {
+function areasGravaveis({ projeto = process.cwd(), extras = [], home = homeUsuario(), escondidos = [] } = {}) {
   const gravaveis = [];
   const avisos = [];
   const homeReal = real(home) || path.resolve(home);
@@ -242,7 +242,7 @@ function areasGravaveis({ projeto = process.cwd(), extras = [], home = os.homedi
 }
 
 /** Caminhos reais a esconder: ~/.gemini-code, os arquivos protegidos (podem ser links) e as credenciais. */
-function caminhosEscondidos({ home = os.homedir(), homeDir, protegidos = [] } = {}) {
+function caminhosEscondidos({ home = homeUsuario(), homeDir, protegidos = [] } = {}) {
   const lista = [];
   const add = (p) => {
     const r = real(p);
@@ -274,7 +274,7 @@ function ambiente(env = process.env) {
  * @returns {{arquivo:string, args:string[], env:object, gravaveis:string[], avisos:string[], bpf:Buffer, rede:boolean}}
  */
 /** O que a sandbox libera e esconde com este config (sem efeito colateral; usado também pelo "gemini-code sandbox"). */
-function resumo({ cfg = {}, projeto = process.cwd(), home = os.homedir() } = {}) {
+function resumo({ cfg = {}, projeto = process.cwd(), home = homeUsuario() } = {}) {
   const config = require('./config');
   const escondidos = caminhosEscondidos({
     home, homeDir: config.HOME_DIR, protegidos: [...config.PROTECTED_PATHS, ...config.SECRET_PATHS, ...config.PROTECTED_DIRS],
@@ -286,7 +286,7 @@ function resumo({ cfg = {}, projeto = process.cwd(), home = os.homedir() } = {})
 }
 
 function montar(comando, {
-  info, cfg = {}, cwd, projeto = process.cwd(), home = os.homedir(), env = process.env,
+  info, cfg = {}, cwd, projeto = process.cwd(), home = homeUsuario(), env = process.env,
 } = {}) {
   const { rede, escondidos, gravaveis, avisos } = resumo({ cfg, projeto, home });
 
@@ -333,6 +333,10 @@ function montar(comando, {
  * no FIM da montagem: encerrado logo no começo, o de fora morria e o comando seguia vivo, órfão. Matar o
  * processo 1 do namespace de PID derruba tudo o que roda lá dentro. Só Linux (/proc); devolve quantos achou.
  */
+// v0.49.2: a pasta do usuário sempre absoluta (src/config.js). Com HOME vazio, o os.homedir() dava '' e as credenciais
+// escondidas (.ssh, .aws...) eram procuradas na pasta ATUAL — as de verdade ficavam visíveis dentro da sandbox.
+function homeUsuario() { return require('./config').pastaDoUsuario(); }
+
 // v0.49.1: `sinal` (padrão SIGKILL) — o "Parar" manda SIGINT primeiro, como um terminal (src/emAndamento.js)
 function matarDescendentes(pid, sinal = 'SIGKILL') {
   try {

@@ -61,8 +61,9 @@ O modelo GGUF é o mesmo, mas os históricos e as memórias do CLI e do app aind
 - **Saúde, compras, imagem, vídeo, câmera, TV e criar site/app** (v0.46.0): veja abaixo.
 - **Redes sociais, controle do celular/computador/sites e desafios** (v0.47.0): veja abaixo, `docs/REDES_SOCIAIS.md` e `docs/CONTROLE.md`.
 - **Modo site com voz** (v0.48.0): `gemini-code site --abrir` — converse falando, com a esfera animada (`docs/MODO_SITE.md`).
-- **Ctrl+C no chat do terminal** (v0.49.1): para só a resposta (e o comando que ela estiver rodando). O chat continua;
-  no `você>`, Ctrl+C sai. Nenhum comando fica rodando sozinho depois de sair.
+- **Ctrl+C no chat do terminal** (v0.49.1): para só a resposta (e o comando que ela estiver rodando). O chat continua.
+  No `você>`, Ctrl+C apaga o que você digitou e, com a linha vazia, sai. Ctrl+D também sai. Nenhum comando fica rodando
+  sozinho depois de sair.
 - **Versão chat** (v0.49.0): `gemini-code site --chat --abrir` — um chat comum no navegador, com respostas formatadas,
   permissões no meio da conversa, Parar e a conversa de volta ao recarregar.
 

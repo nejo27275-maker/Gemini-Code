@@ -275,7 +275,8 @@ Comandos disponíveis no chat:
   /aliado NOME       a conversa passa a ser com esse aliado (instruções, memória e conhecimento dele); /aliado off volta
   @NOME mensagem     manda só esta mensagem para o aliado NOME
   /memoria [esquecer ID]   o que o aliado ativo guardou sobre você
-  Ctrl+C             para a resposta em andamento (e o comando que ela estiver rodando); no "você>", sai
+  Ctrl+C             para a resposta em andamento (e o comando que ela estiver rodando); no "você>", apaga o que
+                     você digitou, e com a linha vazia sai (Ctrl+D também sai)
 `;
 
 // Linhas { nivel, texto } dos módulos de comando (src/workflowCommands.js, src/personalAgentCommands.js).
@@ -338,7 +339,7 @@ async function chatLoop({ agente: nomeAgente } = {}) {
   const aliadosStore = personalAgents.defaultStore;
   let agenteAtivo = nomeAgente ? aliadosStore.obter(nomeAgente) : null;
   const sessoes = agenteAtivo ? aliadosStore.sessoes(agenteAtivo.name) : sessions;
-  console.log(chalk.bold(`gemini-code v${PACKAGE_JSON.version} — modo conversa. Ctrl+C para uma resposta (no "você>", sai), /help para comandos.\n`));
+  console.log(chalk.bold(`gemini-code v${PACKAGE_JSON.version} — modo conversa. Ctrl+C para uma resposta (com a linha vazia, sai), /help para comandos.\n`));
   if (require('../src/solo').ativo()) console.log(chalk.green('[solo] code-ia sozinho: nenhuma outra IA (Gemini, llama.cpp, Ollama) é usada.\n'));
   const primeiraMensagem = await perguntarConfiancaNoProjeto();
   // Item 8 da revisão: usa a MESMA interface de readline que a confirmação
@@ -359,14 +360,31 @@ async function chatLoop({ agente: nomeAgente } = {}) {
   let fechado = false;
   let modoPlano = false;
   stepApproval.configurar({ ativo: loadConfig().confirmarEscrita === true, perguntar: (q) => (fechado ? Promise.resolve('n') : require('../src/ui/prompt').ask(q)) });
-  rl.on('close', () => { fechado = true; });
+  // v0.49.2: Ctrl+D no "você>" (fim da entrada) sai pelo encerrarComLimpeza. Antes só marcava `fechado`: com um
+  // servidor MCP vivo o processo ficava pendurado para sempre. Com uma mensagem a caminho (entrada por pipe, colagem),
+  // o fluxo normal termina a resposta e sai depois, como antes.
+  let noPrompt = false; // esperando o "você>" sem nenhuma linha recebida ainda
+  rl.on('close', () => {
+    fechado = true;
+    if (noPrompt) { process.stdout.write('\n'); encerrarComLimpeza(); }
+  });
   // v0.49.1: Ctrl+C durante uma resposta PARA a resposta (o agente para no próximo ponto seguro, como o "Parar" do
   // modo site; uma confirmação aberta vale "não") e o chat continua. Ctrl+C de novo enquanto ele para, ou no "você>",
   // sai. Antes, o Ctrl+C só fechava a leitura do teclado: a resposta seguia até o fim (com ferramentas!) e o chat
   // fechava sozinho depois, sem aviso.
   let respostaEmAndamento = null; // AbortController da resposta atual
   rl.on('SIGINT', () => {
-    if (!respostaEmAndamento) { process.stdout.write('\n'); encerrarComLimpeza(); return; }
+    if (!respostaEmAndamento) {
+      // v0.49.2: com algo digitado, o Ctrl+C só apaga a linha (como num terminal) — sair perdia a mensagem pela metade
+      if (rl.line) {
+        rl.write(null, { ctrl: true, name: 'e' }); // cursor para o fim
+        rl.write(null, { ctrl: true, name: 'u' }); // apaga a linha
+        return;
+      }
+      process.stdout.write('\n');
+      encerrarComLimpeza();
+      return;
+    }
     if (respostaEmAndamento.signal.aborted) { process.stdout.write(chalk.dim('\n(saindo)\n')); encerrarComLimpeza(); return; }
     respostaEmAndamento.abort();
     require('../src/ui/prompt').cancelarPerguntas();
@@ -753,7 +771,12 @@ async function chatLoop({ agente: nomeAgente } = {}) {
     ask();
   };
   const rotulo = () => [agenteAtivo && agenteAtivo.name, modoPlano && 'plano'].filter(Boolean).join(' · ');
-  const ask = () => fechado ? encerrarComLimpeza() : perguntarColando(rl, chalk.cyan(rotulo() ? `você [${rotulo()}]> ` : 'você> '), tratarLinha);
+  const ask = () => {
+    if (fechado) return encerrarComLimpeza();
+    noPrompt = true;
+    // a mensagem chegou (mesmo que a colagem ainda esteja juntando linhas): o fim da entrada não corta mais nada
+    return perguntarColando(rl, chalk.cyan(rotulo() ? `você [${rotulo()}]> ` : 'você> '), tratarLinha, 150, () => { noPrompt = false; });
+  };
   if (primeiraMensagem) tratarLinha(primeiraMensagem); else ask();
 }
 

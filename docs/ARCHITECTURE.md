@@ -73,6 +73,9 @@ documento é sobre como o código por trás disso está organizado.
   sandbox) ficam registrados. O Ctrl+C e o "Parar" os interrompem como um terminal (SIGINT na árvore, SIGKILL em 2 s)
   e, ao sair, nenhum fica órfão. No chat do terminal, um ouvinte de `SIGINT` na readline compartilhada para a resposta
   (`runOnce({ signal })`) e cancela a confirmação aberta (`cancelarPerguntas` em `src/ui/prompt.js`).
+- **v0.49.2** — `pastaDoUsuario()` (src/config.js): a pasta do usuário é sempre um caminho absoluto. Com `HOME` vazio, a
+  config ia para a pasta atual e a sandbox escondia as credenciais erradas. Também usada no `localServer.js` e nos
+  padrões da sandbox. No chat: Ctrl+C com texto só apaga a linha, e Ctrl+D sai pelo `encerrarComLimpeza`.
 - **`src/routineRunner.js`** — executor das rotinas: `http-check` e, desde a v0.44.0,
   `agente` (o agente roda sozinho; `src/ui/prompt.js` responde "não" a toda confirmação).
 - Os provedores `llamacpp`, `ollama` e `openai` pedem **sempre** em streaming; o
