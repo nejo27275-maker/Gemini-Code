@@ -1,4 +1,4 @@
-# Modo site — conversar pelo navegador: voz com a esfera, ou a versão chat (v0.48.0; "Parar" na v0.48.1; chat na v0.49.0)
+# Modo site — conversar pelo navegador: voz com a esfera, ou a versão chat (v0.48.0; "Parar" na v0.48.1; chat na v0.49.0; foto e vídeo na v0.51.0)
 
 `gemini-code site` abre uma página no seu navegador para conversar com o agente **por voz ou por texto**. No centro
 fica uma esfera brilhante com anéis e um círculo de "risquinhos" que reagem: seguem o seu microfone quando ele ouve,
@@ -30,6 +30,31 @@ Um chat comum, claro ou escuro conforme o seu sistema, sem esfera nem voz:
 - **Enter:** no PC, Enter envia e Shift+Enter quebra a linha. No celular, Enter quebra a linha e quem envia é o botão.
 - **Nova conversa:** começa do zero.
 - **Recarregar:** recarregar a página traz a conversa de volta.
+
+## Foto, vídeo e áudio pela página (v0.51.0)
+
+No chat, mande uma foto, um vídeo ou um áudio para o agente editar, e veja o resultado ali mesmo:
+
+- **Mandar:** toque no **clipe** (no celular, abre a galeria ou a câmera). No PC, também dá para **arrastar** o arquivo para
+  a conversa ou **colar** uma foto (Ctrl+V) na caixa de mensagem.
+- **Subir:** o arquivo sobe na hora, com a barra de progresso, e aparece acima da caixa de mensagem. Escreva o que quer
+  ("deixa pronta pro feed com o texto Promoção") e envie. Dá para mandar só o arquivo, sem texto.
+- **Onde fica:** em `midia-recebida/`, na pasta do projeto, que já vem com um `.gitignore` para nada ir para o git. Um
+  arquivo com o mesmo nome vira `-2` e nada é sobrescrito.
+- **Limites:** até 1 GB por arquivo e 10 por mensagem.
+- **Formatos:**
+  - foto: jpg, png, webp, gif;
+  - vídeo: mp4, mov, webm, mkv, 3gp;
+  - áudio: mp3, m4a, aac, ogg, wav.
+  - Foto HEIC ainda não: no iPhone, use Ajustes > Câmera > Formatos > "Mais Compatível".
+- **O agente vê a foto,** como no `/imagem` do terminal: até uns 15 MB de fotos por mensagem. Ele também recebe o
+  caminho de cada arquivo para editar.
+- **Vídeo:** mandar um vídeo (ou um áudio, para a trilha) liga a ferramenta `video` nesta execução, porque ela é sob
+  demanda. Num aliado, vale a lista de ferramentas dele.
+- **Resultado:** a foto editada, o vídeo e a capa aparecem na resposta, com o botão **Baixar**. Um arquivo acima de
+  150 MB só carrega a prévia quando você toca em "Mostrar".
+- **Recarregar:** a conversa volta com as fotos e os vídeos no lugar.
+- **Página de voz:** o que o agente criar também aparece embaixo da resposta.
 
 ## A página de voz
 
@@ -70,6 +95,17 @@ O modo site roda o agente com as ferramentas dele, então o servidor é fechado:
   resposta do modelo nunca vira código na página;
 - uma conversa por vez; mensagens de até 16.000 caracteres;
 - página fechada no meio = agente parado (ninguém olhando, nada de seguir usando ferramentas nem gastando cota).
+- **Envio de arquivo (v0.51.0):**
+  - É a única rota que não é JSON. Exige a mesma chave e passa pelas mesmas travas de origem e de `Host`.
+  - Só aceita os tipos de foto, vídeo e áudio da lista. Os tipos que outro site consegue mandar sem pedir licença ao
+    navegador (`text/plain`, formulário) são recusados, e o servidor confere os primeiros bytes: uma página HTML
+    chamada de foto não entra.
+  - O nome do arquivo é limpo: só o nome, nunca uma pasta; a extensão vem do tipo, não do nome. O arquivo é recebido num
+    temporário: um envio cortado no meio não deixa nada pela metade.
+  - Se `midia-recebida` for um link para outro lugar (num projeto baixado da internet, por exemplo), o envio é recusado.
+- **Prévias:** a página só mostra arquivos que este servidor registrou, recebidos ou criados nesta conversa. Na hora de
+  mostrar, ele confere de novo: um arquivo trocado por um link, ou dentro das pastas de segredos do gemini-code (saúde,
+  redes), não sai. A prévia é um `blob:` local; nada carrega de fora.
 
 ## Limites honestos
 
@@ -80,3 +116,9 @@ O modo site roda o agente com as ferramentas dele, então o servidor é fechado:
 - A versão chat foi testada num Chromium de verdade, de ponta a ponta: resposta formatada, ferramenta, permissão no
   meio, recarregar e parar. Também passou por prints no tema claro, no escuro e no celular. O Markdown é um subconjunto
   do dia a dia; um recurso raro (HTML, nota de rodapé, título sublinhado) aparece como texto.
+- Foto e vídeo pela página (v0.51.0):
+  - **Testado** num Chromium de verdade com a tela de um Pixel 7, de ponta a ponta: mandar a foto e o vídeo, editar com
+    as ferramentas de verdade, ver o resultado, baixar e recarregar.
+  - **Não testado:** o navegador de um celular de verdade (Chrome do Android, Safari do iPhone).
+  - **Prévia na memória:** a prévia de um vídeo grande é carregada inteira na memória do navegador.
+  - **Arquivos ficam:** "Nova conversa" tira as prévias da página; os arquivos continuam em `midia-recebida/`.

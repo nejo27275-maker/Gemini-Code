@@ -19,6 +19,8 @@
   const elPerguntaTexto = $('pergunta-texto');
   const elTexto = $('texto');
   const elLista = $('historico-lista');
+  const elMidias = $('midias'); // v0.51.0: o que o agente criar (foto editada, vídeo) aparece embaixo da resposta
+  const urls = new Set();
   const reduzido = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   const ROTULOS = {
@@ -405,7 +407,7 @@
   // Conversa com o agente (o servidor manda os eventos linha a linha: G.eventos)
   // ---------------------------------------------------------------------------
   function mostrarResposta(texto) {
-    elPainel.hidden = !texto && elAlerta.hidden; // sem nada para mostrar, sem a faixa vazia
+    elPainel.hidden = !texto && elAlerta.hidden && elMidias.hidden; // sem nada para mostrar, sem a faixa vazia
     // v0.49.0: listas, código e negrito formatados (o Markdown de comum.js monta tudo como texto)
     elResposta.replaceChildren(G.montarMarkdown(G.analisarMarkdown(texto), document));
     elPainel.scrollTop = elPainel.scrollHeight;
@@ -461,6 +463,10 @@
     elOuvido.textContent = texto;
     elAlerta.hidden = true;
     registrar('voce', texto);
+    elMidias.replaceChildren();
+    elMidias.hidden = true;
+    for (const u of urls) URL.revokeObjectURL(u);
+    urls.clear();
     mostrarResposta('');
     estado('pensando');
     let resposta = '';
@@ -478,6 +484,11 @@
         else if (ev.tipo === 'alerta') { elAlerta.textContent = ev.texto; elAlerta.hidden = false; elPainel.hidden = false; }
         else if (ev.tipo === 'pergunta') { if (!parando) await perguntar(ev); }
         else if (ev.tipo === 'pergunta-expirou') fecharPergunta();
+        else if (ev.tipo === 'midia') {
+          elMidias.append(G.cartaoMidia(api, ev, { urls }));
+          elMidias.hidden = false;
+          elPainel.hidden = false;
+        }
         else if (ev.tipo === 'resposta') { resposta = ev.texto; interrompida = Boolean(ev.interrompido); if (!interrompida) mostrarResposta(resposta); }
         else if (ev.tipo === 'erro') { resposta = ev.texto; mostrarResposta(resposta); }
       }

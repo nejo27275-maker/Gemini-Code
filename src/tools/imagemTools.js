@@ -96,6 +96,7 @@ async function execute(name, args = {}) {
       const recusa = await confirmarForaDaArea([path.resolve(a.saida || fotos[0])]);
       if (recusa) return recusa;
       const r = await deps.imagemEdicao().ajustar(fotos, a, { saida: a.saida });
+      require('../midiaGerada').registrar(r.arquivos.map((x) => x.arquivo)); // v0.51.0: o modo site mostra na página
       const rel = (f) => path.relative(process.cwd(), f) || f;
       const tam = `${r.arquivos[0].largura}x${r.arquivos[0].altura}`;
       const feito = r.passos.length ? `; ${r.passos.join(', ')}` : '';
@@ -135,6 +136,7 @@ async function execute(name, args = {}) {
     if (acao === 'gerar') r = await im.gerar(a.prompt, { saida: a.saida });
     else if (acao === 'editar') r = await im.editar(a.arquivo, a.prompt, { saida: a.saida });
     else r = await im.melhorar(a.arquivo, { modo: usaIa ? 'ia' : 'local', saida: a.saida, ampliar: a.ampliar });
+    require('../midiaGerada').registrar(r.arquivo);
     return `Imagem criada (${r.modo === 'ia' ? 'com IA' : 'sem IA, pelo ImageMagick'}): ${path.relative(process.cwd(), r.arquivo) || r.arquivo}`;
   } catch (e) {
     return `Erro: ${e.message}`;

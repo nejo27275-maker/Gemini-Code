@@ -106,6 +106,27 @@ Duas ferramentas fazem esse trabalho:
 
 - **`imagem`, ação "ajustar":** já vem ligada.
 - **`video`:** é sob demanda. No chat comum, ligue com `gemini-code config ferramentas-extras video`. Num aliado, ela vem com o preset "midia".
+  No modo site, ela liga sozinha quando você manda um vídeo pela página (v0.51.0).
+
+**Pelo navegador (v0.51.0):** `gemini-code site --chat --abrir`, toque no clipe e mande a foto ou o vídeo. O resultado
+aparece na conversa, com o botão Baixar. Veja [MODO_SITE.md](MODO_SITE.md).
+
+## Cores e volume certos (v0.51.0)
+
+- **Foto de iPhone (Display P3):**
+  - **Antes:** tirar a localização (o padrão) tirava também o perfil de cor da foto. O app passava a ler a foto como
+    sRGB, e as cores desbotavam.
+  - **Agora:** a foto é convertida para sRGB antes, como um editor faz ao exportar para a internet. O vídeo de fotos
+    (`slideshow`) também converte: o ffmpeg ignora o perfil de cor.
+  - **Sem o lcms no ImageMagick:** a localização sai e o perfil de cor fica. O perfil sRGB é montado pelo próprio
+    gemini-code (`src/perfilCor.js`), porque nem todo aparelho tem um arquivo `.icc`.
+- **Vídeo HDR no "melhorar":** como o `editar` já fazia, converte para cores normais (SDR BT.709).
+- **Volume das redes em duas passadas:** depois de exportar, mede o volume de verdade.
+  - **Por quê:** numa passada só, um vídeo curto com som de mar parava em -15/-16 LUFS dizendo -14.
+  - **Como corrige:** se passou de 1 LU da meta, refaz só o áudio (ganho e limitador de pico). O vídeo é copiado, sem
+    perder qualidade.
+- **GIF animado:** vira uma foto só (o primeiro quadro). Antes, as medidas saíam erradas e o resultado virava vários
+  arquivos.
 
 ## Segurança
 

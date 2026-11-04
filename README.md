@@ -43,6 +43,8 @@ qualquer PC/Linux com Node.js.
   `gemini-code site --chat --abrir` abre um chat comum, com respostas formatadas, permissões no meio da conversa, Parar e
   a conversa de volta ao recarregar. `gemini-code site --abrir` abre a conversa por voz com a esfera animada. Veja
   `docs/MODO_SITE.md`.
+  - **Foto e vídeo pela página** (v0.51.0): toque no clipe (ou arraste/cole) para mandar uma foto, um vídeo ou um
+    áudio. O agente edita, e o resultado aparece na conversa com o botão Baixar.
 - **Saúde, compras, imagem, vídeo, câmera, TV e criar site/app** (v0.46.0): veja abaixo.
 - **Redes sociais, controle do celular/computador/sites e desafios** (v0.47.0): veja abaixo, `docs/REDES_SOCIAIS.md` e `docs/CONTROLE.md`.
 - **Ctrl+C no chat do terminal** (v0.49.1): para só a resposta (e o comando que ela estiver rodando). O chat continua.
@@ -55,6 +57,9 @@ qualquer PC/Linux com Node.js.
   - **foto** (`gemini-code imagem ajustar`).
   
   Tudo no aparelho, sem IA. Veja `docs/EDICAO.md`.
+  
+  v0.51.0: foto de iPhone (Display P3) com as cores certas, vídeo HDR no "melhorar", e o volume das redes medido de
+  verdade (duas passadas).
 
 ## MinhaIA Android integrada (primeira versão)
 
@@ -109,6 +114,12 @@ página**. Microfone com **espaço**; enquanto ele trabalha, o botão vira **Par
 Prefere digitar? `gemini-code site --chat --abrir` abre a **versão chat** (v0.49.0). É uma conversa comum, clara ou
 escura, sem a esfera. As respostas vêm formatadas (listas, tabelas, código com "Copiar"), e as permissões aparecem no meio
 da conversa. Tem também o botão Parar, a nova conversa, e a conversa volta ao recarregar a página. O servidor só atende em `127.0.0.1`, com uma chave nova a cada vez. Guia: `docs/MODO_SITE.md`.
+
+No chat dá para **mandar foto, vídeo e áudio** (v0.51.0) pelo clipe, arrastando ou colando:
+
+- o arquivo sobe com a barra de progresso e fica em `midia-recebida/`, na pasta do projeto;
+- o agente vê a foto e edita com as ferramentas de sempre;
+- a foto editada, o vídeo e a capa aparecem na resposta, com o botão **Baixar**.
 
 ## Redes sociais, celular, computador, sites e desafios — v0.47.0
 

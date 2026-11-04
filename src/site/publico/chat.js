@@ -1,5 +1,7 @@
 /* versão chat do modo site (v0.49.0): uma conversa por texto, comum — sem esfera nem voz. A mesma API e a mesma
- * segurança da página de voz (src/site/servidor.js); o que vem do modelo entra como texto (Markdown de comum.js). */
+ * segurança da página de voz (src/site/servidor.js); o que vem do modelo entra como texto (Markdown de comum.js).
+ * v0.51.0: foto, vídeo e áudio — pelo clipe, arrastando ou colando; o arquivo sobe na hora (com o progresso), aparece
+ * na sua mensagem, e o que o agente criar (a foto editada, o vídeo) aparece na resposta, com o botão de baixar. */
 (function () {
   'use strict';
 
@@ -17,6 +19,9 @@
   const elNova = $('btn-nova');
   const elStatus = $('status');
   const elSubtitulo = $('subtitulo');
+  const elAnexos = $('anexos');
+  const elArquivo = $('arquivo');
+  const elAnexar = $('btn-anexar');
   // no PC, Enter envia; no celular, Enter quebra a linha e quem envia é o botão
   const ponteiroFino = Boolean(window.matchMedia && window.matchMedia('(pointer: fine)').matches);
 
@@ -50,9 +55,18 @@
     return li;
   }
 
-  function msgVoce(texto) {
+  const urls = new Set(); // v0.51.0: os blob: das prévias (liberados na conversa nova)
+  function cartoes(lista) {
+    const caixa = criar('div', 'midias');
+    for (const item of lista) caixa.append(G.cartaoMidia(api, item, { urls }));
+    return caixa;
+  }
+
+  /** A sua mensagem; `midias`: o que você mandou junto (prévia local) ou, ao recarregar, o que o servidor guardou. */
+  function msgVoce(texto, midias = []) {
     const li = criar('li', 'msg msg-voce');
-    li.append(criar('div', 'balao', texto));
+    if (midias.length) li.append(cartoes(midias));
+    if (texto) li.append(criar('div', 'balao', texto));
     return adicionar(li, true);
   }
   const aviso = (texto, classe = 'msg-aviso') => adicionar(criar('li', `msg ${classe}`, texto));
@@ -69,12 +83,14 @@
     digitando.setAttribute('aria-hidden', 'true');
     digitando.append(criar('span'), criar('span'), criar('span'));
     const conteudo = criar('div', 'conteudo md');
+    const midias = criar('div', 'midias');
+    midias.hidden = true;
     const acoes = criar('div', 'acoes-msg');
     acoes.hidden = true;
     const copiar = criar('button', 'acao', 'Copiar resposta');
     copiar.type = 'button';
     acoes.append(copiar);
-    corpo.append(ferramentas, digitando, conteudo, acoes);
+    corpo.append(ferramentas, digitando, conteudo, midias, acoes);
     li.append(avatar, corpo);
     li.setAttribute('aria-busy', 'true');
     adicionar(li, true);
@@ -100,6 +116,12 @@
         ferramentas.append(criar('span', 'ferramenta', n));
         rolar();
       },
+      /** v0.51.0: um arquivo que o agente criou (foto editada, vídeo, capa, áudio). */
+      midia(item) {
+        midias.hidden = false;
+        midias.append(G.cartaoMidia(api, item, { urls }));
+        rolar();
+      },
       parcial(t) {
         if (!t) return;
         if (separar) { texto += '\n\n'; separar = false; }
@@ -116,7 +138,7 @@
         if (erro) corpo.insertBefore(criar('p', 'erro-msg', erro), acoes);
         acoes.hidden = !texto;
         li.setAttribute('aria-busy', 'false');
-        if (!texto && !nota && !erro && !usadas.size) li.remove();
+        if (!texto && !nota && !erro && !usadas.size && midias.hidden) li.remove();
         atualizarVazio();
       },
     };
@@ -199,12 +221,14 @@
 
   async function enviar(texto) {
     texto = String(texto || '').trim();
-    if (!texto || ocupado) return;
+    const prontos = anexos.filter((a) => a.estado === 'pronto');
+    if ((!texto && !prontos.length) || ocupado) return;
     if (!token) { semChave(); return; }
     marcarOcupado(true);
     // o histórico entra primeiro: se a mensagem fosse antes, ela voltaria junto com o histórico e apareceria duas vezes
     await pronto;
-    msgVoce(texto);
+    msgVoce(texto, prontos.map((a) => ({ nome: a.arquivo.name, midia: a.midia, tamanho: a.arquivo.size, url: a.url })));
+    for (const a of prontos) tirarAnexo(a, { manterPrevia: true }); // a prévia agora é da mensagem
     let atual = msgAgente();
     const segmento = () => { if (!atual) atual = msgAgente(); return atual; };
     anunciar('Pensando…');
@@ -212,7 +236,7 @@
     let interrompida = false;
     let erro = '';
     try {
-      const res = await api('/api/conversa', { texto });
+      const res = await api('/api/conversa', { texto, ...(prontos.length ? { anexos: prontos.map((a) => a.id) } : {}) });
       if (!res.ok) {
         const e = await res.json().catch(() => ({}));
         throw new Error(e.erro || `HTTP ${res.status}`);
@@ -233,6 +257,9 @@
         } else if (ev.tipo === 'pergunta-expirou') {
           const f = pendentes.get(ev.id);
           if (f) f('Sem resposta em 2 minutos: contou como "não".');
+        } else if (ev.tipo === 'midia') {
+          segmento().midia(ev);
+          anunciar(`Pronto: ${ev.nome}`);
         } else if (ev.tipo === 'resposta') {
           final = ev.texto || '';
           interrompida = Boolean(ev.interrompido);
@@ -257,6 +284,7 @@
     elTexto.disabled = true;
     elEnviar.disabled = true;
     elNova.disabled = true;
+    elAnexar.disabled = true;
   }
 
   /**
@@ -276,10 +304,11 @@
     const depois = elLista.firstChild;
     const inicio = elLista.childElementCount;
     for (const m of d.mensagens || []) {
-      if (m.quem === 'voce') msgVoce(m.texto);
+      if (m.quem === 'voce') msgVoce(m.texto, m.midias || []);
       else if (m.quem === 'agente') {
         const a = msgAgente();
         for (const f of m.ferramentas || []) a.ferramenta(f);
+        for (const x of m.midias || []) a.midia(x);
         a.fim({ final: m.texto, nota: m.interrompido ? 'Você parou esta resposta.' : '' });
       } else aviso(m.texto);
     }
@@ -317,6 +346,9 @@
     } catch { aviso('Sem conexão com o agente.'); return; }
     elLista.replaceChildren();
     pendentes.clear();
+    for (const a of [...anexos]) tirarAnexo(a);
+    for (const u of urls) URL.revokeObjectURL(u);
+    urls.clear();
     atualizarVazio();
     anunciar('Conversa nova.');
     elTexto.focus();
@@ -340,7 +372,8 @@
     ev.preventDefault();
     if (ocupado) { parar(); return; } // enquanto responde, o botão de enviar é o "Parar"
     const t = elTexto.value;
-    if (!t.trim()) return;
+    if (anexos.some((a) => a.estado === 'fila' || a.estado === 'enviando')) { anunciar('Espere o arquivo terminar de subir.'); avisarNaBandeja('Espere o arquivo terminar de subir para mandar.'); return; }
+    if (!t.trim() && !anexos.some((a) => a.estado === 'pronto')) return;
     elTexto.value = '';
     ajustarAltura();
     enviar(t);
@@ -349,6 +382,130 @@
     if (ev.key === 'Escape' && ocupado) { ev.preventDefault(); parar(); }
   });
   for (const b of document.querySelectorAll('.sugestao')) b.addEventListener('click', () => enviar(b.textContent));
+
+  // ---------------------------------------------------------------------------
+  // v0.51.0: arquivos para mandar (a bandeja acima da caixa de mensagem)
+  // ---------------------------------------------------------------------------
+  const MAX_ANEXOS = 10;
+  const anexos = []; // { arquivo, tipo, midia, url, estado: fila|enviando|pronto|erro, id, envio, li }
+  let subindo = false;
+
+  function avisarNaBandeja(texto) {
+    let n = elAnexos.querySelector('.anexos-aviso');
+    if (!n) { n = criar('li', 'anexos-aviso'); elAnexos.prepend(n); }
+    n.textContent = texto;
+    elAnexos.hidden = false;
+    clearTimeout(n._gcTimer);
+    n._gcTimer = setTimeout(() => { n.remove(); elAnexos.hidden = !anexos.length; }, 4000);
+  }
+
+  function desenharAnexo(a) {
+    a.li.dataset.estado = a.estado;
+    const pct = Math.round((a.progresso || 0) * 100);
+    a.estadoEl.textContent = a.estado === 'fila' ? 'Na fila…' : a.estado === 'enviando' ? `Enviando… ${pct}%`
+      : a.estado === 'pronto' ? `${G.tamanhoLegivel(a.arquivo.size)} · pronto` : (a.erro || 'Não foi.');
+    a.barra.hidden = a.estado !== 'enviando';
+    a.barra.value = a.progresso || 0;
+  }
+
+  function tirarAnexo(a, { manterPrevia = false } = {}) {
+    const i = anexos.indexOf(a);
+    if (i >= 0) anexos.splice(i, 1);
+    if (a.envio) a.envio.cancelar();
+    a.li.remove();
+    if (!manterPrevia && a.url) { URL.revokeObjectURL(a.url); urls.delete(a.url); }
+    elAnexos.hidden = !anexos.length;
+  }
+
+  function adicionarArquivos(lista) {
+    for (const arquivo of Array.from(lista || [])) {
+      if (anexos.length >= MAX_ANEXOS) { avisarNaBandeja(`No máximo ${MAX_ANEXOS} arquivos por mensagem.`); break; }
+      const { tipo, midia } = G.tipoDoArquivo(arquivo);
+      const a = { arquivo, tipo, midia, estado: 'fila', id: null, envio: null, progresso: 0 };
+      if (/^image\/hei[cf]$/.test(tipo)) { a.estado = 'erro'; a.erro = 'foto HEIC ainda não dá: no iPhone, Ajustes > Câmera > Formatos > "Mais Compatível"'; }
+      else if (!midia) { a.estado = 'erro'; a.erro = 'mande foto, vídeo ou áudio'; }
+      else if (!arquivo.size) { a.estado = 'erro'; a.erro = 'arquivo vazio'; }
+      else if (arquivo.size > G.MAX_ENVIO) { a.estado = 'erro'; a.erro = `passa de ${G.tamanhoLegivel(G.MAX_ENVIO)}`; }
+      a.li = criar('li', 'anexo');
+      const previa = criar('div', 'anexo-previa');
+      if (a.estado !== 'erro' && (midia === 'imagem' || midia === 'video')) {
+        a.url = URL.createObjectURL(arquivo);
+        urls.add(a.url);
+        const el = criar(midia === 'imagem' ? 'img' : 'video');
+        if (midia === 'video') { el.muted = true; el.playsInline = true; el.preload = 'metadata'; G.mostrarQuadro(el); } else el.alt = '';
+        el.src = a.url;
+        previa.append(el);
+      } else {
+        previa.append(criar('span', 'anexo-icone', midia === 'audio' ? '♪' : '!'));
+        if (a.estado !== 'erro') { a.url = URL.createObjectURL(arquivo); urls.add(a.url); }
+      }
+      const info = criar('div', 'anexo-info');
+      const nome = criar('span', 'anexo-nome', arquivo.name || 'arquivo');
+      nome.title = arquivo.name || '';
+      a.estadoEl = criar('span', 'anexo-estado');
+      a.barra = criar('progress', 'anexo-barra');
+      a.barra.max = 1;
+      info.append(nome, a.estadoEl, a.barra);
+      const tirar = criar('button', 'anexo-tirar', '×');
+      tirar.type = 'button';
+      tirar.setAttribute('aria-label', `Tirar ${arquivo.name || 'o arquivo'}`);
+      tirar.addEventListener('click', () => tirarAnexo(a));
+      a.li.append(previa, info, tirar);
+      anexos.push(a);
+      elAnexos.append(a.li);
+      desenharAnexo(a);
+    }
+    elAnexos.hidden = !anexos.length;
+    subirFila();
+  }
+
+  // um envio por vez (o servidor também só aceita um)
+  async function subirFila() {
+    if (subindo || !token) return;
+    subindo = true;
+    try {
+      for (;;) {
+        const a = anexos.find((x) => x.estado === 'fila');
+        if (!a) break;
+        a.estado = 'enviando';
+        desenharAnexo(a);
+        a.envio = G.enviarArquivo(token, a.arquivo, a.tipo, { aoProgresso: (f) => { a.progresso = f; desenharAnexo(a); } });
+        try {
+          const r = await a.envio.promessa;
+          a.id = r.id;
+          a.estado = 'pronto';
+          anunciar(`${a.arquivo.name} pronto para mandar.`);
+        } catch (e) {
+          if (e.cancelado) continue;
+          a.estado = 'erro';
+          a.erro = e.message;
+        }
+        a.envio = null;
+        if (anexos.includes(a)) desenharAnexo(a);
+      }
+    } finally { subindo = false; }
+  }
+
+  elAnexar.addEventListener('click', () => elArquivo.click());
+  elArquivo.addEventListener('change', () => { adicionarArquivos(elArquivo.files); elArquivo.value = ''; });
+  // colar uma foto (Ctrl+V) na caixa de mensagem
+  elTexto.addEventListener('paste', (ev) => {
+    const arquivos = ev.clipboardData && ev.clipboardData.files;
+    if (arquivos && arquivos.length) { ev.preventDefault(); adicionarArquivos(arquivos); }
+  });
+  // arrastar para qualquer lugar da página
+  const temArquivos = (ev) => ev.dataTransfer && Array.from(ev.dataTransfer.types || []).includes('Files');
+  let arrastos = 0;
+  document.addEventListener('dragenter', (ev) => { if (!temArquivos(ev)) return; arrastos++; app.dataset.arrastando = 'true'; });
+  document.addEventListener('dragleave', () => { if (--arrastos <= 0) { arrastos = 0; delete app.dataset.arrastando; } });
+  document.addEventListener('dragover', (ev) => { if (temArquivos(ev)) ev.preventDefault(); });
+  document.addEventListener('drop', (ev) => {
+    if (!temArquivos(ev)) return;
+    ev.preventDefault();
+    arrastos = 0;
+    delete app.dataset.arrastando;
+    if (!elAnexar.disabled) adicionarArquivos(ev.dataTransfer.files);
+  });
 
   marcarOcupado(false);
   const pronto = carregar().catch(() => {});

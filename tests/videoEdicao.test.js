@@ -168,6 +168,51 @@ test('HDR (v0.50.1): reconhece HLG e PQ; com o zscale converte para SDR, sem ele
   assert.match(sem.passos.join(' '), /ATENÇÃO: o vídeo é HDR \(HLG\).*zscale/);
 });
 
+test('volume (v0.51.0): lê o resumo do ebur128 (só o resumo, não as linhas de cada quadro)', () => {
+  const saida = '[Parsed_ebur128_0 @ 0x1] t: 0.1  TARGET:-23 LUFS    M:-20.0 S:-120.7     I: -19.0 LUFS       LRA:   0.0 LU\n' +
+    '[Parsed_ebur128_0 @ 0x1] Summary:\n\n  Integrated loudness:\n    I:         -16.3 LUFS\n    Threshold: -26.4 LUFS\n\n' +
+    '  Loudness range:\n    LRA:         1.7 LU\n\n  True peak:\n    Peak:       -1.1 dBFS\n';
+  assert.deepEqual(ve.lerVolume(saida), { integrado: -16.3, pico: -1.1 });
+  assert.deepEqual(ve.lerVolume('Summary:\n    I:         -inf LUFS\n    Peak:       -inf dBFS'), { integrado: -Infinity, pico: -Infinity });
+  assert.equal(ve.lerVolume('nada aqui'), null);
+});
+
+test('HDR no "melhorar" (v0.51.0): converte para SDR com as marcas BT.709; sem o zscale avisa; vídeo comum fica igual', async () => {
+  const p = (n) => path.join(PROJ, n);
+  fs.writeFileSync(p('melhorar-falso.mp4'), 'x');
+  const falso = (descricao, filtros) => {
+    const chamadas = [];
+    const fn = (cmd, args, o, cb) => {
+      chamadas.push(args);
+      if (args.includes('-filters')) return cb(null, filtros, '');
+      if (args.includes('-vf')) { fs.writeFileSync(args[args.length - 1].slice(5), 'x'); return cb(null, '', ''); }
+      return cb(Object.assign(new Error('sem saída'), { code: 1 }), '', `Duration: 00:00:02.00, start: 0\n  Stream #0:0: Video: ${descricao}, 640x360, 30 fps`);
+    };
+    return { fn, chamadas, vf: () => { const a = chamadas.find((x) => x.includes('-vf')); return { filtro: a[a.indexOf('-vf') + 1], args: a }; } };
+  };
+  const HLG = 'hevc (Main 10), yuv420p10le(tv, bt2020nc/bt2020/arib-std-b67, progressive)';
+  const com = falso(HLG, ' ... zscale            V->V       Apply resizing\n ... tonemap           V->V       Tonemap\n');
+  const r = await video.melhorar(p('melhorar-falso.mp4'), { cwd: PROJ, ffmpeg: '/bin/ffmpeg-com-zscale', execFileFn: com.fn });
+  const { filtro, args } = com.vf();
+  assert.match(filtro, /^zscale=tin=arib-std-b67:.*tonemap=tonemap=hable.*format=yuv420p,hqdn3d=/, 'converte ANTES de limpar o ruído');
+  assert.deepEqual(args.slice(args.indexOf('-color_primaries'), args.indexOf('-color_primaries') + 6), ['-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709']);
+  assert.deepEqual(r.passos, ['HDR (HLG) convertido para cores normais (SDR)']);
+  const sem = falso(HLG, ' ... scale             V->V       Scale\n');
+  const r2 = await video.melhorar(p('melhorar-falso.mp4'), { cwd: PROJ, ffmpeg: '/bin/ffmpeg-sem-zscale', execFileFn: sem.fn });
+  assert.doesNotMatch(sem.vf().filtro, /zscale/);
+  assert.match(r2.passos[0], /^ATENÇÃO: o vídeo é HDR \(HLG\).*zscale/);
+  const comum = falso('h264, yuv420p(tv, bt709, progressive)', '');
+  const r3 = await video.melhorar(p('melhorar-falso.mp4'), { cwd: PROJ, ffmpeg: '/bin/ffmpeg-comum', execFileFn: comum.fn });
+  assert.equal(comum.vf().filtro, video.filtrosMelhorar());
+  assert.ok(!comum.chamadas.some((a) => a.includes('-filters')), 'sem HDR, nem pergunta pelos filtros');
+  assert.ok(!comum.vf().args.includes('-color_primaries'));
+  assert.deepEqual(r3.passos, []);
+  midia._testar({ video: () => ({ melhorar: async () => ({ arquivo: path.join(process.cwd(), 'm-melhorado.mp4'), passos: r.passos }) }) });
+  try {
+    assert.equal(await midia.execute('video', { acao: 'melhorar', arquivo: 'm.mp4' }), 'Vídeo melhorado: m-melhorado.mp4 (HDR (HLG) convertido para cores normais (SDR))');
+  } finally { midia._testar({ video: () => video }); }
+});
+
 test('argv do ffmpeg: toda entrada com -protocol_whitelist file e "file:", -n, saída "file:", e o texto fora da linha de comando', async () => {
   const chamadas = [];
   const execFileFn = (cmd, args, o, cb) => {
@@ -208,7 +253,7 @@ test('editar de verdade: Reels com corte, velocidade, cor, textos, legenda, mús
   assert.equal(i.temAudio, true);
   const medida = spawnSync(ffmpeg, ['-hide_banner', '-nostats', '-i', r.arquivo, '-af', 'ebur128=framelog=quiet', '-f', 'null', '-'], { encoding: 'utf8' });
   const lufs = Number((/I:\s+(-?\d+(?:\.\d+)?) LUFS/.exec(medida.stderr) || [])[1]);
-  perto(lufs, -14, 2, 'volume integrado (LUFS)');
+  perto(lufs, -14, 1, 'volume integrado (LUFS; v0.51.0: em duas passadas, ±1)');
   assert.match(ve.descreverResultado(r), /^1080x1920 — 0:03; cortado de 1 s a 5 s, velocidade 1,25x/);
   // nunca sobrescreve: a mesma saída vira -2
   const r2 = await ve.editar(e.clipe, { formato: 'quadrado' }, { cwd: PROJ, saida: path.join(PROJ, 'reels.mp4') });
@@ -224,10 +269,22 @@ test('editar de verdade: vídeo sem som ganha a música, na duração do vídeo'
   perto(i.duracao, 3, 0.2, 'a música (10 s) é cortada no fim do vídeo (3 s)');
 });
 
+test('editar de verdade (v0.51.0): som de mar (picos altos) chega a -14 LUFS — numa passada só parava em -15/-16', { skip: pular, timeout: 120000 }, async () => {
+  lavfi(['-f', 'lavfi', '-i', 'testsrc2=duration=8:size=640x360:rate=30', '-f', 'lavfi', '-i', 'anoisesrc=d=8:c=brown:a=0.5:r=48000,lowpass=f=900,tremolo=f=0.18:d=0.85',
+    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest'], p('mar.mp4'));
+  const r = await ve.editar(p('mar.mp4'), { formato: 'quadrado', fade: 0.6 }, { cwd: PROJ });
+  const v = await ve.medirVolume(r.arquivo, { ffmpeg });
+  perto(v.integrado, -14, 1, 'volume integrado (LUFS)');
+  assert.ok(v.pico <= -1, `sem estourar: pico ${v.pico} dBFS`);
+  assert.equal((await ve.info(r.arquivo)).temAudio, true);
+  assert.deepEqual(fs.readdirSync(PROJ).filter((f) => f.startsWith('.volume-')), [], 'o temporário da segunda passada sumiu');
+});
+
 test('juntar de verdade: tamanhos diferentes, um sem som, com transição suave', { skip: pular, timeout: 180000 }, async () => {
   const e = arquivos();
   const r = await ve.juntar([e.clipe, e.mudo, e.clipe], { transicao: 'suave', cwd: PROJ });
   const i = await ve.info(r.arquivo);
+  perto((await ve.medirVolume(r.arquivo, { ffmpeg })).integrado, -14, 1, 'juntar: volume das redes');
   assert.deepEqual([i.largura, i.altura], [640, 360], 'o tamanho do primeiro clipe');
   assert.equal(i.temAudio, true);
   perto(i.duracao, 6 + 3 + 6 - 2 * 0.6, 0.3, 'duração com as transições');
@@ -281,6 +338,37 @@ test('de verdade (v0.50.1): vídeo HDR (HLG, 10 bits) vira SDR BT.709 no editar,
   assert.match(j.passos.join(' '), /clipes HDR convertidos/);
   assert.match(descrever(j.arquivo), /bt709/);
   assert.equal((await ve.capa(hdr, { cwd: PROJ })).hdrConvertido, true);
+  // v0.51.0: o "melhorar" também (antes saía yuv420p ainda marcado arib-std-b67)
+  const m = await video.melhorar(hdr, { cwd: PROJ });
+  assert.match(m.passos.join(' '), /HDR \(HLG\) convertido/);
+  assert.match(descrever(m.arquivo), /yuv420p\(tv, bt709/, 'melhorar: 8 bits marcado como BT.709');
+  assert.equal((await ve.info(m.arquivo)).hdr, null);
+});
+
+test('de verdade (v0.51.0): no vídeo de fotos, foto de iPhone (Display P3) entra convertida para sRGB — o ffmpeg ignora o perfil', { skip: pular, timeout: 120000 }, async (t) => {
+  const imagem = require('../src/imagem');
+  const ie = require('../src/imagemEdicao');
+  const pc = require('../src/perfilCor');
+  const magick = imagem.acharMagick();
+  if (!magick || !(await ie.temLcms(magick))) { t.skip('sem ImageMagick com lcms'); return; }
+  fs.writeFileSync(p('p3-slide.icc'), pc.perfilRgb(pc.DISPLAY_P3));
+  execFileSync(magick, ['-size', '320x240', 'xc:rgb(200,60,40)', '-profile', p('p3-slide.icc'), '-quality', '98', `jpeg:${p('slide-p3.jpg')}`]);
+  execFileSync(magick, ['-size', '320x240', 'xc:rgb(200,60,40)', '-quality', '98', `jpeg:${p('slide-comum.jpg')}`]);
+  const r = await video.slideshow([p('slide-p3.jpg'), p('slide-comum.jpg')], { segundos: 1, cwd: PROJ, saida: p('slide-cores.mp4') });
+  assert.equal(r.coresConvertidas, 1, 'só a foto em P3');
+  const quadro = (seg) => {
+    const png = p(`quadro-${seg}.png`);
+    execFileSync(ffmpeg, ['-hide_banner', '-loglevel', 'error', '-y', '-ss', String(seg), '-i', r.arquivo, '-frames:v', '1', png]);
+    return execFileSync(magick, [png, '-format', '%[fx:round(255*p{640,360}.r)] %[fx:round(255*p{640,360}.g)] %[fx:round(255*p{640,360}.b)]', 'info:'], { encoding: 'utf8' }).trim().split(' ').map(Number);
+  };
+  const p3 = quadro(0.3);
+  const comum = quadro(1.5);
+  [217, 42, 23].forEach((v, k) => perto(p3[k], v, 6, `foto P3, canal ${'RGB'[k]}`));
+  [200, 60, 40].forEach((v, k) => perto(comum[k], v, 6, `foto comum, canal ${'RGB'[k]}`));
+  midia._testar({ video: () => ({ slideshow: async () => ({ arquivo: path.join(process.cwd(), 's.mp4'), fotos: 2, segundos: 1, coresConvertidas: 1 }) }) });
+  try {
+    assert.match(await midia.execute('video', { acao: 'slideshow', fotos: ['a.jpg', 'b.jpg'] }), /2 fotos, 1 s cada; cores de 1 foto convertidas para sRGB/);
+  } finally { midia._testar({ video: () => video }); }
 });
 
 test('de verdade (v0.50.1): pasta temporária e arquivos com aspas, dois-pontos, vírgula e colchetes no caminho', { skip: pular || (process.platform === 'win32' && 'caminhos com dois-pontos não existem no Windows'), timeout: 120000 }, async () => {

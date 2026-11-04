@@ -194,6 +194,65 @@ svg { display: block; }
 /* só para leitores de tela */
 .status { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
+/* ---- v0.51.0: foto, vídeo e áudio ---- */
+.anexar {
+  flex: 0 0 auto; width: 36px; height: 36px; margin-left: -10px; border-radius: 50%; border: 0; display: grid; place-items: center;
+  background: transparent; color: var(--texto-2);
+}
+.anexar:hover:not(:disabled) { background: var(--superficie-2); color: var(--texto); }
+.anexar:disabled { opacity: 0.4; cursor: default; }
+.anexar svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.anexos {
+  list-style: none; max-width: var(--largura); margin: 0 auto 8px; padding: 0; display: flex; gap: 8px; overflow-x: auto;
+  scrollbar-width: thin;
+}
+.anexo {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 8px; width: 250px; max-width: 80vw; padding: 6px 6px 6px 6px;
+  background: var(--superficie); border: 1px solid var(--borda); border-radius: 14px; box-shadow: var(--sombra);
+}
+.anexo[data-estado="erro"] { border-color: var(--erro-borda); background: var(--erro-fundo); }
+.anexo-previa {
+  flex: 0 0 auto; width: 44px; height: 44px; border-radius: 9px; overflow: hidden; display: grid; place-items: center;
+  background: var(--superficie-2);
+}
+.anexo-previa img, .anexo-previa video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.anexo-icone { font-size: 18px; color: var(--texto-2); }
+.anexo-info { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.anexo-nome { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.anexo-estado { font-size: 12px; color: var(--texto-2); overflow-wrap: anywhere; }
+.anexo[data-estado="erro"] .anexo-estado { color: var(--erro-texto); }
+.anexo-barra { width: 100%; height: 4px; accent-color: var(--acento); }
+.anexo-tirar {
+  flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%; border: 0; background: transparent; color: var(--texto-2);
+  font-size: 18px; line-height: 1;
+}
+.anexo-tirar:hover { background: var(--superficie-2); color: var(--texto); }
+.anexos-aviso { flex: 1 0 100%; align-self: center; font-size: 13px; color: var(--aviso-texto); }
+.app[data-arrastando="true"] .conversa { outline: 2px dashed var(--acento); outline-offset: -8px; }
+
+.midias { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0 8px; }
+.msg-voce .midias { justify-content: flex-end; margin: 0 0 6px; }
+.midia {
+  margin: 0; max-width: min(100%, 420px); border: 1px solid var(--borda); border-radius: 14px; overflow: hidden;
+  background: var(--superficie); box-shadow: var(--sombra);
+}
+.midia-area { display: grid; place-items: center; min-height: 64px; background: var(--superficie-2); }
+.midia-conteudo { display: block; max-width: 100%; max-height: 60vh; }
+.midia-imagem .midia-conteudo, .midia-video .midia-conteudo { width: auto; height: auto; }
+.midia-audio { width: min(100%, 360px); }
+.midia-audio .midia-area { padding: 10px; }
+.midia-audio .midia-conteudo { width: 100%; }
+.midia-estado { margin: 0; padding: 18px 14px; font-size: 13px; color: var(--texto-2); }
+.midia-mostrar { margin: 14px; }
+.midia-legenda { display: flex; align-items: center; gap: 8px; padding: 6px 10px; font-size: 12px; color: var(--texto-2); }
+.midia-nome { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--texto); font-weight: 600; }
+.midia-info { flex: 0 0 auto; }
+.midia-baixar {
+  flex: 0 0 auto; color: var(--acento-texto); background: var(--acento); border-radius: 8px; padding: 3px 10px; font-weight: 600;
+  text-decoration: none;
+}
+.midia-baixar:hover { background: var(--acento-forte); }
+
 /* ---- Markdown das respostas (montado por comum.js) ---- */
 .md { overflow-wrap: anywhere; }
 .md > :first-child { margin-top: 0; }

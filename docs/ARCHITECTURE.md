@@ -93,6 +93,18 @@ documento é sobre como o código por trás disso está organizado.
   - **Foto:** `src/imagemEdicao.js` (ImageMagick) faz o "ajustar", com o texto escapado por `textoMagick`.
 - **v0.50.1** — o vídeo HDR (HLG/PQ) é convertido para SDR BT.709 (`cadeiaSdr`, `zscale` + `tonemap`) no editar,
   no juntar e na capa; a prévia do `/passo` (`src/stepApproval.js`) mostra o diff de verdade, sem nunca ler um segredo.
+- **v0.51.0** — foto e vídeo pelo modo site, e cores e volume certos:
+  - **Envio:** `src/site/servidor.js` ganhou `/api/enviar`, que recebe o arquivo cru (tipos da lista, conferidos pelos
+    primeiros bytes) em `midia-recebida/` (`salvarCorpo`, `publicar`, `nomeDoEnvio`).
+  - **Prévias:** `/api/midia` serve só o que o servidor registrou (`registrarMidia`). O evento `midia` vem de
+    `src/midiaGerada.js`: as ferramentas `imagem`, `video` e `camera` avisam o arquivo que criaram.
+  - **Páginas:** `comum.js` faz o envio com progresso (`enviarArquivo`) e o cartão de mídia (`cartaoMidia`); o chat
+    tem a bandeja de envio e as prévias.
+  - **Ferramenta de vídeo:** `src/tools/index.js` ganhou `ligarNaSessao` (só o `video`).
+  - **Cor da foto:** `src/perfilCor.js` monta perfis ICC v4. O `imagem ajustar` e o slideshow convertem foto Display P3
+    para sRGB.
+  - **Vídeo:** `video melhorar` converte o HDR, e `afinarVolume` (src/videoEdicao.js) mede o volume e corrige em duas
+    passadas.
 - **`src/routineRunner.js`** — executor das rotinas: `http-check` e, desde a v0.44.0,
   `agente` (o agente roda sozinho; `src/ui/prompt.js` responde "não" a toda confirmação).
 - Os provedores `llamacpp`, `ollama` e `openai` pedem **sempre** em streaming; o
@@ -248,10 +260,12 @@ extra). Cobertura atual:
 | chat do terminal num pseudo-terminal de verdade (`script`): Ctrl+C para a resposta e corta a conexão, numa confirmação vale "não", interrompe o comando rodando, duas vezes sai sem órfão; no `você>`, sai (v0.49.1) | `chatTerminal.test.js` |
 | comandos em andamento: SIGINT como um terminal, SIGKILL em 2 s para quem ignora (com os filhos), nada órfão ao sair; `run_shell` (direto e na sandbox) e `run_checks` interrompidos (v0.49.1) | `emAndamento.test.js` |
 | versão chat (v0.49.0): páginas e CSP, histórico para a página (`paraExibicao`, `/api/historico`), Markdown seguro (blocos, links só http/https, HTML vira texto, texto hostil/enorme não trava) e o chat de ponta a ponta num Chromium de verdade; contraste WCAG AA de todos os pares de cor, nos temas claro e escuro (v0.49.3) | `site.test.js` |
+| foto e vídeo pelo modo site (v0.51.0): envio (chave antes de ler, origem/Host, só os tipos de mídia, primeiros bytes, tamanho declarado e no meio, nome saneado, nunca sobrescreve, `.gitignore`, pasta que é link recusada, um por vez, envio cortado sem sobra, sobra antiga limpa), `/api/midia` (só o registrado, some com link ou arquivo apagado), anexos na conversa (caminho e foto para o modelo, com limite), evento `midia` do que as ferramentas criam (segredo nunca), histórico com as mídias, `video` ligado só nesta execução, e a página num Chromium de verdade (mandar a foto pelo clipe, a prévia e a foto editada, recarregar; falha sem `blob:` na CSP) | `siteMidia.test.js` |
+| perfis de cor ICC (v0.51.0): perfil sRGB v4 bem formado (cabeçalho, tags alinhadas, MD5), as contas batem com as matrizes de referência do sRGB e do Display P3, nome do perfil saneado | `perfilCor.test.js` |
 | `HOME` vazio (v0.49.3): a trava do `add-pasta-gravavel`, a pergunta antes de gravar `~/.bashrc` com o projeto na pasta do usuário e os checkpoints usam a pasta do usuário de verdade, não a pasta atual | `pastaDoUsuario.test.js` |
 | edição profissional de código (v0.50.0): motor (espaço no fim da linha, CRLF, trecho mais parecido, diff), `write_file` que não sobrescreve o que não leu nem o que mudou, CRLF/BOM mantidos, sintaxe conferida (JS/ESM, JSON/JSONC, Python, shell) sem rodar o código e sem um `python3`/`bash` plantado | `edicaoProfissional.test.js` |
-| edição profissional de vídeo (v0.50.0): tempos, corte, atempo, escape do filtergraph, receita, plano do ffmpeg, textos empilhados, legenda deslocada, info com rotação, argv seguro e, com o ffmpeg de verdade, editar (volume -14 LUFS medido), juntar, capa, áudio, ferramenta e terminal; v0.50.1: HDR (HLG/PQ) convertido para SDR, vídeo de celular em pé, caminhos com aspas/dois-pontos/colchetes | `videoEdicao.test.js` |
-| edição profissional de foto (v0.50.0): escape do texto para o ImageMagick, receita, argumentos e, com o ImageMagick de verdade, formato, textos, marca d'água, lote, EXIF retirado e foto girada endireitada, ferramenta e terminal | `imagemEdicao.test.js` |
+| edição profissional de vídeo (v0.50.0): tempos, corte, atempo, escape do filtergraph, receita, plano do ffmpeg, textos empilhados, legenda deslocada, info com rotação, argv seguro e, com o ffmpeg de verdade, editar (volume -14 LUFS medido), juntar, capa, áudio, ferramenta e terminal; v0.50.1: HDR (HLG/PQ) convertido para SDR, vídeo de celular em pé, caminhos com aspas/dois-pontos/colchetes; v0.51.0: HDR no "melhorar", volume em duas passadas (som de mar a -14 ± 1 LUFS, também no juntar), foto Display P3 convertida no vídeo de fotos | `videoEdicao.test.js` |
+| edição profissional de foto (v0.50.0): escape do texto para o ImageMagick, receita, argumentos e, com o ImageMagick de verdade, formato, textos, marca d'água, lote, EXIF retirado e foto girada endireitada, ferramenta e terminal; v0.51.0: foto Display P3 sai em sRGB com as cores certas (também numa pasta temporária com caracteres especiais), sem o lcms o perfil fica, GIF animado vira uma foto só | `imagemEdicao.test.js` |
 | "Parar": `runOnce` com signal (antes do modelo, durante a resposta, entre ferramentas; histórico consistente); provedores sem repetir, sem trocar de lado, sem reserva e sem ligar o llama.cpp depois do "Parar"; conexão cortada de verdade (v0.48.1) | `parar.test.js` |
 | hooks `UserPromptSubmit`, `SessionStart`, `Stop` | `hooksEventos.test.js` |
 | subagentes do usuário (`.md`) | `subagentesDoUsuario.test.js` |

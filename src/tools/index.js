@@ -41,11 +41,23 @@ const semRestricao = (allowedNames) => allowedNames == null;
 // carrega: cada declaração custa tokens em todo pedido, e dado de saúde não entra numa conversa qualquer.
 const SOB_DEMANDA = [saudeTools, midiaTools, comprasTools, redesTools, computadorTools, desafioTools];
 const nomeSobDemanda = (nome) => SOB_DEMANDA.some((m) => m.declarations.some((d) => d.name === nome));
+// v0.51.0: ligadas só nesta execução do programa, como se estivessem no ferramentasExtras — o modo site liga o
+// "video" quando a pessoa manda um vídeo (ou um áudio, para a trilha) pela página: ali ela pediu para mexer num vídeo.
+// Só as desta lista (nunca câmera, saúde, redes, computador...) e nunca alargam a lista de ferramentas de um aliado.
+const LIGAVEIS_NA_SESSAO = Object.freeze(['video']);
+const extrasDaSessao = new Set();
+function ligarNaSessao(nome) {
+  if (!LIGAVEIS_NA_SESSAO.includes(nome)) return false;
+  extrasDaSessao.add(nome);
+  return true;
+}
 function extrasLigados() {
+  let lista = [];
   try {
-    const lista = require('../config').loadConfig().ferramentasExtras;
-    return Array.isArray(lista) ? lista : [];
-  } catch { return []; }
+    const cfg = require('../config').loadConfig().ferramentasExtras;
+    if (Array.isArray(cfg)) lista = cfg;
+  } catch { /* config ilegível: só as da sessão */ }
+  return extrasDaSessao.size ? [...lista, ...extrasDaSessao] : lista;
 }
 function liberadaSobDemanda(nome, allowedNames) {
   return semRestricao(allowedNames) ? extrasLigados().includes(nome) : allowedNames.includes(nome);
@@ -143,4 +155,4 @@ function nomesSobDemanda() {
   return SOB_DEMANDA.flatMap((m) => m.declarations.map((d) => d.name));
 }
 
-module.exports = { getAllDeclarations, execute, nomesNativos, nomesSobDemanda, normalizarArgs, stopMcp: mcpClient.stopAll };
+module.exports = { getAllDeclarations, execute, nomesNativos, nomesSobDemanda, normalizarArgs, ligarNaSessao, LIGAVEIS_NA_SESSAO, stopMcp: mcpClient.stopAll };

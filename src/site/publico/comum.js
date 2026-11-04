@@ -430,5 +430,146 @@
     return frag;
   }
 
-  window.GeminiSite = Object.freeze({ lerToken, criarApi, eventos, analisarMarkdown, montarMarkdown, copiarTexto, linkSeguro });
+  // ---------------------------------------------------------------------------
+  // v0.51.0: foto, vídeo e áudio na conversa. O arquivo vem da API (com a chave), vira um blob local e só então entra
+  // na página (img/video/audio com blob:); o nome entra como texto. Nada de endereço de fora.
+  // ---------------------------------------------------------------------------
+  const MAX_ENVIO = 1024 * 1024 * 1024; // o mesmo do servidor
+  const MAX_PREVIA_AUTO = 150 * 1024 * 1024; // maior que isso, a prévia só carrega se a pessoa pedir
+  /** Tipos que o servidor aceita; sem tipo (alguns celulares), pela extensão. */
+  const TIPOS = {
+    jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif',
+    mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm', mkv: 'video/x-matroska', '3gp': 'video/3gpp', m4v: 'video/x-m4v',
+    mp3: 'audio/mpeg', m4a: 'audio/mp4', aac: 'audio/aac', ogg: 'audio/ogg', opus: 'audio/opus', wav: 'audio/wav',
+  };
+  const ACEITOS = new Set(Object.values(TIPOS).concat(['image/jpg', 'audio/mp3', 'audio/x-m4a', 'audio/x-wav', 'audio/wave']));
+
+  function tamanhoLegivel(n) {
+    const u = ['bytes', 'KB', 'MB', 'GB'];
+    let v = Number(n) || 0;
+    let i = 0;
+    while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+    return `${i ? v.toFixed(v < 10 ? 1 : 0).replace('.', ',') : v} ${u[i]}`;
+  }
+
+  /** O tipo para mandar ao servidor ('' se não for foto/vídeo/áudio aceito) e a mídia: imagem, video, audio. */
+  function tipoDoArquivo(arquivo) {
+    const ext = (/\.([a-z0-9]{2,5})$/i.exec(arquivo.name || '') || [])[1];
+    let tipo = String(arquivo.type || '').toLowerCase();
+    if (!ACEITOS.has(tipo)) tipo = (ext && TIPOS[ext.toLowerCase()]) || '';
+    if (!tipo && /^image\/hei[cf]$/.test(String(arquivo.type || ''))) tipo = String(arquivo.type);
+    return { tipo, midia: tipo.startsWith('image/') ? 'imagem' : tipo.startsWith('video/') ? 'video' : tipo.startsWith('audio/') ? 'audio' : '' };
+  }
+
+  /**
+   * Manda um arquivo para o servidor (POST /api/enviar, o arquivo cru), com o progresso.
+   * @returns {{ promessa: Promise<object>, cancelar: () => void }} a promessa resolve com { id, nome, midia, tamanho, caminho }
+   */
+  function enviarArquivo(token, arquivo, tipo, { aoProgresso } = {}) {
+    const xhr = new XMLHttpRequest();
+    const promessa = new Promise((resolve, reject) => {
+      xhr.open('POST', '/api/enviar');
+      xhr.setRequestHeader('authorization', `Bearer ${token}`);
+      xhr.setRequestHeader('content-type', tipo);
+      xhr.setRequestHeader('x-nome', encodeURIComponent(String(arquivo.name || 'arquivo').slice(0, 200)));
+      xhr.responseType = 'json';
+      if (aoProgresso) xhr.upload.addEventListener('progress', (e) => { if (e.lengthComputable) aoProgresso(e.loaded / e.total); });
+      xhr.addEventListener('load', () => {
+        const r = xhr.response || {};
+        if (xhr.status === 200 && r.ok) resolve(r);
+        else reject(new Error(r.erro || `HTTP ${xhr.status}`));
+      });
+      xhr.addEventListener('error', () => reject(new Error('a conexão caiu')));
+      xhr.addEventListener('abort', () => reject(Object.assign(new Error('cancelado'), { cancelado: true })));
+      xhr.send(arquivo);
+    });
+    return { promessa, cancelar: () => xhr.abort() };
+  }
+
+  /**
+   * Um quadro de verdade no lugar do retângulo vazio/preto (sem tocar): o navegador só desenha um quadro depois de ir a
+   * algum ponto do vídeo. Vai um pouco para a frente (os vídeos editados começam escurecidos, no fade) e, se a pessoa
+   * der play sem mexer na barra, volta para o começo.
+   */
+  function mostrarQuadro(video) {
+    let alvo = null;
+    video.addEventListener('loadedmetadata', () => {
+      if (video.currentTime || !video.paused || !(video.duration > 0)) return;
+      alvo = Math.min(1.5, video.duration / 3);
+      try { video.currentTime = alvo; } catch { alvo = null; }
+    }, { once: true });
+    video.addEventListener('play', () => {
+      if (alvo !== null && Math.abs(video.currentTime - alvo) < 0.25) video.currentTime = 0;
+      alvo = null;
+    }, { once: true });
+  }
+
+  function elementoMidia(midia, url, nome, doc) {
+    let el;
+    if (midia === 'imagem') { el = doc.createElement('img'); el.alt = nome; el.decoding = 'async'; }
+    else if (midia === 'video') { el = doc.createElement('video'); el.controls = true; el.playsInline = true; el.preload = 'metadata'; mostrarQuadro(el); }
+    else { el = doc.createElement('audio'); el.controls = true; el.preload = 'metadata'; }
+    el.className = 'midia-conteudo';
+    el.src = url;
+    return el;
+  }
+
+  /**
+   * Um cartão de mídia na conversa: a prévia e, para o que veio do servidor, o botão de baixar.
+   * `item`: { id, nome, midia, tamanho } (do servidor) ou { arquivo: File, nome, midia, tamanho, url } (escolhido aqui).
+   * `urls` (Set) guarda os blob: criados, para a página liberar a memória depois.
+   */
+  function cartaoMidia(api, item, { doc = document, urls } = {}) {
+    const fig = doc.createElement('figure');
+    fig.className = `midia midia-${item.midia}`;
+    const area = doc.createElement('div');
+    area.className = 'midia-area';
+    const legenda = doc.createElement('figcaption');
+    legenda.className = 'midia-legenda';
+    const nome = doc.createElement('span');
+    nome.className = 'midia-nome';
+    nome.textContent = item.nome;
+    nome.title = item.nome;
+    const info = doc.createElement('span');
+    info.className = 'midia-info';
+    info.textContent = tamanhoLegivel(item.tamanho);
+    legenda.append(nome, info);
+    fig.append(area, legenda);
+    const estado = (t) => { const p = doc.createElement('p'); p.className = 'midia-estado'; p.textContent = t; area.replaceChildren(p); };
+    const mostrar = (url, comBaixar) => {
+      area.replaceChildren(elementoMidia(item.midia, url, item.nome, doc));
+      if (!comBaixar) return;
+      const baixar = doc.createElement('a');
+      baixar.className = 'midia-baixar';
+      baixar.href = url;
+      baixar.download = item.nome;
+      baixar.textContent = 'Baixar';
+      legenda.append(baixar);
+    };
+    if (item.url) { mostrar(item.url, false); return fig; }
+    async function carregar() {
+      estado('Carregando a prévia…');
+      try {
+        const r = await api('/api/midia', { id: item.id });
+        if (!r.ok) { const e = await r.json().catch(() => ({})); estado(e.erro || 'Não consegui carregar.'); return; }
+        const url = URL.createObjectURL(await r.blob());
+        if (urls) urls.add(url);
+        mostrar(url, true);
+      } catch { estado('Sem conexão com o agente.'); }
+    }
+    if (item.tamanho > MAX_PREVIA_AUTO) {
+      const b = doc.createElement('button');
+      b.type = 'button';
+      b.className = 'botao midia-mostrar';
+      b.textContent = `Mostrar (${tamanhoLegivel(item.tamanho)})`;
+      b.addEventListener('click', carregar);
+      area.replaceChildren(b);
+    } else carregar();
+    return fig;
+  }
+
+  window.GeminiSite = Object.freeze({
+    lerToken, criarApi, eventos, analisarMarkdown, montarMarkdown, copiarTexto, linkSeguro,
+    tamanhoLegivel, tipoDoArquivo, enviarArquivo, cartaoMidia, mostrarQuadro, MAX_ENVIO,
+  });
 })();

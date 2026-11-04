@@ -161,6 +161,90 @@ test('ferramenta "imagem": ajustar sem IA e sem perguntar; a lista de ações in
   } finally { process.chdir(antes); }
 });
 
+// ---------------------------------------------------------------------------
+// v0.51.0: cores de foto de iPhone (Display P3) e GIF animado
+// ---------------------------------------------------------------------------
+const perfilCor = require('../src/perfilCor');
+/** O que o sRGB mostra para uma cor em Display P3 (as contas de cor, sem o ImageMagick). */
+function p3ParaSrgb(rgb) {
+  const lin = (v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+  const cod = (v) => (v <= 0.0031308 ? 12.92 * v : 1.055 * v ** (1 / 2.4) - 0.055);
+  const mP3 = perfilCor.matrizes(perfilCor.DISPLAY_P3).m;
+  const mS = perfilCor.matrizes(perfilCor.SRGB).m;
+  const [[a, b, c], [d, e, f], [g, h, i]] = mS;
+  const det = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g);
+  const inv = [[(e * i - f * h) / det, (c * h - b * i) / det, (b * f - c * e) / det], [(f * g - d * i) / det, (a * i - c * g) / det, (c * d - a * f) / det], [(d * h - e * g) / det, (b * g - a * h) / det, (a * e - b * d) / det]];
+  const linear = rgb.map((v) => lin(v / 255));
+  const xyz = mP3.map((l) => l.reduce((s, v, k) => s + v * linear[k], 0));
+  return inv.map((l) => l.reduce((s, v, k) => s + v * xyz[k], 0)).map((v) => Math.round(255 * cod(Math.min(1, Math.max(0, v)))));
+}
+const perto = (a, b, tol, msg) => assert.ok(Math.abs(a - b) <= tol, `${msg}: ${a} (esperado ${b} ± ${tol})`);
+const pixel = (f) => im(f, '-format', '%[fx:round(255*p{2,2}.r)] %[fx:round(255*p{2,2}.g)] %[fx:round(255*p{2,2}.b)]', 'info:').trim().split(' ').map(Number);
+const descricaoIcc = (f) => spawnSync(magick, [f, '-format', '%[icc:description]', 'info:'], { encoding: 'utf8' }).stdout.trim();
+
+test('de verdade (v0.51.0): foto de iPhone (Display P3) sai em sRGB com as cores certas — antes o -strip as desbotava', { skip: pular, timeout: 120000 }, async (t) => {
+  if (!(await ie.temLcms(magick))) { t.skip('este ImageMagick não tem o lcms'); return; }
+  const icc = p('p3.icc');
+  fs.writeFileSync(icc, perfilCor.perfilRgb(perfilCor.DISPLAY_P3));
+  const cor = [200, 60, 40];
+  im('-size', '64x48', `xc:rgb(${cor.join(',')})`, '-set', 'comment', 'GPS -23.55,-46.63', '-profile', icc, `png:${p('iphone.png')}`);
+  assert.equal(descricaoIcc(p('iphone.png')), 'Display P3 (gemini-code)', 'a foto de teste está em Display P3');
+  const esperado = p3ParaSrgb(cor);
+  assert.ok(esperado[0] - cor[0] >= 12, `em sRGB o vermelho é bem mais forte (${esperado}): por isso sem converter desbota`);
+  // e numa pasta temporária com caracteres que o ImageMagick poderia interpretar (o perfil sRGB vai para lá)
+  const estranha = p("tmp it's: a, [b]; c=d % ação");
+  fs.mkdirSync(estranha, { recursive: true });
+  const antes = process.env.TMPDIR;
+  process.env.TMPDIR = estranha;
+  let r;
+  try { r = await ie.ajustar(p('iphone.png'), {}, { cwd: PROJ }); } finally { if (antes === undefined) delete process.env.TMPDIR; else process.env.TMPDIR = antes; }
+  const saida = r.arquivos[0].arquivo;
+  assert.equal(descricaoIcc(saida), '', 'sem perfil nenhum (lido como sRGB, o padrão)');
+  assert.equal(im(saida, '-format', '%c', 'info:').trim(), '', 'a localização saiu');
+  pixel(saida).forEach((v, k) => perto(v, esperado[k], 3, `canal ${'RGB'[k]}`));
+  assert.match(r.passos.join(' '), /cores convertidas de Display P3 \(gemini-code\) para sRGB/);
+  assert.deepEqual(fs.readdirSync(estranha), [], 'o perfil temporário foi apagado');
+  // mantendo a localização: a foto fica com o perfil sRGB (as cores continuam as convertidas)
+  const mantida = (await ie.ajustar(p('iphone.png'), { manter_localizacao: true }, { cwd: PROJ })).arquivos[0].arquivo;
+  assert.equal(descricaoIcc(mantida), 'sRGB (gemini-code)');
+  pixel(mantida).forEach((v, k) => perto(v, esperado[k], 3, `mantida, canal ${'RGB'[k]}`));
+  // uma foto que já é sRGB não é mexida
+  fs.writeFileSync(p('srgb.icc'), perfilCor.perfilSrgb());
+  im('-size', '64x48', `xc:rgb(${cor.join(',')})`, '-profile', p('srgb.icc'), `png:${p('android.png')}`);
+  const r2 = await ie.ajustar(p('android.png'), {}, { cwd: PROJ });
+  assert.deepEqual(pixel(r2.arquivos[0].arquivo), cor);
+  assert.doesNotMatch(r2.passos.join(' '), /convertidas/);
+});
+
+test('sem o lcms (v0.51.0): a localização sai e o perfil de cor fica — as cores continuam certas', { skip: pular, timeout: 60000 }, () => {
+  const x = ie.normalizarReceita({});
+  const r = ie.montarArgs('/f/a.jpg', '/f/b.jpg', x, { w: 10, h: 10, manterPerfil: true, perfil: 'Display P3' });
+  assert.ok(!r.args.includes('-strip'));
+  assert.deepEqual(r.args.slice(r.args.indexOf('+profile'), r.args.indexOf('+profile') + 4), ['+profile', '!icc,*', '+set', 'comment']);
+  assert.match(r.passos.join(' '), /perfil de cor \(Display P3\) ficou/);
+  // de verdade: com esses argumentos, sai o comentário e o EXIF; o perfil fica
+  const icc = p('p3b.icc');
+  fs.writeFileSync(icc, perfilCor.perfilRgb(perfilCor.DISPLAY_P3));
+  const f = p('p3-exif.jpg');
+  im('-size', '40x20', 'xc:rgb(200,60,40)', '-set', 'comment', 'GPS -23.55,-46.63', '-profile', icc, `jpeg:${f}`);
+  fs.writeFileSync(f, comOrientacao(fs.readFileSync(f), 6));
+  const plano = ie.montarArgs(f, p('p3-exif-saida.jpg'), x, { w: 20, h: 40, manterPerfil: true, perfil: 'Display P3' });
+  execFileSync(magick, plano.args);
+  const out = p('p3-exif-saida.jpg');
+  assert.equal(descricaoIcc(out), 'Display P3 (gemini-code)');
+  assert.equal(im(out, '-format', '%c', 'info:').trim(), '');
+  assert.doesNotMatch(fs.readFileSync(out).toString('latin1'), /Exif\0\0/, 'o EXIF saiu');
+});
+
+test('de verdade (v0.51.0): GIF animado vira uma foto só, com as medidas certas (antes: "10 2010 20" e vários arquivos)', { skip: pular, timeout: 60000 }, async () => {
+  im('-size', '200x100', 'xc:red', '-size', '200x100', 'xc:blue', '-loop', '0', `gif:${p('anim.gif')}`);
+  assert.deepEqual(await ie.medidas(magick, p('anim.gif')), { w: 200, h: 100, perfil: '' });
+  const r = await ie.ajustar(p('anim.gif'), { textos: ['Oi'] }, { cwd: PROJ });
+  assert.match(r.arquivos[0].arquivo, /anim-editada\.png$/);
+  assert.deepEqual(tamanho(r.arquivos[0].arquivo), [200, 100]);
+  assert.deepEqual(fs.readdirSync(PROJ).filter((n) => /^anim-editada/.test(n)), ['anim-editada.png'], 'um arquivo só');
+});
+
 test('comando do terminal: imagem ajustar recusa opção errada', { skip: pular, timeout: 60000 }, () => {
   const f = foto('cli.jpg', { w: 300, h: 300 });
   const r = spawnSync(process.execPath, [CLI, 'imagem', 'ajustar', f, '--corr', 'vivo'], { encoding: 'utf8', env: { ...process.env, HOME, USERPROFILE: HOME }, cwd: PROJ });

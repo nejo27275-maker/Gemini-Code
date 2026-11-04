@@ -69,13 +69,21 @@ function filtrosMelhorar({ estabilizar = false } = {}) {
   return [...(estabilizar ? ['deshake'] : []), 'hqdn3d=1.5:1.5:6:6', 'unsharp=5:5:0.6:5:5:0.0', 'eq=contrast=1.04:saturation=1.08'].join(',');
 }
 
+/**
+ * v0.51.0: vídeo HDR de celular (HLG/PQ) sai convertido para SDR BT.709, como no "editar" — antes saía em 8 bits ainda
+ * marcado como HDR, com as cores desbotadas nas redes. `passos` conta a conversão (ou o aviso, sem o zscale).
+ */
 async function melhorar(arquivo, { saida, estabilizar = false, cwd, ffmpeg = acharFfmpeg(), execFileFn } = {}) {
   if (!ffmpeg) throw new Error(`melhorar vídeo ${SEM_FFMPEG}`);
   const abs = conferirEntrada(path.resolve(cwd || process.cwd(), String(arquivo || '')), VIDEOS, 'o vídeo');
+  const ed = require('./videoEdicao'); // aqui dentro: o videoEdicao usa este arquivo
+  const inf = await ed.info(abs, { ffmpeg, execFileFn });
+  const hdr = await ed.planoHdr([inf], ffmpeg, execFileFn);
   const destino = destinoVideo({ saida, base: abs, sufixo: '-melhorado', cwd });
-  await rodar(ffmpeg, ['-hide_banner', '-loglevel', 'error', '-n', ...entrada(abs), '-vf', filtrosMelhorar({ estabilizar }),
-    '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p', '-c:a', 'copy', `file:${destino}`], { execFileFn });
-  return { arquivo: destino };
+  const filtros = [...(inf.hdr && hdr.converter ? [ed.cadeiaSdr(inf.hdr)] : []), filtrosMelhorar({ estabilizar })].join(',');
+  await rodar(ffmpeg, ['-hide_banner', '-loglevel', 'error', '-n', ...entrada(abs), '-vf', filtros,
+    '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p', ...hdr.marcas, '-c:a', 'copy', `file:${destino}`], { execFileFn });
+  return { arquivo: destino, passos: inf.hdr ? [ed.notaHdr(inf.hdr, hdr.converter)] : [] };
 }
 
 /** Lista do concat do ffmpeg: aspas simples escapadas ('\'') — um nome com aspas não quebra a lista. */
@@ -94,9 +102,13 @@ async function slideshow(fotos, { segundos = 3, musica, saida, cwd = process.cwd
   const audio = musica ? conferirEntrada(path.resolve(cwd, String(musica)), AUDIOS, 'a música') : null;
   const destino = destinoVideo({ saida: saida || 'slideshow.mp4', cwd });
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gemini-code-slideshow-'));
+  let convertidas;
   try {
+    // v0.51.0: o ffmpeg ignora o perfil de cor; foto em Display P3 (iPhone) entra convertida para sRGB, senão desbota
+    const cor = await require('./imagemEdicao').fotosEmSrgb(lista, tmp);
+    convertidas = cor.convertidas;
     const arqLista = path.join(tmp, 'lista.txt');
-    fs.writeFileSync(arqLista, listaConcat(lista, seg));
+    fs.writeFileSync(arqLista, listaConcat(cor.fotos, seg));
     const escala = 'scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,format=yuv420p';
     await rodar(ffmpeg, ['-hide_banner', '-loglevel', 'error', '-n',
       '-protocol_whitelist', 'file', '-f', 'concat', '-safe', '0', '-i', `file:${arqLista}`,
@@ -107,7 +119,7 @@ async function slideshow(fotos, { segundos = 3, musica, saida, cwd = process.cwd
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
-  return { arquivo: destino, fotos: lista.length, segundos: seg };
+  return { arquivo: destino, fotos: lista.length, segundos: seg, ...(convertidas ? { coresConvertidas: convertidas } : {}) };
 }
 
 /** Vídeo com IA (Veo). Exige o modelo liberado na conta; pode ter custo. */

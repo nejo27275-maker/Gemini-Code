@@ -1,3 +1,68 @@
+## 0.51.0 — foto e vídeo pelo modo site, e cores e volume certos na edição
+
+Base: a 0.50.1 (no PR [#7](https://github.com/nejo27275-maker/Gemini-Code/pull/7)). Você pediu para conferir se o
+erro das cores do vídeo HDR também aparecia em outro lugar, conferir o modo site e mostrar uma edição de foto e vídeo
+"com aquele sistema": bota a foto e o vídeo. Achei o mesmo tipo de erro em três lugares, e mais um no volume.
+
+**Corrigido:**
+- **`video melhorar` com vídeo HDR saía desbotado:** o mesmo erro da 0.50.1, que tinha ficado de fora do "melhorar".
+  - Reproduzido: a saída era 8 bits ainda marcada como HLG.
+  - Agora converte para SDR BT.709 como o `editar`, ou avisa num ffmpeg sem `zscale`.
+- **Foto de iPhone desbotava no `imagem ajustar`:**
+  - **O erro:** o iPhone grava em Display P3, com o perfil de cor dentro da foto. Tirar a localização (o padrão) tirava
+    também o perfil. A foto passava a ser lida como sRGB, e as cores desbotavam.
+  - **Medido:** um vermelho P3 (200,60,40) saía como (200,60,40) sRGB, quando o certo é (217,42,23).
+  - **Agora:** a foto é convertida para sRGB antes. O perfil sRGB é montado pelo próprio gemini-code
+    (`src/perfilCor.js`), porque nem todo aparelho tem um arquivo `.icc`. Sem o lcms no ImageMagick, a localização sai
+    e o perfil de cor fica.
+- **O vídeo de fotos (`slideshow`) desbotava foto P3:** o ffmpeg ignora o perfil de cor. A foto P3 agora entra
+  convertida.
+- **GIF animado no `ajustar`:**
+  - **Antes:** as medidas saíam erradas ("10 2010 20") e o resultado virava vários arquivos, com erro.
+  - **Agora:** vira uma foto só (o primeiro quadro).
+- **Volume das redes:** o `editar` e o `juntar` diziam "-14 LUFS", mas um vídeo curto com som de mar saía com -15,5 (no
+  teste) e -16,3 (no Reels da demonstração).
+  - **Por quê:** o `loudnorm` numa passada só não chegava lá.
+  - **Agora:** depois de exportar, mede de verdade. Se passou de 1 LU da meta, refaz só o áudio (ganho e limitador de
+    pico; o vídeo é copiado, sem perder qualidade).
+  - **Medido:** o mesmo Reels ficou em -14,5 LUFS.
+
+**Novo — foto, vídeo e áudio pelo modo site (chat):**
+- **Mandar:** pelo clipe (no celular, galeria ou câmera), arrastando para a conversa ou colando uma foto.
+  - O arquivo sobe na hora, com a barra de progresso, e vai para `midia-recebida/` na pasta do projeto (com um
+    `.gitignore`).
+  - Nunca sobrescreve: um arquivo com o mesmo nome vira `-2`.
+  - Limites: até 1 GB por arquivo e 10 por mensagem.
+- **O agente vê a foto,** como no `/imagem` do terminal: até ~15 MB de fotos por mensagem. Ele também recebe o caminho
+  de cada arquivo.
+- **Vídeo:** mandar um vídeo liga a ferramenta `video` nesta execução, porque ela é sob demanda. A lista de um aliado
+  não muda.
+- **Resultado:** a foto editada, o vídeo e a capa aparecem na resposta, com o botão **Baixar**. Recarregar a página traz
+  as mídias de volta, e a página de voz mostra o que o agente criou.
+- **Segurança:**
+  - O envio é a única rota que não é JSON. Exige a mesma chave e passa pelas mesmas travas de origem e de `Host`.
+  - Só aceita os tipos de mídia da lista, conferidos pelos primeiros bytes: uma página HTML chamada de foto não entra.
+  - O nome do arquivo é limpo, e a extensão vem do tipo. Uma pasta `midia-recebida` que seja um link é recusada.
+  - A página só vê o que o servidor registrou, conferido de novo na hora: nada de segredo do gemini-code nem de link no
+    lugar. A CSP ganhou só `blob:` para as prévias.
+
+**Testes (+25):** cada correção tem um teste que falha no código anterior:
+- HDR do "melhorar", foto P3, sem o lcms, GIF, volume e slideshow P3;
+- o teste de ponta a ponta no Chromium falha sem `blob:` na CSP;
+- e o envio inteiro: segurança, nome, sem sobrescrever, um por vez, envio cortado, prévias, histórico e a ferramenta
+  ligada na sessão.
+
+**Demonstração (honesta):** a foto e o vídeo de teste foram desenhados aqui, porque este ambiente não tem internet nem
+modelo de IA.
+- **De verdade:** a edição (ImageMagick e ffmpeg), o envio, a página e as ferramentas, no Chromium com a tela de um
+  Pixel 7.
+- **Roteiro:** o texto das respostas do agente.
+
+**Limites:**
+- O navegador de um celular de verdade não foi testado.
+- Foto HEIC ainda não é aceita: no iPhone, use "Mais Compatível".
+- A prévia de um vídeo grande é carregada inteira na memória do navegador.
+
 ## 0.50.1 — acabamento para vídeo de celular e a edição posta à prova
 
 Base: a 0.50.0 (no PR [#7](https://github.com/nejo27275-maker/Gemini-Code/pull/7)). Testei a edição nova com casos de

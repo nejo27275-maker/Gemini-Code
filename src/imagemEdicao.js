@@ -8,11 +8,17 @@
 // src/imagens.js (segredos, formato, tamanho) e saída sempre num arquivo novo fora das áreas protegidas. O texto vai
 // como argumento (nunca por shell) e escapado: um "@" no começo leria um arquivo e "%w"/"%[fx:...]" seriam
 // interpretados pelo ImageMagick.
+// v0.51.0: cores de foto de iPhone (Display P3) — o -strip tirava o perfil de cor junto com a localização, e a foto
+// era lida como sRGB (cores desbotadas, o mesmo problema do vídeo HDR). Agora a foto é convertida para sRGB antes
+// (src/perfilCor.js); sem o lcms no ImageMagick, o perfil de cor fica (sai só a localização). E um GIF animado vira
+// uma foto só (o primeiro quadro): antes as medidas saíam erradas e o resultado virava vários arquivos.
 'use strict';
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const imagem = require('./imagem');
+const perfilCor = require('./perfilCor');
 
 const FORMATOS = {
   feed: { w: 1080, h: 1350, nome: 'feed do Instagram (4:5, 1080x1350)' },
@@ -123,14 +129,19 @@ function quebrarLinhas(texto, max) {
 
 /**
  * Os argumentos do ImageMagick (puro). `w`/`h`: tamanho da foto de entrada, já endireitada.
+ * v0.51.0 — cor: `srgb` (caminho do perfil sRGB) converte a foto do perfil dela (`perfil`, ex.: "Display P3") para
+ * sRGB logo depois de ler; `manterPerfil` (sem como converter) tira a localização mas deixa o perfil de cor.
  * @returns {{args: string[], largura: number, altura: number, passos: string[]}}
  */
-function montarArgs(entrada, saida, x, { w, h, fonte = null, alturaMarca = 0 } = {}) {
+function montarArgs(entrada, saida, x, { w, h, fonte = null, alturaMarca = 0, srgb = null, perfil = '', manterPerfil = false } = {}) {
   const coderIn = imagem.CODER[path.extname(entrada).toLowerCase()];
   const coderOut = imagem.CODER[path.extname(saida).toLowerCase()];
   if (!coderIn || !coderOut) throw new Error('use .png, .jpg, .webp ou .gif');
   const passos = [];
-  const a = [`${coderIn}:${entrada}`, '-auto-orient'];
+  // "-delete 1--1": só o primeiro quadro (um GIF/WebP animado vira uma foto só)
+  const a = [`${coderIn}:${entrada}`, '-delete', '1--1', '-auto-orient'];
+  const nome = perfilCor.nomeDoPerfil(perfil) || 'outro perfil de cor';
+  if (srgb) { a.push('-profile', srgb); passos.push(`cores convertidas de ${nome} para sRGB (o padrão da internet)`); }
   if (x.melhorar) { a.push('-auto-level', '-modulate', '100,108', '-enhance', '-unsharp', '0x0.8+0.8+0.01'); passos.push('melhorada (luz, cor e nitidez)'); }
   if (x.cor) { a.push(...CORES[x.cor]); passos.push(`cor "${x.cor}"`); }
   if (x.brilho !== undefined || x.contraste !== undefined) {
@@ -198,18 +209,57 @@ function montarArgs(entrada, saida, x, { w, h, fonte = null, alturaMarca = 0 } =
       '-gravity', GRAVIDADE_MARCA[x.posicaoMarca], '-geometry', x.posicaoMarca === 'centro' ? '+0+0' : `+${m}+${m}`, '-composite');
     passos.push("marca d'água");
   }
-  if (x.tirarLocalizacao) { a.push('-strip'); passos.push('sem a localização e os dados da câmera (EXIF)'); }
+  if (x.tirarLocalizacao && manterPerfil) {
+    // tudo menos o perfil de cor: a localização e os dados da câmera saem, as cores continuam certas
+    a.push('+profile', '!icc,*', '+set', 'comment');
+    passos.push(`sem a localização e os dados da câmera (EXIF); o perfil de cor (${nome}) ficou, porque este ImageMagick não tem o lcms para converter para sRGB`);
+  } else if (x.tirarLocalizacao) { a.push('-strip'); passos.push('sem a localização e os dados da câmera (EXIF)'); }
   a.push('-quality', String(QUALIDADES[x.qualidade].q), `${coderOut}:${saida}`);
   return { args: a, largura: W, altura: H, passos };
 }
 
-/** Largura e altura da foto já endireitada (a orientação do EXIF conta). */
+/**
+ * Largura e altura da foto já endireitada (a orientação do EXIF conta) e o nome do perfil de cor dela ('' sem perfil).
+ * Só o primeiro quadro: num GIF animado, "%w %h" saía repetido, um colado no outro ("10 2010 20").
+ */
 async function medidas(magick, arquivo) {
   const coder = imagem.CODER[path.extname(arquivo).toLowerCase()];
-  const { stdout } = await imagem.rodar(magick, [`${coder}:${arquivo}`, '-auto-orient', '-format', '%w %h', 'info:']);
-  const [w, h] = String(stdout).trim().split(/\s+/).map(Number);
+  const { stdout } = await imagem.rodar(magick, [`${coder}:${arquivo}`, '-delete', '1--1', '-auto-orient', '-format', '%w %h|%[icc:description]\\n', 'info:']);
+  const m = /^(\d+) (\d+)\|(.*)$/m.exec(String(stdout));
+  const w = m ? Number(m[1]) : 0;
+  const h = m ? Number(m[2]) : 0;
   if (!w || !h) throw new Error('não consegui ler o tamanho da foto.');
-  return { w, h };
+  return { w, h, perfil: m[3].trim() };
+}
+
+// este ImageMagick converte perfis de cor (tem o lcms)? Pergunta uma vez por programa, só quando aparece uma foto que precisa.
+const comLcms = new Map();
+function temLcms(magick) {
+  if (!comLcms.has(magick)) {
+    comLcms.set(magick, imagem.rodar(magick, ['-version']).then((r) => /Delegates[^\n]*\blcms\b/i.test(r.stdout), () => false));
+  }
+  return comLcms.get(magick);
+}
+
+/** Uma pasta temporária com o perfil sRGB (src/perfilCor.js), criada só quando alguma foto precisa. */
+function perfilTemporario() {
+  let pasta = null;
+  return {
+    caminho() {
+      if (!pasta) {
+        pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'gemini-code-cor-'));
+        fs.writeFileSync(path.join(pasta, 'srgb.icc'), perfilCor.perfilSrgb());
+      }
+      return path.join(pasta, 'srgb.icc');
+    },
+    apagar() { if (pasta) fs.rmSync(pasta, { recursive: true, force: true }); },
+  };
+}
+
+/** O que fazer com a cor de uma foto: converter para sRGB (com o lcms), manter o perfil (sem ele) ou nada (já é sRGB). */
+async function planoCor(magick, perfil, tmp) {
+  if (perfilCor.jaEhSrgb(perfil)) return {};
+  return (await temLcms(magick)) ? { srgb: tmp.caminho(), perfil } : { manterPerfil: true, perfil };
 }
 
 /** Edita uma foto (ou várias, em lote) com a receita. @returns {Promise<{arquivos: Array<{arquivo, largura, altura}>, passos}>} */
@@ -225,25 +275,59 @@ async function ajustar(fotos, receita = {}, { saida, cwd = process.cwd(), magick
   const feitos = [];
   let passos = [];
   const logo = x.marca ? await medidas(magick, x.marca) : null;
-  for (const f of lista_) {
-    const entrada = path.resolve(cwd, f);
-    require('./imagens').lerImagem(entrada); // segredos, formato, tamanho
-    const extIn = path.extname(entrada).toLowerCase();
-    const ext = extIn === '.gif' ? '.png' : (extIn === '.jpeg' ? '.jpg' : extIn);
-    const destino = imagem.destinoNovo({ saida, base: entrada, sufixo: '-editada', ext, cwd });
-    const { w, h } = await medidas(magick, entrada);
-    const larguraFinal = x.formato ? FORMATOS[x.formato].w : w;
-    const alturaMarca = logo ? Math.round((larguraFinal * x.tamanhoMarca * logo.h) / logo.w) : 0;
-    const plano = montarArgs(entrada, destino, x, { w, h, fonte, alturaMarca });
-    await imagem.rodar(magick, plano.args);
-    if (!fs.existsSync(destino)) throw new Error('o ImageMagick terminou sem criar a foto.');
-    feitos.push({ arquivo: destino, largura: plano.largura, altura: plano.altura });
-    passos = plano.passos;
+  const tmp = perfilTemporario();
+  try {
+    for (const f of lista_) {
+      const entrada = path.resolve(cwd, f);
+      require('./imagens').lerImagem(entrada); // segredos, formato, tamanho
+      const extIn = path.extname(entrada).toLowerCase();
+      const ext = extIn === '.gif' ? '.png' : (extIn === '.jpeg' ? '.jpg' : extIn);
+      const destino = imagem.destinoNovo({ saida, base: entrada, sufixo: '-editada', ext, cwd });
+      const { w, h, perfil } = await medidas(magick, entrada);
+      const larguraFinal = x.formato ? FORMATOS[x.formato].w : w;
+      const alturaMarca = logo ? Math.round((larguraFinal * x.tamanhoMarca * logo.h) / logo.w) : 0;
+      const plano = montarArgs(entrada, destino, x, { w, h, fonte, alturaMarca, ...(await planoCor(magick, perfil, tmp)) });
+      await imagem.rodar(magick, plano.args);
+      if (!fs.existsSync(destino)) throw new Error('o ImageMagick terminou sem criar a foto.');
+      feitos.push({ arquivo: destino, largura: plano.largura, altura: plano.altura, passos: plano.passos });
+      passos = [...new Set([...passos, ...plano.passos])]; // no lote, a conversão de cor de uma foto só também aparece
+    }
+  } finally {
+    tmp.apagar();
   }
   return { arquivos: feitos, passos };
 }
 
+/**
+ * v0.51.0, para o vídeo de fotos (src/video.js, slideshow): o ffmpeg ignora o perfil de cor, então uma foto em Display
+ * P3 (iPhone) entra como uma cópia temporária em sRGB, em `pasta` (com o lcms; sem ele, ou sem ImageMagick, como está).
+ * A conferência é só pelo cabeçalho (-ping): rápida mesmo com 300 fotos.
+ * @returns {Promise<{ fotos: string[], convertidas: number }>}
+ */
+async function fotosEmSrgb(fotos, pasta, { magick = imagem.acharMagick() } = {}) {
+  if (!magick) return { fotos, convertidas: 0 };
+  const out = [];
+  let convertidas = 0;
+  let icc = null;
+  for (const [i, f] of fotos.entries()) {
+    const coder = imagem.CODER[path.extname(f).toLowerCase()];
+    let perfil = '';
+    if (coder) {
+      try {
+        perfil = String((await imagem.rodar(magick, ['-ping', `${coder}:${f}`, '-format', '%[icc:description]\\n', 'info:'])).stdout).split('\n')[0].trim();
+      } catch { /* não deu para ler o cabeçalho: a foto segue como está (o ffmpeg avisa se não abrir) */ }
+    }
+    if (!coder || perfilCor.jaEhSrgb(perfil) || !(await temLcms(magick))) { out.push(f); continue; }
+    if (!icc) { icc = path.join(pasta, 'srgb.icc'); fs.writeFileSync(icc, perfilCor.perfilSrgb()); }
+    const destino = path.join(pasta, `foto-${i}${coder === 'jpeg' ? '.jpg' : `.${coder}`}`);
+    await imagem.rodar(magick, [`${coder}:${f}`, '-delete', '1--1', '-auto-orient', '-profile', icc, '-strip', '-quality', '95', `${coder}:${destino}`]);
+    out.push(destino);
+    convertidas++;
+  }
+  return { fotos: out, convertidas };
+}
+
 module.exports = {
   FORMATOS, APELIDOS_FORMATO, ENQUADRAMENTOS, CORES, QUALIDADES, POSICOES_TEXTO, TAMANHOS_TEXTO, GRAVIDADE_MARCA,
-  textoMagick, normalizarReceita, quebrarLinhas, montarArgs, medidas, ajustar,
+  textoMagick, normalizarReceita, quebrarLinhas, montarArgs, medidas, ajustar, temLcms, planoCor, perfilTemporario, fotosEmSrgb,
 };

@@ -25,6 +25,7 @@ const GLOBAIS_NAVEGADOR = [
   'requestAnimationFrame', 'cancelAnimationFrame', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval',
   'fetch', 'TextDecoder', 'TextEncoder', 'URL', 'Element', 'HTMLElement', 'HTMLInputElement', 'Event',
   'SpeechSynthesisUtterance', 'AudioContext',
+  'XMLHttpRequest', // v0.51.0: o envio de foto/vídeo com a barra de progresso (o fetch não informa o progresso do envio)
 ];
 
 module.exports = [

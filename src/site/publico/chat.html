@@ -28,7 +28,7 @@
   <main id="conversa" class="conversa">
     <section id="vazio" class="vazio" aria-labelledby="vazio-titulo">
       <h2 id="vazio-titulo">Como posso ajudar?</h2>
-      <p>Escreva o que você precisa. Quando uma ação precisar da sua permissão, eu pergunto aqui mesmo.</p>
+      <p>Escreva o que você precisa, ou mande uma foto ou um vídeo pelo clipe para eu editar. Quando uma ação precisar da sua permissão, eu pergunto aqui mesmo.</p>
       <div class="sugestoes">
         <button class="sugestao" type="button">O que você consegue fazer?</button>
         <button class="sugestao" type="button">Explique o projeto desta pasta</button>
@@ -40,14 +40,19 @@
 
   <footer class="rodape">
     <p id="status" class="status" role="status" aria-live="polite"></p>
+    <ul id="anexos" class="anexos" aria-label="Arquivos para mandar" hidden></ul>
     <form id="form" class="caixa" autocomplete="off">
+      <input id="arquivo" type="file" accept="image/*,video/*,audio/*" multiple hidden>
+      <button id="btn-anexar" class="anexar" type="button" aria-label="Mandar foto, vídeo ou áudio" title="Mandar foto, vídeo ou áudio (ou arraste para a conversa)">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5 12.6 19.9a5.5 5.5 0 0 1-7.8-7.8l8.4-8.4a3.7 3.7 0 0 1 5.2 5.2l-8.4 8.4a1.8 1.8 0 0 1-2.6-2.6l7.8-7.8"/></svg>
+      </button>
       <textarea id="texto" rows="1" maxlength="16000" placeholder="Escreva uma mensagem…" aria-label="Mensagem para o agente" enterkeyhint="send"></textarea>
       <button id="btn-enviar" class="enviar" type="submit" aria-label="Enviar">
         <svg class="icone-enviar" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5"/></svg>
         <svg class="icone-parar" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>
       </button>
     </form>
-    <p class="dica">Enter envia · Shift+Enter quebra a linha · Esc para a resposta</p>
+    <p class="dica">Enter envia · Shift+Enter quebra a linha · Esc para a resposta · arraste ou cole uma foto para mandar</p>
   </footer>
 </div>
 <script src="/comum.js"></script>

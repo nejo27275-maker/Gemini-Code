@@ -107,6 +107,7 @@ async function executeCamera(a) {
     ` para responder: "${paraExibir(pergunta)}". Permitir? (s/n) `);
   if (!sim(resp)) return 'O usuário não autorizou usar a câmera.';
   const r = await deps.camera().analisar(pergunta, { camera: Number(a.camera) === 1 ? 1 : 0, manterFoto: a.guardar === true });
+  if (r.arquivo) require('../midiaGerada').registrar(r.arquivo);
   return `${r.arquivo ? `[foto guardada em ${path.relative(process.cwd(), r.arquivo) || r.arquivo}]\n` : ''}${r.resposta}`;
 }
 
@@ -125,6 +126,7 @@ async function executeVideo(a) {
     if (fora) return fora;
   }
   const rel = (f) => path.relative(process.cwd(), f) || f;
+  const gerou = (f) => require('../midiaGerada').registrar(f); // v0.51.0: o modo site mostra o resultado na página
   if (acao === 'info') {
     const i = await deps.videoEdicao().info(a.arquivo);
     if (!i.largura) return `Erro: não achei imagem em ${a.arquivo} (é só áudio?).`;
@@ -137,18 +139,22 @@ async function executeVideo(a) {
   const ve = deps.videoEdicao();
   if (acao === 'editar') {
     const r = await ve.editar(a.arquivo, a, { saida: a.saida });
+    gerou(r.arquivo);
     return `Vídeo editado: ${rel(r.arquivo)} (${ve.descreverResultado(r)})`;
   }
   if (acao === 'juntar') {
     const r = await ve.juntar(a.arquivos, { transicao: a.transicao || 'nenhuma', formato: a.formato, enquadrar: a.enquadrar || 'barras', normalizar: a.normalizar !== false, qualidade: a.qualidade || 'normal', saida: a.saida });
+    gerou(r.arquivo);
     return `Vídeos juntados: ${rel(r.arquivo)} (${r.clipes} clipes, ${ve.descreverResultado(r)}${r.transicao === 'suave' ? ', com transição suave' : ''})`;
   }
   if (acao === 'capa') {
     const r = await ve.capa(a.arquivo, { tempo: a.tempo, saida: a.saida });
+    gerou(r.arquivo);
     return `Capa salva: ${rel(r.arquivo)} (imagem de ${String(r.tempo).replace('.', ',')} s)`;
   }
   if (acao === 'audio') {
     const r = await ve.extrairAudio(a.arquivo, { saida: a.saida });
+    gerou(r.arquivo);
     return `Áudio salvo: ${rel(r.arquivo)}`;
   }
   if (acao === 'gerar') {
@@ -159,14 +165,18 @@ async function executeVideo(a) {
       return 'Cancelado pelo usuário.';
     }
     const r = await v.gerar(a.prompt);
+    gerou(r.arquivo);
     return `Vídeo criado com IA: ${r.arquivo}`;
   }
   if (acao === 'melhorar') {
     const r = await v.melhorar(a.arquivo, { saida: a.saida, estabilizar: a.estabilizar === true });
-    return `Vídeo melhorado: ${path.relative(process.cwd(), r.arquivo) || r.arquivo}`;
+    gerou(r.arquivo);
+    return `Vídeo melhorado: ${path.relative(process.cwd(), r.arquivo) || r.arquivo}${r.passos && r.passos.length ? ` (${r.passos.join('; ')})` : ''}`;
   }
   const r = await v.slideshow(a.fotos, { segundos: a.segundos, musica: a.musica, saida: a.saida });
-  return `Slideshow criado: ${path.relative(process.cwd(), r.arquivo) || r.arquivo} (${r.fotos} fotos, ${String(r.segundos).replace('.', ',')} s cada)`;
+  gerou(r.arquivo);
+  const cores = r.coresConvertidas ? `; cores de ${r.coresConvertidas === 1 ? '1 foto convertidas' : `${r.coresConvertidas} fotos convertidas`} para sRGB (Display P3 do iPhone)` : '';
+  return `Slideshow criado: ${path.relative(process.cwd(), r.arquivo) || r.arquivo} (${r.fotos} fotos, ${String(r.segundos).replace('.', ',')} s cada${cores})`;
 }
 
 async function execute(name, args = {}) {

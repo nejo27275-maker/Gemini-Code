@@ -11,6 +11,7 @@
 // com expansion=none: o texto da pessoa (ou do modelo) nunca vira parte do filtro, e um "%{...}" aparece como está.
 'use strict';
 
+const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -218,6 +219,9 @@ function cadeiaSdr(hdr) {
     'tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuv420p';
 }
 const MARCAS_SDR = ['-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709'];
+/** O que contar do HDR: convertido, ou o aviso de que este ffmpeg não converte. v0.51.0: o "melhorar" usa o mesmo. */
+const notaHdr = (hdr, convertido) => (convertido ? `HDR (${hdr.toUpperCase()}) convertido para cores normais (SDR)`
+  : `ATENÇÃO: o vídeo é HDR (${hdr.toUpperCase()}) e este ffmpeg não tem o filtro zscale para converter; as cores podem ficar desbotadas`);
 
 /** Tamanho final: o do formato; sem formato, o do vídeo (pares; no máximo 720 de altura na qualidade "leve"). */
 function tamanhoFinal(inf, x) {
@@ -291,8 +295,8 @@ function montarEdicao(inf, x, { textosArquivos = [], legenda = null, legendaEsti
   const { w, h } = tamanhoFinal(inf, x);
   const vertical = h > w;
   const cadeia = [];
-  if (inf.hdr && converterHdr) { cadeia.push(cadeiaSdr(inf.hdr)); passos.push(`HDR (${inf.hdr.toUpperCase()}) convertido para cores normais (SDR)`); }
-  else if (inf.hdr) passos.push(`ATENÇÃO: o vídeo é HDR (${inf.hdr.toUpperCase()}) e este ffmpeg não tem o filtro zscale para converter; as cores podem ficar desbotadas`);
+  if (inf.hdr && converterHdr) cadeia.push(cadeiaSdr(inf.hdr));
+  if (inf.hdr) passos.push(notaHdr(inf.hdr, converterHdr));
   if (x.inicio || x.fim !== undefined) passos.push(`cortado de ${fmt(ini)} s a ${fimOrigem ? `${fmt(fimOrigem)} s` : 'o fim'}`);
   if (vel !== 1) { cadeia.push(`setpts=PTS/${fmt(vel)}`); passos.push(`velocidade ${String(fmt(vel)).replace('.', ',')}x`); }
   if (x.estabilizar) { cadeia.push('deshake'); passos.push('estabilizado'); }
@@ -467,6 +471,52 @@ async function planoHdr(infos, ffmpeg, execFileFn) {
   return { converter: await temConversorHdr(ffmpeg, execFileFn), marcas: MARCAS_SDR };
 }
 
+// v0.51.0: o volume das redes em duas passadas. O loudnorm numa passada só sobe o ganho aos poucos e, num vídeo curto,
+// fica abaixo da meta (um Reels de 8 s saía com -16 LUFS dizendo -14). Depois de exportar, mede de verdade e, se
+// passou de 1 LU da meta, refaz só o áudio — o vídeo é copiado, sem perder qualidade: ganho e um limitador de pico.
+const META_LUFS = -14;
+const PICO_MAX = -1.5;
+
+/** O resumo do filtro ebur128 do ffmpeg -> { integrado (LUFS), pico (dBFS) }; null se não achar. Puro. */
+function lerVolume(saida) {
+  const s = String(saida || '');
+  const i = s.lastIndexOf('Summary:');
+  const resumo = i >= 0 ? s.slice(i) : s;
+  const num = (v) => (v === '-inf' ? -Infinity : Number(v));
+  const I = /\bI:\s+(-inf|-?\d+(?:\.\d+)?) LUFS/.exec(resumo);
+  const P = /\bPeak:\s+(-inf|-?\d+(?:\.\d+)?) dBFS/.exec(resumo);
+  return I ? { integrado: num(I[1]), pico: P ? num(P[1]) : null } : null;
+}
+
+function medirVolume(arquivo, { ffmpeg, execFileFn = execFile }) {
+  return new Promise((resolve) => {
+    execFileFn(ffmpeg, ['-hide_banner', '-nostats', '-protocol_whitelist', 'file', '-i', `file:${arquivo}`, '-vn', '-af', 'ebur128=framelog=quiet:peak=true', '-f', 'null', '-'],
+      { timeout: TEMPO_MEDIR_MS, maxBuffer: 8 * 1024 * 1024 }, (err, stdout, stderr) => resolve(err ? null : lerVolume(stderr)));
+  });
+}
+const TEMPO_MEDIR_MS = 10 * 60 * 1000;
+
+/** @returns {Promise<number|null>} o volume final em LUFS, ou null quando não precisou (ou não deu para medir) */
+async function afinarVolume(arquivo, { ffmpeg, execFileFn, bitrate }) {
+  const m = await medirVolume(arquivo, { ffmpeg, execFileFn });
+  if (!m || !Number.isFinite(m.integrado) || m.integrado < -50) return null; // silêncio, ou não deu para medir
+  const ganho = META_LUFS - m.integrado;
+  if (Math.abs(ganho) <= 1) return null;
+  const tmp = path.join(path.dirname(arquivo), `.volume-${crypto.randomBytes(6).toString('hex')}${path.extname(arquivo)}`);
+  const limite = 10 ** ((PICO_MAX - 0.5) / 20); // meio dB de folga: o limitador não mede o pico "verdadeiro" (entre amostras)
+  try {
+    await video.rodar(ffmpeg, ['-hide_banner', '-loglevel', 'error', '-n', ...video.entrada(arquivo), '-map', '0', '-c:v', 'copy',
+      '-af', `volume=${ganho.toFixed(2)}dB,alimiter=limit=${limite.toFixed(4)}:level=false,aresample=48000`,
+      '-c:a', 'aac', '-b:a', bitrate, '-ar', '48000', '-movflags', '+faststart', `file:${tmp}`], { execFileFn });
+    fs.renameSync(tmp, arquivo); // o arquivo que acabamos de criar (nunca um da pessoa)
+  } catch {
+    fs.rmSync(tmp, { force: true });
+    return null; // fica o da primeira passada
+  }
+  const depois = await medirVolume(arquivo, { ffmpeg, execFileFn });
+  return depois ? depois.integrado : null;
+}
+
 const saidaVideo = (q, temAudio) => [
   '-c:v', 'libx264', '-preset', 'medium', '-crf', String(QUALIDADES[q].crf), '-pix_fmt', 'yuv420p', '-movflags', '+faststart',
   ...(temAudio ? ['-c:a', 'aac', '-b:a', QUALIDADES[q].audio, '-ar', '48000'] : ['-an']),
@@ -516,6 +566,7 @@ async function editar(arquivo, receita = {}, { saida, cwd = process.cwd(), ffmpe
     await video.rodar(ffmpeg, ['-hide_banner', '-loglevel', 'error', '-n', ...entradas,
       '-filter_complex', plano.filtro, '-map', '[v]', ...(plano.temAudio ? ['-map', '[a]'] : []),
       ...saidaVideo(x.qualidade, plano.temAudio), ...hdr.marcas, ...limite, `file:${destino}`], { execFileFn });
+    if (plano.temAudio && x.normalizar) await afinarVolume(destino, { ffmpeg, execFileFn, bitrate: QUALIDADES[x.qualidade].audio });
     return { arquivo: destino, duracao: plano.duracao, largura: plano.largura, altura: plano.altura, passos: plano.passos };
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
@@ -578,6 +629,7 @@ async function juntar(arquivos, { transicao = 'nenhuma', formato, enquadrar = 'b
   const destino = video.destinoVideo({ saida: saida || 'juntado.mp4', cwd });
   await video.rodar(ffmpeg, ['-hide_banner', '-loglevel', 'error', '-n', ...clipes.flatMap((c) => video.entrada(c)),
     '-filter_complex', partes.join(';'), '-map', '[v]', '-map', '[a]', ...saidaVideo(qualidade, true), ...hdr.marcas, `file:${destino}`], { execFileFn });
+  if (normalizar) await afinarVolume(destino, { ffmpeg, execFileFn, bitrate: QUALIDADES[qualidade].audio });
   const duracao = infos.reduce((s, i) => s + i.duracao, 0) - d * (infos.length - 1);
   const passos = [];
   if (infos.some((i) => i.hdr)) {
@@ -628,4 +680,5 @@ module.exports = {
   escaparValor, lerTempo, lerCorte, cadeiaAtempo, quebrarLinhas, normalizarReceita, tamanhoFinal, medidasTexto,
   posicionarTextos, montarEdicao,
   ajustarLegenda, lerInfo, acharFonte, info, editar, juntar, capa, extrairAudio, descreverResultado,
+  cadeiaSdr, planoHdr, notaHdr, MARCAS_SDR, lerVolume, medirVolume, afinarVolume, META_LUFS,
 };

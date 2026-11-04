@@ -1021,6 +1021,7 @@ async function main() {
         console.log(`  ${flags.chat ? chalk.green('Chat') : 'Chat'} (conversa por texto):   ${chat}`);
         console.log(`  ${flags.chat ? 'Voz' : chalk.green('Voz')} (com a esfera animada): ${voz}`);
         console.log(chalk.dim('Só neste aparelho (127.0.0.1). A chave no fim do endereço (#t=...) muda a cada vez: não compartilhe. As duas páginas são a mesma conversa. Voz: Chrome ou Edge. As confirmações das ferramentas aparecem na página. Ctrl+C para parar.'));
+        console.log(chalk.dim(`No chat dá para mandar foto, vídeo ou áudio (botão do clipe): ficam em ${path.join(process.cwd(), site.PASTA_RECEBIDA)}, e o que o agente editar aparece na página.`));
         const url = flags.chat ? chat : voz;
         if (flags.abrir && !(await require('../src/abrir').abrir(url))) console.log(chalk.dim('Não consegui abrir o navegador sozinho: copie o endereço acima.'));
       });
@@ -1524,6 +1525,7 @@ async function main() {
           return;
         }
         console.log(chalk.green(`Vídeo criado: ${r.arquivo}`));
+        if (r.passos && r.passos.length) console.log(chalk.dim(r.passos.join('; ')));
       } catch (err) {
         console.error(chalk.red(`Erro: ${err.message}`));
         process.exitCode = 1;
