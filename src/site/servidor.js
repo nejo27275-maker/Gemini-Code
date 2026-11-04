@@ -20,6 +20,10 @@
 // criam na conversa (foto editada, vídeo, capa) chega à página num evento "midia" (src/midiaGerada.js), e /api/midia
 // só devolve os arquivos que este servidor registrou (recebidos ou criados nesta conversa), conferidos de novo na
 // hora: nada de segredo do gemini-code, nada de link simbólico no lugar.
+// v0.52.0: o site só precisa da chave do Gemini — a página pede quando falta (/api/chave: conferida na API, salva
+// como o "config set-key", nunca devolvida nem escrita no log) e, com a chave, tudo vai direto ao Gemini (o modelo
+// local do modo híbrido não entra: é o Gemini que vê as fotos e cria imagens). E o modo até terminar: a página fechada
+// não para o agente, as perguntas esperam a página voltar, e /api/historico mostra o andamento.
 'use strict';
 
 const crypto = require('crypto');
@@ -52,6 +56,43 @@ const PRAZO_PERGUNTA_MS = 120000;
 const AVISO_INTERROMPIDO = '(interrompido por você)'; // o mesmo de src/agent.js (conferido em teste)
 const MARCA_HOOK = '\n\n[contexto adicionado por hook do usuário]\n';
 const MARCA_IMAGEM = /^\[imagem [\w.+/-]+ enviada nesta mensagem; já analisada\]$/; // src/imagens.js, depois do turno
+const PRAZO_PERGUNTA_ATE_TERMINAR_MS = 30 * 60 * 1000; // no modo até terminar, a pergunta espera a pessoa voltar
+const CHAVE_OK = /^[A-Za-z0-9_.-]{20,200}$/;
+const MAX_TENTATIVAS_CHAVE = 10; // por 10 minutos (cada uma é uma chamada ao Google)
+
+/**
+ * A chave do Gemini de verdade: o estado (sem nunca devolver a chave), conferir com a API e salvar. Trocável nos testes.
+ * precisa = o site depende do Gemini (modo híbrido ou gemini, sem modo solo nem nuvem openai), não há chave e não há
+ * modelo local instalado para seguir sem ela.
+ */
+function chavesPadrao() {
+  const config = () => require('../config');
+  return {
+    estado() {
+      const cfg = config().loadConfig();
+      const provider = cfg.provider || 'hybrid';
+      const solo = require('../solo').ativo(cfg);
+      const dependeDoGemini = !solo && (provider === 'hybrid' || provider === 'gemini') && cfg.hybridCloud !== 'openai';
+      let local = false;
+      if (provider === 'hybrid') { try { local = fs.existsSync(require('../localServer').caminhos(process.env, cfg).modelo); } catch { /* sem local */ } }
+      const configurada = Boolean(cfg.apiKey);
+      return { configurada, precisa: dependeDoGemini && !configurada && !local, protegida: Boolean(cfg.apiKeyLocked) && !configurada };
+    },
+    async validar(chave) {
+      // a lista de modelos: a chamada mais barata que confere a chave (não gasta cota de geração)
+      const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=1', {
+        headers: { 'x-goog-api-key': chave }, signal: AbortSignal.timeout(15000), redirect: 'error',
+      });
+      if (res.ok) return true;
+      if (res.status === 400 || res.status === 401 || res.status === 403) throw Object.assign(new Error('chave recusada'), { recusada: true });
+      return false; // 429, 5xx: não deu para conferir agora
+    },
+    salvar(chave) { config().saveConfig({ apiKey: chave }); },
+  };
+}
+
+/** Erro do agente que é a chave (falta ou foi recusada): a página mostra de novo o pedido da chave. */
+const erroDeChave = (msg) => /Nenhuma API key|chave recusada|API key not valid|API_KEY_INVALID/i.test(String(msg || ''));
 
 // v0.51.0: mídia pela página
 const PASTA_RECEBIDA = 'midia-recebida';
@@ -239,7 +280,7 @@ function paraExibicao(historico, { max = 200 } = {}) {
     if (m.role === 'user') {
       if (m.parts.some((p) => p && p.functionResponse)) continue; // resultado de ferramenta: não é fala de ninguém
       const t = textos.join('\n');
-      if (!t.trim() || t.startsWith('[hook Stop do usuário]')) continue;
+      if (!t.trim() || t.startsWith('[hook Stop do usuário]') || t.startsWith('[modo até terminar]')) continue;
       fecharAgente();
       if (t.startsWith('[...histórico do meio da conversa foi omitido')) { out.push({ quem: 'aviso', texto: 'O meio desta conversa foi resumido para caber.' }); continue; }
       const corte = t.indexOf(MARCA_HOOK);
@@ -267,15 +308,34 @@ function paraExibicao(historico, { max = 200 } = {}) {
  * Como o modo site conversa: o agente de sempre (runOnce) ou um aliado (mesmo caminho do "aliados chat").
  * @returns {(texto, { historico, onText, onFerramenta, onAlerta, signal }) => Promise<{ texto, historico, interrompido? }>}
  */
-function conversarComAgente({ aliado = null, runOnce = (...a) => require('../agent').runOnce(...a) } = {}) {
-  const resultado = (r) => ({ texto: r.text, historico: r.history, ...(r.interrompido ? { interrompido: true } : {}) });
+/**
+ * v0.52.0: no modo site, com a chave da nuvem, tudo vai para a nuvem (o Gemini, por padrão): o modelo local do modo
+ * híbrido (llama.cpp) não vê fotos nem cria imagens, e no celular quase nunca está instalado. Quem escolheu um provedor
+ * (local, openai, code-ia) ou o modo solo segue com o dele.
+ */
+function modeloDoSite(cfg) {
+  if (require('../solo').ativo(cfg) || (cfg.provider || 'hybrid') !== 'hybrid') return undefined;
+  const temNuvem = cfg.hybridCloud === 'openai' ? Boolean(require('../providers/openai').chave(cfg)) : Boolean(cfg.apiKey);
+  return temNuvem ? '@cloud' : undefined;
+}
+
+function conversarComAgente({ aliado = null, runOnce = (...a) => require('../agent').runOnce(...a), loadConfig = () => require('../config').loadConfig() } = {}) {
+  const resultado = (r) => ({
+    texto: r.text, historico: r.history, ...(r.interrompido ? { interrompido: true } : {}), ...(r.fim ? { fim: r.fim } : {}),
+  });
   // v0.51.0: `imagens` — as fotos que a pessoa mandou pela página, para o modelo ver (como o /imagem do terminal)
-  return async (texto, { historico, onText, onFerramenta, onAlerta, signal, imagens = [] }) => {
-    if (!aliado) return resultado(await runOnce(texto, { history: historico, onText, onFerramenta, signal, imagens }));
+  // v0.52.0: `ateTerminar`/`onContinuar` — o modo até terminar (src/agent.js)
+  return async (texto, { historico, onText, onFerramenta, onAlerta, signal, imagens = [], ateTerminar = false, onContinuar }) => {
+    let modelName;
+    try { modelName = modeloDoSite(loadConfig()); } catch { /* config ilegível: o roteador decide */ }
+    const comuns = { onText, onFerramenta, signal, imagens, ...(ateTerminar ? { ateTerminar: true, onContinuar } : {}) };
+    if (!aliado) return resultado(await runOnce(texto, { history: historico, ...(modelName ? { modelName } : {}), ...comuns }));
     const pa = require('../personalAgents');
     const { opcoes, ctx, alerta } = pa.prepararTurno(aliado.store, aliado.agente, texto, {});
     if (alerta) onAlerta(alerta);
-    return resultado(await pa.comAgente(ctx, () => runOnce(texto, { history: historico, ...opcoes, onText, onFerramenta, signal, imagens })));
+    // o modelo próprio do aliado, se ele tiver, vale sobre a regra do site
+    const modelo = opcoes.modelName ? {} : (modelName ? { modelName } : {});
+    return resultado(await pa.comAgente(ctx, () => runOnce(texto, { history: historico, ...modelo, ...opcoes, ...comuns })));
   };
 }
 
@@ -290,6 +350,7 @@ function conversarComAgente({ aliado = null, runOnce = (...a) => require('../age
  * @param {string} [o.pasta] v0.51.0: a pasta do projeto (os arquivos recebidos vão para <pasta>/midia-recebida)
  * @param {number} [o.maxEnvio] v0.51.0: tamanho máximo de um arquivo recebido
  * @param {(nome: string) => boolean} [o.ligarFerramenta] v0.51.0: liga uma ferramenta sob demanda nesta execução
+ * @param {string[]|null} [o.sugestoes] v0.52.0: as sugestões de conversa do aliado (no lugar das da página)
  */
 function criarServidorSite({
   token = crypto.randomBytes(24).toString('base64url'),
@@ -301,8 +362,15 @@ function criarServidorSite({
   pasta = process.cwd(),
   maxEnvio = MAX_ENVIO,
   ligarFerramenta = (nome) => require('../tools').ligarNaSessao(nome),
+  chaves = chavesPadrao(),
+  prazoPerguntaAteTerminarMs = PRAZO_PERGUNTA_ATE_TERMINAR_MS,
+  ateTerminarPadrao = () => { try { return require('../config').loadConfig().modoAteTerminar === true; } catch { return false; } },
+  sugestoes = null,
 } = {}) {
   const { paraExibir, semControlesInvisiveis } = require('../ui/textoSeguro');
+  // v0.52.0: as sugestões do aliado (ex.: o "treinador"); texto guardado pelo usuário, mas limpo e curto mesmo assim
+  const sugestoesDaPagina = (Array.isArray(sugestoes) ? sugestoes : [])
+    .map((s) => semControlesInvisiveis(String(s)).replace(/\s+/g, ' ').trim().slice(0, 160)).filter(Boolean).slice(0, 4);
   const conteudo = {};
   for (const [rota, [arquivo]] of Object.entries(ARQUIVOS)) conteudo[rota] = fs.readFileSync(path.join(PUBLICO, arquivo));
   let historico = [];
@@ -314,6 +382,10 @@ function criarServidorSite({
   const midias = new Map();
   let turnos = [];
   let enviando = false;
+  // v0.52.0: o que a resposta em andamento já fez (para a página que voltar no meio, no modo até terminar)
+  let andamento = null;
+  let tentativasChave = [];
+  let conferindoChave = false;
 
   let pastaReal = pasta;
   try { pastaReal = fs.realpathSync(pasta); } catch { /* fica como veio */ }
@@ -515,8 +587,17 @@ function criarServidorSite({
     }
     if (caminho === '/api/parar') return json(res, 200, { ok: true, parando: parar('pela página') });
     if (caminho === '/api/historico') {
-      return json(res, 200, { mensagens: comMidias(paraExibicao(historico)), ocupado, aliado: aliado ? semControlesInvisiveis(String(aliado)).slice(0, 80) : null });
+      let chave = { configurada: true, precisa: false };
+      try { const e = chaves.estado(); chave = { configurada: Boolean(e.configurada), precisa: Boolean(e.precisa) }; } catch { /* sem config: nada a pedir */ }
+      return json(res, 200, {
+        mensagens: comMidias(paraExibicao(historico)), ocupado, aliado: aliado ? semControlesInvisiveis(String(aliado)).slice(0, 80) : null,
+        chave, ateTerminarPadrao: Boolean(ateTerminarPadrao()),
+        ...(sugestoesDaPagina.length ? { sugestoes: sugestoesDaPagina } : {}),
+        ...(ocupado && andamento ? { andamento: retratoDoAndamento() } : {}),
+        perguntas: [...pendentes].map(([id, p]) => ({ id, texto: p.texto })),
+      });
     }
+    if (caminho === '/api/chave') return salvarChave(res, corpo);
     if (caminho === '/api/midia') return servirMidia(res, corpo);
     if (caminho === '/api/limpar') {
       if (ocupado) return json(res, 409, { erro: 'espere a resposta terminar' });
@@ -526,6 +607,42 @@ function criarServidorSite({
       return json(res, 200, { ok: true });
     }
     return json(res, 404, { erro: 'não encontrado' });
+  }
+
+  /** POST /api/chave {chave}: confere com o Gemini e salva (como o "config set-key"). A chave nunca volta nem vai para o log. */
+  async function salvarChave(res, corpo) {
+    const chave = typeof corpo.chave === 'string' ? corpo.chave.trim() : '';
+    if (!CHAVE_OK.test(chave)) return json(res, 400, { erro: 'isso não parece uma chave da API do Gemini: copie a chave inteira (ela começa com "AIza")' });
+    let e;
+    try { e = chaves.estado(); } catch { e = {}; }
+    if (e.protegida) return json(res, 409, { erro: 'a chave atual está protegida por senha mestra: troque pelo terminal (gemini-code config remove-passphrase e depois set-key)' });
+    const agora = Date.now();
+    tentativasChave = tentativasChave.filter((t) => agora - t < 10 * 60 * 1000);
+    if (tentativasChave.length >= MAX_TENTATIVAS_CHAVE) return json(res, 429, { erro: 'tentativas demais: espere alguns minutos' });
+    if (conferindoChave) return json(res, 409, { erro: 'já estou conferindo uma chave' });
+    tentativasChave.push(agora);
+    conferindoChave = true;
+    let conferida;
+    try {
+      try { conferida = Boolean(await chaves.validar(chave)); } catch (err) {
+        if (err && err.recusada) return json(res, 400, { erro: 'o Gemini recusou essa chave: confira se copiou inteira (aistudio.google.com/apikey)' });
+        conferida = false; // sem internet agora: salva sem conferir (a primeira conversa confere)
+      }
+      chaves.salvar(chave);
+      log(`[site] chave da API do Gemini salva${conferida ? ' (conferida com o Gemini)' : ' (não deu para conferir agora)'}`);
+      return json(res, 200, { ok: true, conferida });
+    } finally { conferindoChave = false; }
+  }
+
+  /** O andamento para a página que voltou no meio: texto (o fim dele), ferramentas, mídias e continuações. */
+  function retratoDoAndamento() {
+    return {
+      texto: andamento.texto.length > 20000 ? andamento.texto.slice(-20000) : andamento.texto,
+      ferramentas: andamento.ferramentas.slice(0, 20),
+      midias: andamento.gerados.map(publico).filter(Boolean),
+      continuacoes: andamento.continuacoes,
+      ateTerminar: andamento.ateTerminar,
+    };
   }
 
   async function conversa(res, corpo) {
@@ -554,25 +671,36 @@ function criarServidorSite({
       if (m.midia !== 'imagem' || bytes + m.tamanho > MAX_BYTES) continue;
       try { imagens.push(lerImagem(m.caminho)); bytes += m.tamanho; } catch { /* sumiu ou mudou: ele ainda recebe o caminho */ }
     }
+    // v0.52.0: modo até terminar — pedido pela página (o botão "Até terminar")
+    const ateTerminar = corpo.ateTerminar === true;
     ocupado = true;
     const ctrl = new AbortController();
     parador = ctrl;
     res.writeHead(200, { ...BASE, 'content-type': 'application/x-ndjson; charset=utf-8' });
     let aberto = true;
     let terminou = false;
-    // a página fechou (ou recarregou) no meio: ninguém está olhando, então o agente para
-    res.on('close', () => { aberto = false; if (!terminou) parar('a página fechou'); });
+    // a página fechou (ou recarregou) no meio: ninguém está olhando, então o agente para — menos no modo até terminar,
+    // em que ele segue (a pessoa volta e vê o andamento; a pergunta espera por ela)
+    res.on('close', () => {
+      aberto = false;
+      if (terminou) return;
+      if (ateTerminar) log('[site] a página fechou; no modo até terminar o agente continua (abra de novo para acompanhar)');
+      else parar('a página fechou');
+    });
     const enviar = (ev) => { if (aberto && !res.writableEnded) res.write(`${JSON.stringify(ev)}\n`); };
-    log(`[site] você: ${texto.slice(0, 200)}`);
+    log(`[site] você: ${texto.slice(0, 200)}${ateTerminar ? ' (modo até terminar)' : ''}`);
+    const gerados = [];
+    andamento = { texto: '', ferramentas: [], gerados, continuacoes: 0, ateTerminar };
     const desfazer = definirPerguntador((pergunta) => new Promise((resolve) => {
-      if (!aberto || ctrl.signal.aborted) return resolve(''); // página fechada ou "Parar": ninguém responde = "não"
+      if (ctrl.signal.aborted || (!aberto && !ateTerminar)) return resolve(''); // "Parar" ou página fechada: ninguém responde = "não"
       const id = crypto.randomBytes(8).toString('hex');
-      const timer = setTimeout(() => { pendentes.delete(id); enviar({ tipo: 'pergunta-expirou', id }); resolve(''); }, prazoPerguntaMs);
-      pendentes.set(id, { responder: (r) => { clearTimeout(timer); pendentes.delete(id); resolve(r); } });
-      enviar({ tipo: 'pergunta', id, texto: paraExibir(pergunta).trim() });
+      const textoPergunta = paraExibir(pergunta).trim();
+      const prazo = ateTerminar ? prazoPerguntaAteTerminarMs : prazoPerguntaMs;
+      const timer = setTimeout(() => { pendentes.delete(id); enviar({ tipo: 'pergunta-expirou', id }); resolve(''); }, prazo);
+      pendentes.set(id, { texto: textoPergunta, responder: (r) => { clearTimeout(timer); pendentes.delete(id); resolve(r); } });
+      enviar({ tipo: 'pergunta', id, texto: textoPergunta });
     }));
     // v0.51.0: o que as ferramentas criarem agora (foto editada, vídeo...) aparece na página
-    const gerados = [];
     const pararDeOuvir = require('../midiaGerada').observar((caminho) => {
       const m = registrarMidia(caminho, 'agente');
       if (!m || gerados.includes(m.id)) return;
@@ -583,11 +711,22 @@ function criarServidorSite({
     try {
       const r = await conversar(texto, {
         historico,
-        onText: (t) => enviar({ tipo: 'parcial', texto: semControlesInvisiveis(String(t)) }),
-        onFerramenta: (nome) => enviar({ tipo: 'ferramenta', nome: String(nome).slice(0, 80) }),
+        onText: (t) => {
+          const limpo = semControlesInvisiveis(String(t));
+          andamento.texto += limpo;
+          // a página que volta vê só o fim (retratoDoAndamento); numa tarefa longa, a memória não cresce sem parar
+          if (andamento.texto.length > 100000) andamento.texto = andamento.texto.slice(-20000);
+          enviar({ tipo: 'parcial', texto: limpo });
+        },
+        onFerramenta: (nome) => {
+          const n = String(nome).slice(0, 80);
+          if (andamento.ferramentas.length < 20 && !andamento.ferramentas.includes(n)) andamento.ferramentas.push(n);
+          enviar({ tipo: 'ferramenta', nome: n });
+        },
         onAlerta: (t) => enviar({ tipo: 'alerta', texto: String(t) }),
         signal: ctrl.signal,
         imagens,
+        ...(ateTerminar ? { ateTerminar: true, onContinuar: (n) => { andamento.continuacoes = n; enviar({ tipo: 'continuando', n }); } } : {}),
       });
       if (r && Array.isArray(r.historico)) {
         historico = r.historico;
@@ -596,11 +735,16 @@ function criarServidorSite({
           if (turnos.length > 200) turnos.shift();
         }
       }
-      enviar({ tipo: 'resposta', texto: semControlesInvisiveis(String((r && r.texto) || '')), ...(r && r.interrompido ? { interrompido: true } : {}) });
+      enviar({
+        tipo: 'resposta', texto: semControlesInvisiveis(String((r && r.texto) || '')),
+        ...(r && r.interrompido ? { interrompido: true } : {}), ...(r && r.fim ? { fim: r.fim } : {}),
+      });
     } catch (e) {
-      enviar({ tipo: 'erro', texto: `Erro: ${e && e.message ? e.message : e}` });
+      const msg = e && e.message ? e.message : String(e);
+      enviar({ tipo: 'erro', texto: `Erro: ${msg}`, ...(erroDeChave(msg) ? { chave: true } : {}) });
     } finally {
       terminou = true;
+      andamento = null;
       pararDeOuvir();
       desfazer();
       for (const [, p] of pendentes) p.responder(''); // pergunta sem resposta = "não"
@@ -620,4 +764,5 @@ function criarServidorSite({
 module.exports = {
   criarServidorSite, conversarComAgente, paraExibicao, CSP, MAX_TEXTO, AVISO_INTERROMPIDO,
   PASTA_RECEBIDA, MAX_ENVIO, TIPOS_ENVIO, nomeDoEnvio, assinaturaOk, tamanhoLegivel,
+  modeloDoSite, chavesPadrao, erroDeChave,
 };

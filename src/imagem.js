@@ -98,10 +98,23 @@ async function salvarDaIa(inlineData, opcoes) {
   return gravarNovo(destino, Buffer.from(inlineData.data, 'base64'));
 }
 
-async function gerar(prompt, { saida, cwd, generateImage = (o) => require('./gemini').generateImage(o) } = {}) {
+// v0.52.0: a proporção de cada rede, para criar a imagem já no formato certo (as que o modelo de imagem aceita)
+const PROPORCOES = Object.freeze({ feed: '4:5', instagram: '4:5', quadrado: '1:1', stories: '9:16', reels: '9:16', status: '9:16', vertical: '9:16', youtube: '16:9', capa: '16:9', horizontal: '16:9' });
+const PROPORCOES_ACEITAS = new Set(['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9']);
+/** "feed", "stories", "16:9"... -> a proporção para a API; undefined sem formato. Erro claro para um desconhecido. */
+function proporcao(formato) {
+  if (formato === undefined || formato === null || formato === '' || formato === 'original') return undefined;
+  const f = String(formato).trim().toLowerCase();
+  const r = PROPORCOES[f] || (PROPORCOES_ACEITAS.has(f) ? f : null);
+  if (!r) throw new Error(`formato "${formato}" desconhecido para criar imagem: use feed, quadrado, stories, youtube ou uma proporção (${[...PROPORCOES_ACEITAS].join(', ')}).`);
+  return r;
+}
+
+async function gerar(prompt, { saida, cwd, formato, generateImage = (o) => require('./gemini').generateImage(o) } = {}) {
   const p = String(prompt || '').trim();
   if (!p) throw new Error('descreva a imagem que você quer.');
-  const img = await generateImage({ prompt: p });
+  const aspecto = proporcao(formato);
+  const img = await generateImage({ prompt: p, ...(aspecto ? { aspecto } : {}) });
   return { arquivo: await salvarDaIa(img, { saida, base: null, sufixo: `-${Date.now()}`, cwd }), modo: 'ia' };
 }
 
@@ -136,5 +149,5 @@ async function descrever(arquivo, pergunta, { cwd, chatWithTools = (o) => requir
 
 module.exports = {
   INSTRUCAO_MELHORAR, CODER, destinoNovo, acharMagick, argsMelhorar, rodar,
-  gerar, editar, melhorar, melhorarLocal, descrever,
+  gerar, editar, melhorar, melhorarLocal, descrever, PROPORCOES, proporcao,
 };

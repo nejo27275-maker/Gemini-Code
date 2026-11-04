@@ -33,7 +33,7 @@ const declarations = [
         prompt: { type: 'string', description: 'gerar: o que desenhar; editar: o que mudar; descrever: a pergunta' },
         arquivo: { type: 'string', description: 'ajustar/editar/melhorar/descrever: caminho da imagem' },
         fotos: { type: 'array', items: { type: 'string' }, description: 'ajustar: várias fotos com a mesma receita (lote)' },
-        formato: { type: 'string', enum: ['feed', 'quadrado', 'stories', 'youtube', 'original'], description: 'ajustar: feed = Instagram 4:5; stories = 9:16; youtube = capa 16:9' },
+        formato: { type: 'string', enum: ['feed', 'quadrado', 'stories', 'youtube', 'original'], description: 'ajustar e gerar: feed = Instagram 4:5; stories = 9:16; youtube = capa 16:9; quadrado = 1:1' },
         enquadrar: { type: 'string', enum: ['fundo-desfocado', 'preencher', 'barras'], description: 'ajustar: como caber no formato (padrão: fundo-desfocado)' },
         cor: { type: 'string', enum: ['natural', 'vivo', 'quente', 'frio', 'cinema', 'pb', 'vintage', 'dramatico', 'nenhuma'] },
         brilho: { type: 'number', description: 'ajustar: -1 a 1 (0 = igual)' },
@@ -68,11 +68,15 @@ const declarations = [
   },
 ];
 
+// v0.52.0: "sempre" libera criar/editar com IA até o programa fechar (antes contava como "não"); numa rotina, a
+// pergunta já volta "não" sozinha (src/ui/prompt.js), então "sempre" nunca vem de lá.
+let iaLiberadaNestaExecucao = false;
 async function confirmar(pergunta) {
   let cfg = {};
   try { cfg = deps.loadConfig() || {}; } catch { /* config ilegível: pergunta */ }
-  if (cfg.confirmarMidia === false) return true;
-  const r = String(await deps.ask(pergunta)).trim().toLowerCase();
+  if (cfg.confirmarMidia === false || iaLiberadaNestaExecucao) return true;
+  const r = String(await deps.ask(`${pergunta.replace(/\(s\/n\) $/, '')}(s/n/sempre) `)).trim().toLowerCase();
+  if (r === 'sempre' || r === 'always') { iaLiberadaNestaExecucao = true; return true; }
   return r === 's' || r === 'y' || r === 'sim';
 }
 
@@ -133,7 +137,7 @@ async function execute(name, args = {}) {
       if (!(await confirmar(`\n[gemini-code] ${oQue} (usa a cota da sua chave)? (s/n) `))) return 'Cancelado pelo usuário.';
     }
     let r;
-    if (acao === 'gerar') r = await im.gerar(a.prompt, { saida: a.saida });
+    if (acao === 'gerar') r = await im.gerar(a.prompt, { saida: a.saida, formato: a.formato });
     else if (acao === 'editar') r = await im.editar(a.arquivo, a.prompt, { saida: a.saida });
     else r = await im.melhorar(a.arquivo, { modo: usaIa ? 'ia' : 'local', saida: a.saida, ampliar: a.ampliar });
     require('../midiaGerada').registrar(r.arquivo);
@@ -143,6 +147,7 @@ async function execute(name, args = {}) {
   }
 }
 
+function _resetarSessao() { iaLiberadaNestaExecucao = false; }
 function _testar(novas = {}) { deps = { ...deps, ...novas }; }
 
-module.exports = { declarations, execute, _testar };
+module.exports = { declarations, execute, _testar, _resetarSessao };

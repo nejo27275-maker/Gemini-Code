@@ -144,7 +144,12 @@ function erroDaApi({ status, data, statusText, model, contexto, retryAfter }) {
     const waitSeconds = retrySeconds == null ? null : Math.ceil(retrySeconds);
     let orientacao;
 
-    if (limiteZero) {
+    if (limiteZero && /imagem/i.test(contexto)) {
+      // v0.52.0: no caso da imagem, o comando certo é outro (o modelo de imagem é separado do modelo do chat)
+      orientacao =
+        `O Google informou limit: 0: o modelo de imagem ${model} não tem cota liberada para a sua chave (no plano grátis, alguns modelos de imagem exigem faturamento ativo no projeto).\n` +
+        `Não adianta repetir. Ative o faturamento no Google AI Studio ou troque o modelo de imagem: gemini-code config set-image-model NOME_DO_MODELO\n`;
+    } else if (limiteZero) {
       orientacao =
         `O Google informou limit: 0 para esta cota; esse modelo/operação não tem requisições liberadas nessa métrica para o projeto atual.\n` +
         `Não adianta repetir imediatamente. Para continuar usando somente a API Gemini, consulte os modelos e as cotas da sua chave; se escolher outro modelo Gemini, configure-o com: gemini-code config set-model NOME_DO_MODELO\n`;
@@ -485,10 +490,12 @@ async function generateText({ prompt, modelName }) {
  * retorna erro claro — trate isso na camada de cima. Migrada para `fetch`
  * pelo mesmo motivo de generateText (item 14 da revisão).
  */
-async function generateImage({ prompt, modelName, imagens = [] }) {
+async function generateImage({ prompt, modelName, imagens = [], aspecto }) {
   const cfg = loadConfig();
   exigirApiKey(cfg);
   const model = modelName || cfg.imageModel;
+  // v0.52.0: a proporção (feed 4:5, stories 9:16...) vai no imageConfig — sem ela, o modelo escolhe (quase sempre 1:1)
+  const generationConfig = { responseModalities: ['TEXT', 'IMAGE'], ...(aspecto ? { imageConfig: { aspectRatio: aspecto } } : {}) };
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
   // v0.46.0: `imagens` ([{ inlineData }], de src/imagens.js) entram antes do texto: é assim que se pede para
@@ -500,7 +507,7 @@ async function generateImage({ prompt, modelName, imagens = [] }) {
       'Content-Type': 'application/json',
       'x-goog-api-key': cfg.apiKey,
     },
-    body: JSON.stringify({ contents: [{ role: 'user', parts: partesPedido }], generationConfig: { responseModalities: ['TEXT', 'IMAGE'] } }),
+    body: JSON.stringify({ contents: [{ role: 'user', parts: partesPedido }], generationConfig }),
   });
 
   const data = await res.json().catch(() => ({}));

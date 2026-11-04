@@ -105,6 +105,20 @@ documento é sobre como o código por trás disso está organizado.
     para sRGB.
   - **Vídeo:** `video melhorar` converte o HDR, e `afinarVolume` (src/videoEdicao.js) mede o volume e corrige em duas
     passadas.
+- **v0.52.0** — o site só com a chave do Gemini, criar imagem, o modo até terminar e o treinador de futebol:
+  - **Chave pela página:** `src/site/servidor.js` ganhou `/api/chave` (`chavesPadrao`: `estado`, `validar` pela lista de
+    modelos do Google, `salvar`). O `/api/historico` diz se falta a chave (`precisa`).
+    - **Na página:** `comum.js` monta o cartão (`cartaoChave`).
+    - **O modelo:** `modeloDoSite` manda as conversas do site para `@cloud` quando há chave (o híbrido iria para o
+      modelo local).
+  - **Criar imagem:** `imagem.gerar` aceita o formato da rede (`proporcao` → `imageConfig.aspectRatio` em
+    `gemini.generateImage`), e o erro `limit: 0` da imagem fala do modelo de imagem (`config set-image-model`).
+  - **Modo até terminar:** `runOnce({ ateTerminar })` em `src/agent.js` (marcas de fim, `CONTINUAR_ATE_TERMINAR`,
+    tetos, `filtrarMarcas` no streaming).
+    - **Terminal:** `/ate-terminar`, `run --ate-terminar` e `config set-ate-terminar`.
+    - **Site:** o botão, a página que volta no meio (`andamento`) e as perguntas que esperam até 30 minutos.
+  - **Futebol:** `src/futebol.js` (biblioteca, treino, semana, carga, prancheta), a ferramenta sob demanda
+    `src/tools/futebolTools.js`, o comando `src/futebolCommands.js` e o preset `futebol` dos aliados.
 - **`src/routineRunner.js`** — executor das rotinas: `http-check` e, desde a v0.44.0,
   `agente` (o agente roda sozinho; `src/ui/prompt.js` responde "não" a toda confirmação).
 - Os provedores `llamacpp`, `ollama` e `openai` pedem **sempre** em streaming; o
@@ -262,6 +276,10 @@ extra). Cobertura atual:
 | versão chat (v0.49.0): páginas e CSP, histórico para a página (`paraExibicao`, `/api/historico`), Markdown seguro (blocos, links só http/https, HTML vira texto, texto hostil/enorme não trava) e o chat de ponta a ponta num Chromium de verdade; contraste WCAG AA de todos os pares de cor, nos temas claro e escuro (v0.49.3) | `site.test.js` |
 | foto e vídeo pelo modo site (v0.51.0): envio (chave antes de ler, origem/Host, só os tipos de mídia, primeiros bytes, tamanho declarado e no meio, nome saneado, nunca sobrescreve, `.gitignore`, pasta que é link recusada, um por vez, envio cortado sem sobra, sobra antiga limpa), `/api/midia` (só o registrado, some com link ou arquivo apagado), anexos na conversa (caminho e foto para o modelo, com limite), evento `midia` do que as ferramentas criam (segredo nunca), histórico com as mídias, `video` ligado só nesta execução, e a página num Chromium de verdade (mandar a foto pelo clipe, a prévia e a foto editada, recarregar; falha sem `blob:` na CSP) | `siteMidia.test.js` |
 | perfis de cor ICC (v0.51.0): perfil sRGB v4 bem formado (cabeçalho, tags alinhadas, MD5), as contas batem com as matrizes de referência do sRGB e do Display P3, nome do perfil saneado | `perfilCor.test.js` |
+| chave pela página (v0.52.0): falta da chave no histórico sem nunca mostrá-la, formato, recusada não salva, sem internet salva sem conferir, senha mestra, limite de tentativas, a conferência de verdade (cabeçalho, nunca na URL), o site direto na nuvem com chave, erro de chave reabre o cartão, as sugestões do aliado (limpas, no máximo 4); modo até terminar no site (eventos, selo, página fechada que não para, pergunta que espera, fora do modo continua parando, mensagem automática fora do histórico); e num Chromium de verdade | `siteChave.test.js` |
+| modo até terminar (v0.52.0): marcas tiradas do texto e do streaming (mesmo cortadas entre pedaços), continua sozinho, "preciso de você", tetos (resposta repetida, continuações, passos), o "Parar" vale, subagente não continua, e o chat do terminal de verdade num pseudo-terminal | `ateTerminar.test.js` |
+| criar imagem (v0.52.0): o pedido de verdade (modelo de imagem, chave no cabeçalho, formato no `imageConfig`), formato desconhecido recusado antes de gastar cota, `limit: 0` com o comando certo, a ferramenta com "sempre" só nesta execução | `criarImagem.test.js` |
+| treinador de futebol (v0.52.0): biblioteca coerente, treino que fecha o tempo em todas as combinações (sem repetir exercício), criança sem bloco analítico, organização do campo, semana (MD, 2 jogos, ordem do microciclo), carga conferida à mão (datas como a gente digita, nunca no futuro, o dia local), prancheta (posições, nomes escapados e cortados, PNG de verdade conferido pelos pixels, nunca sobrescreve), a ferramenta sob demanda, o aliado e o comando | `futebol.test.js` |
 | `HOME` vazio (v0.49.3): a trava do `add-pasta-gravavel`, a pergunta antes de gravar `~/.bashrc` com o projeto na pasta do usuário e os checkpoints usam a pasta do usuário de verdade, não a pasta atual | `pastaDoUsuario.test.js` |
 | edição profissional de código (v0.50.0): motor (espaço no fim da linha, CRLF, trecho mais parecido, diff), `write_file` que não sobrescreve o que não leu nem o que mudou, CRLF/BOM mantidos, sintaxe conferida (JS/ESM, JSON/JSONC, Python, shell) sem rodar o código e sem um `python3`/`bash` plantado | `edicaoProfissional.test.js` |
 | edição profissional de vídeo (v0.50.0): tempos, corte, atempo, escape do filtergraph, receita, plano do ffmpeg, textos empilhados, legenda deslocada, info com rotação, argv seguro e, com o ffmpeg de verdade, editar (volume -14 LUFS medido), juntar, capa, áudio, ferramenta e terminal; v0.50.1: HDR (HLG/PQ) convertido para SDR, vídeo de celular em pé, caminhos com aspas/dois-pontos/colchetes; v0.51.0: HDR no "melhorar", volume em duas passadas (som de mar a -14 ± 1 LUFS, também no juntar), foto Display P3 convertida no vídeo de fotos | `videoEdicao.test.js` |

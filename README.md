@@ -45,6 +45,13 @@ qualquer PC/Linux com Node.js.
   `docs/MODO_SITE.md`.
   - **Foto e vídeo pela página** (v0.51.0): toque no clipe (ou arraste/cole) para mandar uma foto, um vídeo ou um
     áudio. O agente edita, e o resultado aparece na conversa com o botão Baixar.
+  - **Só com a chave do Gemini** (v0.52.0): sem chave, a própria página pede uma, e o site funciona só com ela. Ele
+    também cria imagens no formato das redes.
+- **Modo até terminar** (v0.52.0): o agente trabalha sozinho até a tarefa estar pronta, sem parar para perguntar "posso
+  continuar?". Liga pelo botão do site, por `/ate-terminar` no chat ou por `run --ate-terminar`.
+- **Treinador de futebol** (v0.52.0): `gemini-code futebol aliado` cria o aliado "treinador". Ele monta treinos por
+  categoria, planeja a semana até o jogo, controla a carga, desenha a formação e corta os lances do vídeo. Veja
+  `docs/FUTEBOL.md`.
 - **Saúde, compras, imagem, vídeo, câmera, TV e criar site/app** (v0.46.0): veja abaixo.
 - **Redes sociais, controle do celular/computador/sites e desafios** (v0.47.0): veja abaixo, `docs/REDES_SOCIAIS.md` e `docs/CONTROLE.md`.
 - **Ctrl+C no chat do terminal** (v0.49.1): para só a resposta (e o comando que ela estiver rodando). O chat continua.
@@ -60,6 +67,35 @@ qualquer PC/Linux com Node.js.
   
   v0.51.0: foto de iPhone (Display P3) com as cores certas, vídeo HDR no "melhorar", e o volume das redes medido de
   verdade (duas passadas).
+
+## Treinador de futebol, site só com a chave e modo até terminar — v0.52.0
+
+```bash
+gemini-code futebol aliado                     # cria o aliado "treinador"
+gemini-code site --chat --aliado treinador --abrir
+gemini-code futebol treino --tema pressao --categoria sub-15 --jogadores 18
+gemini-code futebol semana --jogo sabado --dias segunda,terca,quinta,sexta
+gemini-code futebol prancheta 4-3-3 --nomes "Marcos,Rafa,Thiago,..."
+gemini-code run --ate-terminar "corrige os testes que estão falhando"
+```
+
+- **O treinador:**
+  - **Treino:** a sessão para a categoria, o número de jogadores e o tema, com exercícios de verdade (organização,
+    regras, pontos de correção, progressão).
+  - **Semana:** o microciclo até o jogo (MD-4 tensão, MD-3 duração, MD-2 velocidade, MD-1 ativação; também com 2
+    jogos na semana).
+  - **Carga:** PSE x minutos, ACWR e monotonia.
+  - **Prancheta:** a formação em PNG e SVG.
+  - **No chat:** o aliado usa tudo isso, ajusta ao seu time e corta os lances do vídeo do jogo.
+  - **A idade conta:** criança brinca de jogar, e a segurança (pancada na cabeça: na dúvida, fora) vale em todo plano.
+  - Guia: `docs/FUTEBOL.md`.
+- **Site só com a chave:**
+  - sem chave, a página pede a chave do Gemini, confere com o Google e salva;
+  - com ela, a conversa vai direto para a nuvem;
+  - "crie uma imagem para o feed" sai no formato da rede e aparece na conversa.
+- **Até terminar:** o agente só para quando a tarefa estiver feita ou quando precisar de você. No site, ele continua
+  mesmo com a página fechada, e você acompanha ao voltar. O Parar e as permissões continuam valendo. Veja
+  `docs/MODO_SITE.md`.
 
 ## MinhaIA Android integrada (primeira versão)
 

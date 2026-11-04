@@ -55,6 +55,21 @@ function aplicar(sub, args, saveConfig) {
     saveConfig({ conferirSintaxe: a[0] === 'on' });
     return a[0] === 'on' ? 'Depois de cada edição, a sintaxe de .js, .json, .py e .sh é conferida (só análise, o código não roda).' : 'A conferência de sintaxe depois das edições foi desligada.';
   }
+  // v0.52.0: o modelo de imagem (criar/editar imagem com IA) é separado do modelo do chat
+  if (sub === 'set-image-model') {
+    const nome = String(a[0] || '').trim();
+    if (!/^[a-z0-9][a-z0-9._-]{2,80}$/i.test(nome)) return 'Uso: gemini-code config set-image-model NOME   (ex.: gemini-2.5-flash-image; veja os seus com: gemini-code models)';
+    saveConfig({ imageModel: nome });
+    return `Modelo de imagem: ${nome} (vale para criar e editar imagem com IA).`;
+  }
+  // v0.52.0: modo até terminar (src/agent.js): o agente continua sozinho até a tarefa estar feita
+  if (sub === 'set-ate-terminar') {
+    if (!['on', 'off'].includes(a[0])) return 'Uso: gemini-code config set-ate-terminar on|off   (on: o chat e o modo site começam no modo até terminar — o agente só para quando a tarefa estiver feita)';
+    saveConfig({ modoAteTerminar: a[0] === 'on' });
+    return a[0] === 'on'
+      ? 'Modo até terminar ligado por padrão: o agente continua sozinho até a tarefa estar feita (o Parar e as permissões continuam valendo). No chat: /ate-terminar off desliga só na conversa.'
+      : 'Modo até terminar desligado por padrão (no chat: /ate-terminar liga na conversa).';
+  }
   // v0.45.0: sandbox do run_shell (src/sandbox.js) e pastas onde o agente grava sem perguntar.
   if (sub === 'set-sandbox') {
     if (!['auto', 'sempre', 'off'].includes(a[0])) {

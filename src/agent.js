@@ -185,6 +185,59 @@ function podarHistorico(convo) {
   return [...inicio, aviso, ...convo.slice(corte)];
 }
 
+// v0.52.0: MODO ATÉ TERMINAR — a pessoa liga, e o agente trabalha sozinho até a tarefa estar feita. Quando ele
+// fecha o turno sem dizer que terminou, o loop manda continuar (como o hook Stop). Tetos: continuações, passos e a
+// mesma resposta duas vezes (sem progresso). O "Parar" da pessoa continua valendo, e as permissões das ferramentas
+// também (quem pergunta é o sistema, não o modelo). As marcas saem do texto, inclusive no meio do streaming.
+const MARCA_CONCLUIDA = '[TAREFA CONCLUÍDA]';
+const MARCA_PRECISA = '[PRECISO DE VOCÊ]';
+const RE_MARCAS = /\[\s*(TAREFA\s+CONCLU[IÍ]DA|PRECISO\s+DE\s+VOC[EÊ])\s*\]/gi;
+const MAX_CONTINUACOES_ATE_TERMINAR = 25;
+const PASSOS_ATE_TERMINAR = 400;
+const INSTRUCAO_ATE_TERMINAR = 'MODO ATÉ TERMINAR (a pessoa ligou): trabalhe sozinho até a tarefa estar completa. Não pare no ' +
+  'meio para perguntar "posso continuar?" ou "quer que eu faça X?": escolha o caminho razoável e siga. As permissões das ' +
+  'ferramentas continuam sendo pedidas pelo sistema; isso não depende de você. Antes de dizer que terminou, confira o ' +
+  'resultado (rode os testes, leia o arquivo gravado, veja a imagem criada). Quando a tarefa estiver feita de verdade, ' +
+  `escreva na última linha exatamente ${MARCA_CONCLUIDA}. Se só a pessoa puder destravar (uma informação que você não ` +
+  `tem, uma decisão de gosto, um acesso), diga exatamente o que precisa e termine com ${MARCA_PRECISA}.`;
+const CONTINUAR_ATE_TERMINAR = '[modo até terminar] Você parou sem marcar a tarefa como concluída. Continue de onde parou, ' +
+  'sem repetir o que já fez nem pedir confirmação. Se ela já está pronta, confira o resultado e termine com ' +
+  `${MARCA_CONCLUIDA}; se só a pessoa pode destravar, diga o quê e termine com ${MARCA_PRECISA}.`;
+
+/** Tira as marcas do texto. @returns {{ limpo: string, marca: 'concluida'|'precisa'|null }} (a última marca vale) */
+function marcaDoFim(texto) {
+  let marca = null;
+  const limpo = String(texto || '').replace(RE_MARCAS, (m, qual) => {
+    marca = /^TAREFA/i.test(qual) ? 'concluida' : 'precisa';
+    return '';
+  }).replace(/[ \t]+$/gm, '').trimEnd();
+  return { limpo, marca };
+}
+
+const semAcento = (s) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+const INICIOS_DE_MARCA = ['TAREFA CONCLUIDA]', 'PRECISO DE VOCE]'];
+/** O texto depois do último "[" ainda pode virar uma marca? ("[TAREFA CONC", "[PRECISO DE V") */
+function podeVirarMarca(resto) {
+  if (resto.length > 24 || resto.includes(']')) return false;
+  const r = semAcento(resto.slice(1)).toUpperCase().replace(/\s+/g, ' ').replace(/^ /, '');
+  return INICIOS_DE_MARCA.some((m) => m.startsWith(r));
+}
+
+/** onText sem as marcas: segura um possível começo de marca no fim de um pedaço até saber o que é. */
+function filtrarMarcas(onText) {
+  let pendente = '';
+  return {
+    escrever(pedaco) {
+      let s = (pendente + String(pedaco)).replace(RE_MARCAS, '');
+      pendente = '';
+      const i = s.lastIndexOf('[');
+      if (i >= 0 && podeVirarMarca(s.slice(i))) { pendente = s.slice(i); s = s.slice(0, i); }
+      if (s) onText(s);
+    },
+    fim() { if (pendente) { const s = pendente.replace(RE_MARCAS, ''); pendente = ''; if (s) onText(s); } },
+  };
+}
+
 // v0.48.1: "Parar" de verdade (o modo site manda; ver src/site/servidor.js). Com `signal` (AbortSignal) o agente
 // para no próximo ponto seguro: não chama o modelo de novo, não roda a próxima ferramenta e não espera a resposta
 // que está chegando (o provedor recebe o mesmo signal e corta a conexão). Uma ferramenta que JÁ está rodando
@@ -226,7 +279,8 @@ function esperarOuParar(promessa, signal) {
 async function runOnce(userMessage, opts = {}) {
   // `imagens` (v0.41.0): [{ inlineData: {mimeType, data} }] de src/imagens.js, enviadas junto com a mensagem.
   // `onFerramenta` (v0.48.0): avisa o nome de cada ferramenta usada (o modo site mostra na tela)
-  const { history = [], modelName, extraSystemInstruction, allowedTools, onText, onFerramenta, deps = {}, maxSteps = 60, logPrefix = '', imagens = [], signal } = opts;
+  // `ateTerminar` (v0.52.0): o modo até terminar (ver INSTRUCAO_ATE_TERMINAR); `onContinuar(n)` avisa cada continuação.
+  const { history = [], modelName, extraSystemInstruction, allowedTools, onFerramenta, deps = {}, logPrefix = '', imagens = [], signal, onContinuar } = opts;
   const parado = () => Boolean(signal && signal.aborted);
   const loadConfigFn = deps.loadConfig || loadConfig;
   const chatWithToolsFn = deps.chatWithTools || chatWithTools;
@@ -245,11 +299,17 @@ async function runOnce(userMessage, opts = {}) {
   // (código 2 bloqueia o pedido; saída com código 0 vira contexto extra) — ver src/hooks.js.
   const inicio = hooks.contextoDeInicio();
   inicio.avisos.forEach((a) => console.log(chalk.yellow(`${logPrefix}[hook SessionStart] ${a}`)));
-  const systemInstruction = buildSystemInstructionFn(extraSystemInstruction) +
-    (inicio.texto ? `\n\nContexto adicionado pelo hook SessionStart do usuário:\n${inicio.texto}` : '');
   // UserPromptSubmit e Stop são do pedido do USUÁRIO: dentro de um subagente (delegate_task) não rodam —
   // senão um Stop "npm test ainda falha" obrigava até o explorador somente leitura a continuar.
   const dentroDeSubagente = subagent.profundidadeAtual() > 0;
+  // o modo até terminar é do pedido da pessoa: um subagente não fica "continuando" sozinho
+  const ateTerminar = opts.ateTerminar === true && !dentroDeSubagente;
+  const maxSteps = opts.maxSteps !== undefined ? opts.maxSteps : (ateTerminar ? PASSOS_ATE_TERMINAR : 60);
+  const filtro = ateTerminar && typeof opts.onText === 'function' ? filtrarMarcas(opts.onText) : null;
+  const onText = filtro ? filtro.escrever : opts.onText;
+  const systemInstruction = buildSystemInstructionFn(extraSystemInstruction) +
+    (inicio.texto ? `\n\nContexto adicionado pelo hook SessionStart do usuário:\n${inicio.texto}` : '') +
+    (ateTerminar ? `\n\n${INSTRUCAO_ATE_TERMINAR}` : '');
   const envio = dentroDeSubagente ? { avisos: [], bloqueado: false, saidas: [] } : hooks.executar('UserPromptSubmit', { extra: { prompt: userMessage } });
   envio.avisos.forEach((a) => console.log(chalk.yellow(`${logPrefix}[hook UserPromptSubmit] ${a}`)));
   if (envio.bloqueado) return { text: `Pedido bloqueado por hook do usuário (UserPromptSubmit): ${envio.mensagem}`, history: [...history] };
@@ -275,6 +335,8 @@ async function runOnce(userMessage, opts = {}) {
   const maxCharsContexto = cfg.contextoMaxChars === 0 ? 0 : Number(cfg.contextoMaxChars) || 300000;
   let avisouEnxugar = false;
   let continuacoesStop = 0;
+  let continuacoesAte = 0;
+  let ultimaRespostaAte = null;
   for (let step = 0; step < maxSteps; step++) {
     if (parado()) return interromper();
     const enxuto = enxugarResultadosAntigos(podarHistorico(convo), { maxChars: maxCharsContexto });
@@ -290,11 +352,13 @@ async function runOnce(userMessage, opts = {}) {
       onText,
       ...(signal ? { signal } : {}),
     }), signal);
+    if (filtro) filtro.fim();
     if (response === PARADO) return interromper();
 
     const calls = response.functionCalls ? response.functionCalls() : [];
     if (!calls || calls.length === 0) {
-      const text = response.text();
+      const fim = ateTerminar ? marcaDoFim(response.text()) : { limpo: response.text(), marca: null };
+      const text = fim.limpo;
       convo.push({ role: 'model', parts: [{ text }] });
       // v0.41.0: hook Stop com código 2 obriga a continuar (ex.: "os testes não passaram"), até 3 vezes.
       const parada = !dentroDeSubagente && continuacoesStop < MAX_CONTINUACOES_STOP ? hooks.executar('Stop', { extra: { resposta: text } }) : null;
@@ -305,10 +369,31 @@ async function runOnce(userMessage, opts = {}) {
         convo.push({ role: 'user', parts: [{ text: `[hook Stop do usuário] A tarefa ainda não terminou: ${parada.mensagem}\nContinue até resolver isso.` }] });
         continue;
       }
-      return fechar({ text, history: convo });
+      if (ateTerminar && !fim.marca) {
+        // sem avançar = a mesma resposta (inclusive vazia) logo depois da anterior, sem nenhuma ferramenta no meio
+        const repetiu = ultimaRespostaAte !== null && text.trim() === ultimaRespostaAte;
+        if (repetiu || continuacoesAte >= MAX_CONTINUACOES_ATE_TERMINAR) {
+          const aviso = !repetiu
+            ? `(modo até terminar: parei depois de ${MAX_CONTINUACOES_ATE_TERMINAR} continuações sem a tarefa ser marcada como concluída)`
+            : text.trim() ? '(modo até terminar: parei — o agente deu a mesma resposta duas vezes seguidas, sem avançar)'
+              : '(modo até terminar: parei — o agente respondeu vazio duas vezes seguidas)';
+          console.log(chalk.yellow(`${logPrefix}${aviso}`));
+          return fechar({ text: text ? `${text}\n\n${aviso}` : aviso, history: convo, fim: repetiu ? 'repetiu' : 'teto' });
+        }
+        ultimaRespostaAte = text.trim();
+        continuacoesAte++;
+        console.log(chalk.dim(`\n${logPrefix}(modo até terminar: ainda não terminou — continuando, ${continuacoesAte}/${MAX_CONTINUACOES_ATE_TERMINAR})`));
+        if (typeof onContinuar === 'function') { try { onContinuar(continuacoesAte); } catch { /* quem ouve não derruba o agente */ } }
+        if (onText && text) onText('\n\n'); // o que ele escrever depois é outro parágrafo
+        convo.push({ role: 'user', parts: [{ text: CONTINUAR_ATE_TERMINAR }] });
+        continue;
+      }
+      return fechar({ text, history: convo, ...(ateTerminar ? { fim: fim.marca } : {}) });
     }
 
-    // O modelo pediu para usar uma ou mais ferramentas.
+    // O modelo pediu para usar uma ou mais ferramentas. (Modo até terminar: usar ferramenta é avançar — a próxima
+    // resposta igual à anterior não conta como "repetiu".)
+    ultimaRespostaAte = null;
     // Ecoa os parts exatamente como o Google devolveu (preserva o "id" de
     // cada functionCall e qualquer outro campo, como thoughtSignature).
     // Gemini 3.5+ exige que a functionResponse devolva o mesmo id — só
@@ -405,9 +490,14 @@ async function runOnce(userMessage, opts = {}) {
   // — na próxima chamada de `runOnce` com esse `history`, o modelo perdia o
   // fio: via os `functionResponse` das ferramentas mas nenhuma fala do
   // "assistente" fechando aquele turno, o que deixa o histórico inconsistente.
-  const aviso = '(número máximo de passos de ferramenta atingido)';
+  const aviso = ateTerminar
+    ? `(modo até terminar: parei no limite de ${maxSteps} passos de ferramenta — a tarefa pode não estar completa)`
+    : '(número máximo de passos de ferramenta atingido)';
   convo.push({ role: 'model', parts: [{ text: aviso }] });
-  return fechar({ text: aviso, history: convo });
+  return fechar({ text: aviso, history: convo, ...(ateTerminar ? { fim: 'passos' } : {}) });
 }
 
-module.exports = { runOnce, buildSystemInstruction, podarHistorico, cortarResultado, AVISO_INTERROMPIDO };
+module.exports = {
+  runOnce, buildSystemInstruction, podarHistorico, cortarResultado, AVISO_INTERROMPIDO,
+  marcaDoFim, filtrarMarcas, MARCA_CONCLUIDA, MARCA_PRECISA, CONTINUAR_ATE_TERMINAR, MAX_CONTINUACOES_ATE_TERMINAR, PASSOS_ATE_TERMINAR,
+};

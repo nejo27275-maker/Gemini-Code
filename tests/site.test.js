@@ -19,8 +19,10 @@ test.after(() => fs.rmSync(HOME, { recursive: true, force: true }));
 const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
 const TOKEN = 'token-de-teste-1234567890abcdef';
 
+// v0.52.0: estes testes usam um agente falso; a chave do Gemini (que a página pede quando falta) conta como configurada
+const CHAVE_OK = { estado: () => ({ configurada: true, precisa: false }), validar: async () => true, salvar() {} };
 async function subir(opcoes = {}) {
-  const s = criarServidorSite({ token: TOKEN, ...opcoes });
+  const s = criarServidorSite({ token: TOKEN, chaves: CHAVE_OK, ...opcoes });
   await new Promise((r) => s.servidor.listen(0, '127.0.0.1', r));
   const porta = s.servidor.address().port;
   t_fechar.push(() => new Promise((r) => s.servidor.close(r)));
@@ -381,7 +383,7 @@ test('/api/historico: a conversa volta para a página (e diz se ainda está resp
     },
   });
   const vazio = JSON.parse((await api(porta, '/api/historico', {})).corpo);
-  assert.deepEqual(vazio, { mensagens: [], ocupado: false, aliado: 'central' }, 'controle de direção (que reordena o texto) sai');
+  assert.deepEqual({ mensagens: vazio.mensagens, ocupado: vazio.ocupado, aliado: vazio.aliado }, { mensagens: [], ocupado: false, aliado: 'central' }, 'controle de direção (que reordena o texto) sai');
   await api(porta, '/api/conversa', { texto: 'primeira' });
   const longa = api(porta, '/api/conversa', { texto: 'longa' });
   await dormir(60);

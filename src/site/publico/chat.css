@@ -194,6 +194,30 @@ svg { display: block; }
 /* só para leitores de tela */
 .status { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
+/* ---- v0.52.0: modo até terminar, o pedido da chave e os selos ---- */
+.topo-acoes { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.botao-ate[aria-pressed="true"] { background: var(--acento); border-color: var(--acento); color: var(--acento-texto); }
+.botao-ate[aria-pressed="true"]:hover:not(:disabled) { background: var(--acento-forte); }
+.seguindo { margin: 6px 0 0; font-size: 13px; color: var(--texto-2); }
+.seguindo::before { content: "↻ "; }
+.selo {
+  display: inline-block; margin: 8px 0 0; padding: 3px 10px; border-radius: 999px; font-size: 13px; font-weight: 600;
+  background: var(--aviso-fundo); border: 1px solid var(--aviso-borda); color: var(--aviso-texto);
+}
+.selo-ok { background: var(--voce); border-color: var(--borda); color: var(--voce-texto); }
+.msg-chave { align-self: stretch; }
+.chave {
+  max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; padding: 16px;
+  background: var(--superficie); border: 1px solid var(--borda); border-radius: 16px; box-shadow: var(--sombra);
+}
+.chave-titulo { margin: 0; font-size: 17px; font-weight: 700; }
+.chave-texto { margin: 0; color: var(--texto-2); font-size: 14px; }
+.chave-link { color: var(--acento); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+.chave-campo {
+  border: 1px solid var(--borda); background: var(--fundo); border-radius: 10px; padding: 10px 12px; font-family: var(--mono);
+}
+.chave-estado { margin: 0; min-height: 1.2em; font-size: 13px; color: var(--texto-2); }
+
 /* ---- v0.51.0: foto, vídeo e áudio ---- */
 .anexar {
   flex: 0 0 auto; width: 36px; height: 36px; margin-left: -10px; border-radius: 50%; border: 0; display: grid; place-items: center;
@@ -297,6 +321,7 @@ svg { display: block; }
   .avatar { display: none; }
   .cartao { margin-left: 0; }
   .botao-sec span { display: none; }
+  .botao-ate span { display: inline; } /* o modo até terminar precisa do nome para se entender */
   .botao-sec { padding: 8px; }
   .vazio { margin-top: 8vh; }
   .vazio h2 { font-size: 21px; }

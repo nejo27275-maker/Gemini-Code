@@ -1,3 +1,104 @@
+## 0.52.0 — o site só com a chave do Gemini, criar imagem, o modo até terminar e o treinador de futebol
+
+Base: a 0.51.0 (no PR [#7](https://github.com/nejo27275-maker/Gemini-Code/pull/7)). Você pediu:
+- o site funcionando só com a chave da API do Gemini;
+- criar imagem;
+- um modo que só para quando terminar;
+- depois, a IA treinando futebol "feito o melhor treinador que já existiu", e o código ainda melhor.
+
+**Novo — o site só com a chave do Gemini:**
+- **Sem chave:** a página (chat e voz) mostra um cartão para colar a chave, com o link do Google AI Studio.
+  - O servidor confere a chave com o Google antes de salvar. A conferência usa a lista de modelos, que não gasta cota.
+  - A chave nunca volta para a página nem vai para o log.
+  - O `gemini-code site` também avisa no terminal que falta a chave.
+- **Com a chave:** a conversa do site vai direto para a nuvem. No modo híbrido (o padrão), as perguntas simples iriam
+  para o modelo local, que talvez nem esteja instalado. Um aliado com modelo próprio continua com o dele.
+- **Chave recusada no meio da conversa:** o cartão aparece de novo.
+- **Com um aliado** (`gemini-code site --aliado treinador`): as sugestões da tela inicial são as dele.
+
+**Novo — criar imagem no formato das redes:**
+- **No terminal:** `gemini-code imagem gerar "..." --formato feed|quadrado|stories|youtube|16:9`.
+  - A ferramenta `imagem` também aceita o formato, e a proporção vai para a API (`imageConfig.aspectRatio`).
+  - Um formato desconhecido é recusado antes de gastar cota.
+- **Permissão:** a ferramenta pergunta antes de cada criação, porque gasta cota. "sempre" libera só nesta execução.
+- **Cota zerada (`limit: 0`):** o erro agora fala do modelo de **imagem** e do comando certo
+  (`gemini-code config set-image-model NOME`). Antes, mandava trocar o modelo do chat.
+- **No site:** a sugestão "Crie uma imagem…" e a imagem na conversa, com o botão Baixar.
+
+**Novo — modo até terminar:**
+- **Como funciona:** o agente trabalha sozinho até a tarefa estar pronta e marca o fim: concluída, ou "preciso de você"
+  com o que falta. Se ele parar sem marcar, o gemini-code manda continuar de onde parou.
+- **Limites:**
+  - até 25 continuações e 400 passos (em vez de 60);
+  - duas respostas iguais seguidas (ou vazias), sem nenhuma ferramenta no meio, também encerram;
+  - o Parar (Ctrl+C) e as permissões continuam valendo;
+  - um subagente nunca entra no modo.
+- **As marcas** nunca aparecem, nem cortadas entre pedaços do streaming.
+- **Onde ligar:**
+  - `/ate-terminar` no chat do terminal;
+  - `gemini-code run --ate-terminar "..."`;
+  - `gemini-code config set-ate-terminar on`, para começar sempre ligado;
+  - o botão **Até terminar** no site.
+- **No site:**
+  - nesse modo, fechar a página não para o agente;
+  - ao voltar, você vê o que ele já fez (o texto, as ferramentas e as mídias), e uma permissão espera até 30 minutos;
+  - a resposta termina com um selo: ✓ Tarefa concluída, ⚑ Precisa de você, ou o motivo de ter parado.
+
+**Novo — o treinador de futebol** (`docs/FUTEBOL.md`):
+- **O aliado:** `gemini-code futebol aliado` cria o "treinador".
+  - **Ferramentas:** o preset `futebol` traz `futebol`, `video`, `imagem`, `desafio` e `web_fetch`.
+  - **Instruções de treinador de elite:** os 4 momentos do jogo e as bolas paradas, treinar como se joga, liderança e
+    o plano de jogo contra o adversário, sem fingir ser nenhuma pessoa real.
+- **A ferramenta `futebol`** (sob demanda) e o comando `gemini-code futebol`, sem IA:
+  - **treino:** a sessão por tema (12), categoria (sub-7 a veterano), número de jogadores e tempo, com 25 exercícios
+    de verdade (organização, regras, pontos de correção, progressão);
+  - **semana:** a periodização tática (MD-4 tensão, MD-3 duração, MD-2 velocidade, MD-1 ativação, recuperação),
+    também com 2 jogos na semana;
+  - **carga:** PSE x minutos, aguda, crônica, ACWR, monotonia e tensão;
+  - **prancheta:** a formação em PNG e SVG, com os nomes e as setas das jogadas.
+- **Idade e segurança:**
+  - criança brinca de jogar: sem bloco analítico;
+  - um tema avançado demais para a idade é avisado;
+  - todo plano traz a hidratação e a regra da pancada na cabeça ("na dúvida, fora");
+  - o aliado não diagnostica nem receita.
+
+**Corrigido na revisão** (cada um com teste):
+- **Sub-11 repetia exercício:** com o tema posse ou pressão, o mesmo exercício aparecia nos dois blocos principais. Agora
+  ele ganha o tempo dos dois, em duas etapas (a segunda com a progressão).
+- **Goleiros no aquecimento:** o plano dizia que os goleiros aquecem com o preparador, mas dividia todo mundo nos grupos
+  do rondo. Agora o aquecimento divide só os de linha.
+- **Prancheta:**
+  - **Nomes encostando:** nomes compridos encostavam no do lado. Agora o limite depende de quantos jogadores há na
+    linha, e linhas de 4 ou mais usam fonte menor.
+  - **Emoji:** virava um buraco no PNG; agora sai.
+  - **Título:** era cortado em 18 letras, como os nomes; agora vai até 40.
+- **Carga:**
+  - **O "hoje":** era o dia em UTC: em São Paulo, depois das 21h, já era amanhã. Agora é o dia local.
+  - **As datas:** como a gente digita (04/11/2026, "ontem"), lidas por `src/datas.js`. Uma data no futuro é recusada.
+  - **Alarme falso:** com menos de 3 semanas de registros, a crônica é pequena e o ACWR sai alto. Mesmo assim, o
+    resultado dizia "aumento brusco, reduza". Agora o ACWR aparece "ainda sem base", sem faixa de risco.
+- **Modo até terminar:**
+  - duas respostas vazias seguidas gastavam as 25 continuações; agora param na segunda;
+  - a mesma frase depois de usar uma ferramenta contava como "sem avançar"; agora a ferramenta conta como avanço.
+- **ESLint:** uma atribuição inútil no servidor do site, e caracteres invisíveis num regex (agora são códigos).
+
+**Testes (+37):**
+- 11 do treinador;
+- 12 da chave, das sugestões do aliado e do modo até terminar no site;
+- 10 do modo até terminar;
+- 4 de criar imagem.
+- No Chromium de verdade: o cartão da chave e o botão "Até terminar".
+- Num pseudo-terminal de verdade: o `/ate-terminar`.
+- Com o ImageMagick de verdade: a prancheta, conferida pelos pixels.
+
+**Limites honestos:** este ambiente não tem internet nem modelo de IA.
+- **Testado aqui,** com um Gemini falso: a conversa, a chave e o modo até terminar.
+- **Não testado:**
+  - uma chave de verdade conferida com o Google;
+  - a imagem criada de verdade pelo Gemini;
+  - um modelo de verdade seguindo as marcas de fim;
+  - a conversa com o aliado treinador.
+
 ## 0.51.0 — foto e vídeo pelo modo site, e cores e volume certos na edição
 
 Base: a 0.50.1 (no PR [#7](https://github.com/nejo27275-maker/Gemini-Code/pull/7)). Você pediu para conferir se o

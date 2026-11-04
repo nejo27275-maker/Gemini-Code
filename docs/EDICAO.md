@@ -94,6 +94,20 @@ gemini-code imagem ajustar foto.jpg --qualidade leve                # menor, par
 - **Localização:** por padrão, a foto sai **sem a localização e sem os dados da câmera** (EXIF), depois de ser endireitada. Para manter, use `--manter-localizacao`.
 - **Marca d'água no canto:** o texto daquele lado sobe para não ficar em cima dela.
 
+**Criar uma imagem do zero** (v0.52.0) não é edição: usa a IA do Gemini e gasta a cota da sua chave.
+
+```bash
+gemini-code imagem gerar "um café aconchegante, luz da manhã" --formato feed
+```
+
+- **Formatos:** `feed` (4:5), `quadrado` (1:1), `stories`/`reels` (9:16), `youtube`/`capa` (16:9), ou a proporção
+  direto: 1:1, 2:3, 3:2, 3:4, 4:3, 4:5, 5:4, 9:16, 16:9 e 21:9.
+- **Pelo agente:** a ferramenta `imagem` pergunta antes de cada criação. Responda "sempre" para não perguntar de novo
+  nesta execução.
+- **Sem cota para imagens:** quando o Google responde `limit: 0` para o modelo de imagem, o erro explica: a chave não
+  tem cota para esse modelo, e repetir não adianta. Ative o faturamento no Google AI Studio ou troque o modelo de imagem
+  (`gemini-code config set-image-model NOME_DO_MODELO`).
+
 ## Pedindo para o agente
 
 No chat, é só pedir. Exemplos:

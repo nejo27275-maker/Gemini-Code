@@ -568,8 +568,62 @@
     return fig;
   }
 
+  // ---------------------------------------------------------------------------
+  // v0.52.0: o pedido da chave da API do Gemini (quando falta, ou o Gemini recusou). A chave vai só para o servidor
+  // deste aparelho (com a chave da página) e nunca volta; o campo é de senha e se esvazia depois de salvar.
+  // ---------------------------------------------------------------------------
+  function cartaoChave(api, { doc = document, motivo = '', aoSalvar } = {}) {
+    const el = (tag, classe, texto) => { const e = doc.createElement(tag); if (classe) e.className = classe; if (texto) e.textContent = texto; return e; };
+    const caixa = el('form', 'chave');
+    caixa.autocomplete = 'off';
+    caixa.setAttribute('aria-label', 'Chave da API do Gemini');
+    const link = el('a', 'chave-link', 'Pegar a minha chave grátis (aistudio.google.com)');
+    link.href = 'https://aistudio.google.com/apikey';
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    const campo = el('input', 'chave-campo');
+    campo.type = 'password';
+    campo.autocomplete = 'off';
+    campo.spellcheck = false;
+    campo.placeholder = 'Cole a chave aqui (começa com AIza)';
+    campo.setAttribute('aria-label', 'Chave da API do Gemini');
+    const botao = el('button', 'botao botao-primario', 'Salvar e começar');
+    botao.type = 'submit';
+    const estado = el('p', 'chave-estado');
+    estado.setAttribute('role', 'status');
+    caixa.append(
+      el('p', 'chave-titulo', motivo || 'Falta só a chave da API do Gemini'),
+      el('p', 'chave-texto', 'Com ela o site funciona sozinho: conversa, vê as suas fotos, edita e cria imagens. A chave fica guardada neste aparelho (no config do gemini-code) e nunca volta para a página.'),
+      link, campo, botao, estado,
+    );
+    caixa.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const chave = campo.value.trim();
+      if (!chave) { campo.focus(); return; }
+      botao.disabled = true;
+      estado.textContent = 'Conferindo com o Gemini…';
+      try {
+        const r = await api('/api/chave', { chave });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) { estado.textContent = d.erro || 'Não deu certo.'; botao.disabled = false; return; }
+        campo.value = '';
+        estado.textContent = d.conferida ? 'Pronto! Chave conferida e salva.' : 'Chave salva (não deu para conferir agora; a primeira conversa confere).';
+        caixa.dataset.salva = 'true';
+        if (aoSalvar) aoSalvar(d);
+      } catch { estado.textContent = 'Sem conexão com o agente.'; botao.disabled = false; }
+    });
+    return caixa;
+  }
+
+  /** v0.52.0: o selo do fim de uma resposta no modo até terminar. '' quando não há. */
+  const SELOS = Object.freeze({
+    concluida: '✓ Tarefa concluída', precisa: '⚑ Precisa de você', teto: 'Parou no limite do modo até terminar',
+    repetiu: 'Parou: o agente repetiu a resposta', passos: 'Parou no limite de passos',
+  });
+  const seloDoFim = (fim) => SELOS[fim] || '';
+
   window.GeminiSite = Object.freeze({
     lerToken, criarApi, eventos, analisarMarkdown, montarMarkdown, copiarTexto, linkSeguro,
-    tamanhoLegivel, tipoDoArquivo, enviarArquivo, cartaoMidia, mostrarQuadro, MAX_ENVIO,
+    tamanhoLegivel, tipoDoArquivo, enviarArquivo, cartaoMidia, mostrarQuadro, MAX_ENVIO, cartaoChave, seloDoFim,
   });
 })();

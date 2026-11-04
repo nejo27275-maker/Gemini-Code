@@ -176,6 +176,7 @@ No modo "chat", digite /help para ver os comandos de sessão (/clear, /model, /s
   gemini-code computador status | tela | clicar X Y   Usa o computador como você: print, mouse, teclado e janelas (Linux, Mac, Windows)
   gemini-code adb ui | tocar "Enviar" | deslizar cima  Celular/TV: lê o que está na tela e toca pelo texto do botão
   gemini-code desafio criar "30 dias de caminhada"  Desafios: lembrete diário, marcar o dia, sequência e postar o progresso
+  gemini-code futebol treino|semana|carga|prancheta|aliado   O treinador de futebol: treinos, semana até o jogo, carga e prancheta
   gemini-code site --abrir [--aliado central]  Modo site: conversa por VOZ no navegador, com a esfera animada (só neste aparelho)
   gemini-code site --chat --abrir              Versão chat do modo site: uma conversa comum, por texto, no navegador
   gemini-code imagem gerar|editar|melhorar|descrever   Imagens com IA ou, para melhorar, sem IA (ImageMagick)
@@ -258,6 +259,7 @@ Comandos disponíveis no chat:
   /aprovar [ajuste]  aprova o plano e deixa o agente executar
   /custo [zerar]     tokens gastos nesta sessão (reais, do Gemini), chamadas locais e limite; /custo zerar recomeça a contagem
   /passo [on|off]    aprovação passo a passo: mostra uma prévia e pergunta s/n/t antes de cada write_file/edit_file
+  /ate-terminar [on|off]  modo até terminar: o agente continua sozinho até a tarefa estar feita (Ctrl+C ainda para)
   /workflows         lista os workflows salvos que o agente pode acionar sozinho (run_workflow)
   /workflows rodar <nome> [var=valor ...]   roda um workflow direto, sem o modelo escolher
   /workflows validar <nome>                 confere o workflow sem rodar (erros e avisos)
@@ -360,6 +362,7 @@ async function chatLoop({ agente: nomeAgente } = {}) {
   // estourar ERR_USE_AFTER_CLOSE na próxima pergunta.
   let fechado = false;
   let modoPlano = false;
+  let ateTerminar = loadConfig().modoAteTerminar === true; // v0.52.0
   stepApproval.configurar({ ativo: loadConfig().confirmarEscrita === true, perguntar: (q) => (fechado ? Promise.resolve('n') : require('../src/ui/prompt').ask(q)) });
   // v0.49.2: Ctrl+D no "você>" (fim da entrada) sai pelo encerrarComLimpeza. Antes só marcava `fechado`: com um
   // servidor MCP vivo o processo ficava pendurado para sempre. Com uma mensagem a caminho (entrada por pipe, colagem),
@@ -479,6 +482,16 @@ async function chatLoop({ agente: nomeAgente } = {}) {
       else if (arg) { console.log(chalk.dim('Uso: /passo [on|off]\n')); return ask(); }
       else stepApproval.configurar({ ativo: !stepApproval.ativo() });
       console.log(chalk.dim(stepApproval.ativo() ? 'Passo a passo LIGADO: cada gravação de arquivo pede sua aprovação (s/n/t).\n' : 'Passo a passo desligado.\n'));
+      return ask();
+    }
+    if (cmd === '/ate-terminar' || cmd.startsWith('/ate-terminar ') || cmd === '/até-terminar' || cmd.startsWith('/até-terminar ')) {
+      const arg = cmd.replace(/^\/at[eé]-terminar/, '').trim().toLowerCase();
+      if (arg === 'on' || arg === 'off') ateTerminar = arg === 'on';
+      else if (arg) { console.log(chalk.dim('Uso: /ate-terminar [on|off]\n')); return ask(); }
+      else ateTerminar = !ateTerminar;
+      console.log(chalk.dim(ateTerminar
+        ? 'Modo até terminar LIGADO: o agente continua sozinho até a tarefa estar feita (as permissões continuam sendo perguntadas; Ctrl+C para).\n'
+        : 'Modo até terminar desligado.\n'));
       return ask();
     }
     if (cmd === '/workflows' || cmd.startsWith('/workflows ')) {
@@ -742,6 +755,7 @@ async function chatLoop({ agente: nomeAgente } = {}) {
         modelName: modeloAtual,
         imagens: imagensDoTurno,
         ...(turno ? turno.opcoes : restricao),
+        ...(ateTerminar && !modoPlano ? { ateTerminar: true } : {}),
         onText: (pedaco) => {
           if (parar.signal.aborted) return; // o que ainda chegar depois do Ctrl+C não aparece
           streamed = true;
@@ -771,7 +785,7 @@ async function chatLoop({ agente: nomeAgente } = {}) {
     if (rw) console.log(chalk.dim(`(${rw.arquivos} arquivo(s) gravado(s) neste turno — /rewind desfaz)\n`));
     ask();
   };
-  const rotulo = () => [agenteAtivo && agenteAtivo.name, modoPlano && 'plano'].filter(Boolean).join(' · ');
+  const rotulo = () => [agenteAtivo && agenteAtivo.name, modoPlano && 'plano', ateTerminar && !modoPlano && 'até terminar'].filter(Boolean).join(' · ');
   const ask = () => {
     if (fechado) return encerrarComLimpeza();
     noPrompt = true;
@@ -787,7 +801,7 @@ async function chatLoop({ agente: nomeAgente } = {}) {
 // "agenda" e "projetos" são só arquivo local (sem API key nenhuma
 // envolvida) — pedir a chave de segurança pra só ver a lista seria atrito
 // à toa.
-const COMANDOS_SEM_DESBLOQUEIO = new Set([undefined, 'help', '--help', 'version', '--version', '-v', 'config', 'confianca', 'trust', 'agenda', 'projetos', 'backups', 'routines', 'sessions', 'checkpoints', 'artifacts', 'context', 'doctor', 'solo', 'security', 'profiles', 'agents', 'code-ia', 'codeia', 'adb']);
+const COMANDOS_SEM_DESBLOQUEIO = new Set([undefined, 'help', '--help', 'version', '--version', '-v', 'config', 'confianca', 'trust', 'agenda', 'projetos', 'backups', 'routines', 'sessions', 'checkpoints', 'artifacts', 'context', 'doctor', 'solo', 'security', 'profiles', 'agents', 'code-ia', 'codeia', 'adb', 'futebol', 'treinador']);
 
 // v0.42.0: de "aliados", só conversar (chat/run) e criar com --ia chamam o modelo.
 function aliadosUsaModelo() {
@@ -912,7 +926,7 @@ async function main() {
     case 'run': {
       const parsed = agentProfiles.parseRunArgs(rest);
       const { profile, createCheckpoint, instruction } = parsed;
-      if (!instruction) throw new Error('Informe uma instrução. Uso: gemini-code run [--profile coder|explore|plan|review|test] [--checkpoint] [--imagem ARQ] [--json] "instrução"');
+      if (!instruction) throw new Error('Informe uma instrução. Uso: gemini-code run [--profile coder|explore|plan|review|test] [--checkpoint] [--imagem ARQ] [--json] [--ate-terminar] "instrução"');
       try {
         const imagens = parsed.imagens.map((arq) => require('../src/imagens').lerImagem(arq));
         let checkpoint = null;
@@ -924,6 +938,7 @@ async function main() {
           allowedTools: profile.tools ? [...profile.tools] : undefined,
           extraSystemInstruction: profile.instructions,
           imagens,
+          ...(parsed.ateTerminar ? { ateTerminar: true } : {}),
         });
         if (!parsed.json) console.log(paraTerminal(text));
         const report = artifacts.createArtifact({ title: instruction.slice(0, 120), type: profile.artifactType, status: 'concluido', summary: text.slice(0, 1000), content: text, cwd: process.cwd(), metadata: { profile: profile.name, allowedTools: profile.tools ? [...profile.tools] : 'session-default', checkpointId: checkpoint && checkpoint.id } });
@@ -1009,6 +1024,7 @@ async function main() {
         conversar: site.conversarComAgente({ aliado }),
         log: (m) => console.log(chalk.dim(paraTerminal(m))),
         aliado: aliado ? aliado.agente.name : null,
+        sugestoes: aliado && Array.isArray(aliado.agente.starters) ? aliado.agente.starters : null, // v0.52.0
       });
       s.servidor.on('error', (e) => {
         console.error(chalk.red(`Erro: ${e.code === 'EADDRINUSE' ? `a porta ${porta} está em uso (use --porta 8766, ou --porta 0 para qualquer uma livre)` : e.message}`));
@@ -1022,9 +1038,22 @@ async function main() {
         console.log(`  ${flags.chat ? 'Voz' : chalk.green('Voz')} (com a esfera animada): ${voz}`);
         console.log(chalk.dim('Só neste aparelho (127.0.0.1). A chave no fim do endereço (#t=...) muda a cada vez: não compartilhe. As duas páginas são a mesma conversa. Voz: Chrome ou Edge. As confirmações das ferramentas aparecem na página. Ctrl+C para parar.'));
         console.log(chalk.dim(`No chat dá para mandar foto, vídeo ou áudio (botão do clipe): ficam em ${path.join(process.cwd(), site.PASTA_RECEBIDA)}, e o que o agente editar aparece na página.`));
+        // v0.52.0: o site só precisa da chave do Gemini — sem ela, a própria página pede
+        try {
+          if (site.chavesPadrao().estado().precisa) console.log(chalk.yellow('Falta a chave da API do Gemini: a página vai pedir (é grátis em aistudio.google.com/apikey). Ou: gemini-code config set-key SUA_CHAVE'));
+        } catch { /* sem config: segue */ }
         const url = flags.chat ? chat : voz;
         if (flags.abrir && !(await require('../src/abrir').abrir(url))) console.log(chalk.dim('Não consegui abrir o navegador sozinho: copie o endereço acima.'));
       });
+      return;
+    }
+
+    case 'futebol':
+    case 'treinador': {
+      // v0.52.0: o treinador de futebol (src/futebol.js, src/futebolCommands.js)
+      const r = await require('../src/futebolCommands').executar(rest);
+      imprimirLinhas(r.linhas);
+      if (r.codigo) process.exitCode = r.codigo;
       return;
     }
 
@@ -1183,7 +1212,7 @@ async function main() {
       const [sub, ...resto] = rest;
       const flags = { _: [] };
       for (let i = 0; i < resto.length; i++) {
-        if (['--saida', '--modo', '--ampliar'].includes(resto[i]) && i + 1 < resto.length) flags[resto[i].slice(2)] = resto[++i];
+        if (['--saida', '--modo', '--ampliar', '--formato'].includes(resto[i]) && i + 1 < resto.length) flags[resto[i].slice(2)] = resto[++i];
         else flags._.push(resto[i]);
       }
       const im = require('../src/imagem');
@@ -1194,7 +1223,7 @@ async function main() {
         '       --cor natural|vivo|quente|frio|cinema|pb|vintage|dramatico   --brilho -1..1 --contraste 0..3 --saturacao 0..3 --nitidez 0..3',
         '       --texto "Oferta" (pode repetir) [--posicao-texto topo|centro|baixo] [--fundo]   --marca logo.png [--posicao-marca ...]',
         '       --qualidade alta|normal|leve   --manter-localizacao (por padrão a localização/EXIF sai)',
-        '     gemini-code imagem gerar "descrição"                      (com IA; usa a cota da sua chave)',
+        '     gemini-code imagem gerar "descrição" [--formato feed|quadrado|stories|youtube|16:9]   (com IA; usa a cota da sua chave)',
         '     gemini-code imagem editar FOTO "o que mudar"              (com IA)',
         '     gemini-code imagem melhorar FOTO [--modo local|ia] [--ampliar 2]   (local = ImageMagick, grátis e offline)',
         '     gemini-code imagem descrever FOTO ["pergunta"]',
@@ -1233,7 +1262,7 @@ async function main() {
         if (sub === 'gerar') {
           if (bloquearSeConvidado('geração de imagem (custa cota da API do dono).')) return;
           if (!flags._.length) return uso();
-          r = await im.gerar(flags._.join(' '), { saida: flags.saida });
+          r = await im.gerar(flags._.join(' '), { saida: flags.saida, formato: flags.formato });
         } else if (sub === 'editar') {
           if (bloquearSeConvidado('edição de imagem com IA (custa cota da API do dono).')) return;
           if (flags._.length < 2) return uso();

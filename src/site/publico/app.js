@@ -473,7 +473,7 @@
     let parcial = '';
     let interrompida = false;
     try {
-      const res = await api('/api/conversa', { texto });
+      const res = await api('/api/conversa', { texto, ...(ateTerminar ? { ateTerminar: true } : {}) });
       if (!res.ok) {
         const erro = await res.json().catch(() => ({}));
         throw new Error(erro.erro || `HTTP ${res.status}`);
@@ -484,13 +484,20 @@
         else if (ev.tipo === 'alerta') { elAlerta.textContent = ev.texto; elAlerta.hidden = false; elPainel.hidden = false; }
         else if (ev.tipo === 'pergunta') { if (!parando) await perguntar(ev); }
         else if (ev.tipo === 'pergunta-expirou') fecharPergunta();
+        else if (ev.tipo === 'continuando') { if (!parando) estado('pensando', `Continuando sozinho (${ev.n})…`); }
         else if (ev.tipo === 'midia') {
           elMidias.append(G.cartaoMidia(api, ev, { urls }));
           elMidias.hidden = false;
           elPainel.hidden = false;
         }
-        else if (ev.tipo === 'resposta') { resposta = ev.texto; interrompida = Boolean(ev.interrompido); if (!interrompida) mostrarResposta(resposta); }
-        else if (ev.tipo === 'erro') { resposta = ev.texto; mostrarResposta(resposta); }
+        else if (ev.tipo === 'resposta') {
+          resposta = ev.texto;
+          interrompida = Boolean(ev.interrompido);
+          if (!interrompida) mostrarResposta(resposta);
+          const selo = G.seloDoFim(ev.fim);
+          if (selo && !interrompida) { const p = document.createElement('p'); p.className = 'selo'; p.textContent = selo; elResposta.append(p); }
+        }
+        else if (ev.tipo === 'erro') { resposta = ev.texto; mostrarResposta(resposta); if (ev.chave) pedirChave('O Gemini recusou a chave (ou ela falta): cole a sua'); }
       }
     } catch (e) {
       resposta = `Não consegui falar com o agente: ${e.message}`;
@@ -548,6 +555,14 @@
   });
   $('form').addEventListener('submit', (ev) => { ev.preventDefault(); const t = elTexto.value; elTexto.value = ''; enviar(t); });
   $('btn-continuo').addEventListener('click', () => { continuo = !continuo; marcar('btn-continuo', continuo); if (continuo && estadoAtual === 'ocioso' && !ocupado) ouvir(); });
+  // v0.52.0: modo até terminar (o agente continua sozinho até a tarefa estar feita); lembrado nesta aba
+  let ateTerminar = false;
+  const marcarAte = (ligado, lembrar = true) => {
+    ateTerminar = Boolean(ligado);
+    marcar('btn-ate', ateTerminar);
+    if (lembrar) { try { sessionStorage.setItem('gc-ate-terminar', ateTerminar ? '1' : '0'); } catch { /* sem armazenamento */ } }
+  };
+  $('btn-ate').addEventListener('click', () => marcarAte(!ateTerminar));
   $('btn-voz').addEventListener('click', () => { falarRespostas = !falarRespostas; marcar('btn-voz', falarRespostas); if (!falarRespostas) pararFala(); });
   $('btn-historico').addEventListener('click', () => { const el = $('historico'); el.hidden = !el.hidden; marcar('btn-historico', !el.hidden); });
   $('btn-limpar').addEventListener('click', async () => {
@@ -591,7 +606,39 @@
       }
       if (depois) for (const n of [...elLista.children].slice(inicio)) elLista.insertBefore(n, depois);
       if (d.aliado) $('marca-modo').textContent = `aliado ${d.aliado}`;
+      let lembrado = null;
+      try { lembrado = sessionStorage.getItem('gc-ate-terminar'); } catch { /* sem armazenamento */ }
+      marcarAte(lembrado === null ? d.ateTerminarPadrao === true : lembrado === '1', false);
+      if (d.chave && d.chave.precisa) pedirChave();
+      // v0.52.0: no modo até terminar, a tarefa anterior segue mesmo com a página fechada: espera ela acabar
+      if (d.ocupado && d.andamento && d.andamento.ateTerminar) {
+        estado('pensando', 'Terminando a tarefa anterior (modo até terminar)…');
+        for (;;) {
+          await new Promise((r) => setTimeout(r, 2000));
+          try { const r2 = await api('/api/historico', {}); if (r2.ok && !(await r2.json()).ocupado) break; } catch { /* tenta de novo */ }
+        }
+        elLista.replaceChildren();
+        estado('ocioso', 'A tarefa anterior terminou: veja em "Conversa"');
+        const r3 = await api('/api/historico', {});
+        const d3 = r3.ok ? await r3.json() : { mensagens: [] };
+        for (const m of d3.mensagens || []) {
+          const t = m.texto || (m.interrompido ? '(interrompido por você)' : '');
+          if (t && (m.quem === 'voce' || m.quem === 'agente')) registrar(m.quem, t);
+        }
+      }
     } catch { /* sem histórico: segue vazio */ }
+  }
+
+  // v0.52.0: o pedido da chave do Gemini (o site só precisa dela), no painel
+  let cartaoDaChave = null;
+  function pedirChave(motivo) {
+    if (cartaoDaChave) return;
+    cartaoDaChave = G.cartaoChave(api, {
+      motivo,
+      aoSalvar: () => { setTimeout(() => { if (cartaoDaChave) cartaoDaChave.remove(); cartaoDaChave = null; mostrarResposta(''); }, 2500); estado('ocioso', 'Chave salva. Pode falar.'); },
+    });
+    elPainel.hidden = false;
+    elPainel.prepend(cartaoDaChave);
   }
 
   let pronto = Promise.resolve();

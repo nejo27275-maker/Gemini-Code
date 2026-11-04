@@ -28,7 +28,8 @@ let n = 0;
 async function subir(opcoes = {}) {
   const pasta = fs.mkdtempSync(path.join(HOME, `proj-${n++}-`));
   const ligadas = [];
-  const s = site.criarServidorSite({ token: TOKEN, pasta, ligarFerramenta: (nome) => { ligadas.push(nome); return true; }, ...opcoes });
+  const chaves = { estado: () => ({ configurada: true, precisa: false }), validar: async () => true, salvar() {} }; // v0.52.0
+  const s = site.criarServidorSite({ token: TOKEN, pasta, chaves, ligarFerramenta: (nome) => { ligadas.push(nome); return true; }, ...opcoes });
   await new Promise((r) => s.servidor.listen(0, '127.0.0.1', r));
   fechar.push(() => new Promise((r) => s.servidor.close(r)));
   return { ...s, porta: s.servidor.address().port, pasta, ligadas, recebida: path.join(fs.realpathSync(pasta), site.PASTA_RECEBIDA) };

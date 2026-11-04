@@ -19,10 +19,16 @@
         <p id="subtitulo" class="subtitulo">Chat</p>
       </div>
     </div>
+    <div class="topo-acoes">
+    <button id="btn-ate" class="botao-sec botao-ate" type="button" aria-pressed="false" title="Modo até terminar: o agente continua sozinho até a tarefa estar feita (você ainda pode parar)">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.6M4 4v4h4"/></svg>
+      <span>Até terminar</span>
+    </button>
     <button id="btn-nova" class="botao-sec" type="button" aria-label="Nova conversa" title="Começar uma conversa nova (a atual some desta tela e do agente)">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
       <span>Nova conversa</span>
     </button>
+    </div>
   </header>
 
   <main id="conversa" class="conversa">
@@ -33,6 +39,7 @@
         <button class="sugestao" type="button">O que você consegue fazer?</button>
         <button class="sugestao" type="button">Explique o projeto desta pasta</button>
         <button class="sugestao" type="button">Me ajude a escrever um e-mail</button>
+        <button class="sugestao" type="button">Crie uma imagem de um café aconchegante para o feed</button>
       </div>
     </section>
     <ol id="mensagens" class="mensagens" role="log" aria-label="Conversa"></ol>

@@ -115,6 +115,8 @@ const DEFAULT_CONFIG = {
   fallbackModel: '',
   imageModel: 'gemini-2.5-flash-image',
   confirmShell: true,
+  // v0.52.0: modo até terminar — o chat e o modo site começam com ele ligado (o agente só para quando terminar)
+  modoAteTerminar: false,
   // v0.45.0: sandbox do run_shell (src/sandbox.js, Linux com bubblewrap). 'auto': comando que roda sem você
   // aprovar na hora (confirmShell:false, regra "permitir", rotina) roda isolado; 'sempre': todos; 'off': nenhum.
   // shellSandboxRede: a sandbox tem internet? pastasGravaveis: pastas além do projeto onde o agente grava sem

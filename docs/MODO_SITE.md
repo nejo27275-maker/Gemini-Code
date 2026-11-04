@@ -1,4 +1,4 @@
-# Modo site — conversar pelo navegador: voz com a esfera, ou a versão chat (v0.48.0; "Parar" na v0.48.1; chat na v0.49.0; foto e vídeo na v0.51.0)
+# Modo site — conversar pelo navegador: voz com a esfera, ou a versão chat (v0.48.0; "Parar" na v0.48.1; chat na v0.49.0; foto e vídeo na v0.51.0; só com a chave do Gemini e "até terminar" na v0.52.0)
 
 `gemini-code site` abre uma página no seu navegador para conversar com o agente **por voz ou por texto**. No centro
 fica uma esfera brilhante com anéis e um círculo de "risquinhos" que reagem: seguem o seu microfone quando ele ouve,
@@ -15,6 +15,48 @@ gemini-code site --porta 0                  # qualquer porta livre (padrão: 876
 O terminal mostra os dois endereços, `http://127.0.0.1:8765/chat#t=...` (chat) e `http://127.0.0.1:8765/#t=...` (voz).
 A parte `#t=...` é uma **chave que muda a cada vez**: abra o endereço completo e não compartilhe. As duas páginas são
 a mesma conversa.
+
+## Só com a chave do Gemini (v0.52.0)
+
+Para usar o site, basta a chave da API do Gemini. Não precisa de modelo local nem de configurar mais nada.
+
+- **Sem chave:** a página mostra o cartão "Falta só a chave da API do Gemini", com o link para pegar uma de graça no
+  Google AI Studio (aistudio.google.com/apikey). Cole a chave e toque em **Salvar e começar**.
+  - **Conferida antes de salvar:** o servidor confere a chave com o Google, numa chamada que não gasta cota (a lista de
+    modelos). Uma chave recusada não é salva.
+  - **Sem internet:** a chave é salva sem conferir, e a primeira conversa confere.
+  - **Onde fica:** no mesmo lugar do `gemini-code config set-key`. Ela nunca volta para a página nem aparece no log.
+  - **Chave errada ou recusada no meio da conversa:** o cartão aparece de novo.
+- **Com a chave:** a conversa vai direto para a nuvem. O modo híbrido (o padrão) mandaria as perguntas simples para um
+  modelo local, que talvez nem esteja instalado. Um aliado com modelo próprio continua usando o dele.
+- **Com senha mestra** (`apiKeyLocked`): a página não troca a chave. Use o terminal.
+- **Com um aliado** (`--aliado treinador`): as sugestões da tela inicial são as dele, como "Monta o treino de amanhã…".
+- **Criar imagem pela conversa:** "crie uma imagem de um café aconchegante para o feed". A imagem sai no formato da rede
+  (feed 4:5, stories 9:16, YouTube 16:9) e aparece na conversa com o botão **Baixar**.
+  - **Antes de criar:** a permissão aparece na página, porque gasta a cota da sua chave. Responda "sempre" para não
+    perguntar de novo nesta execução.
+
+## Modo até terminar (v0.52.0)
+
+O botão **Até terminar**, no topo do chat (e embaixo, na página de voz), faz o agente trabalhar sozinho até a tarefa
+estar pronta. Sem ele, o agente às vezes para no meio para perguntar "posso continuar?".
+
+- **Como funciona:**
+  - o agente conta quando acabou;
+  - se ele parar antes, o gemini-code manda ele continuar de onde parou;
+  - no fim, a resposta ganha um selo: **✓ Tarefa concluída**, **⚑ Precisa de você** (ele diz exatamente o que falta) ou
+    o motivo de ter parado.
+- **Os limites:**
+  - **Continuações:** até 25. Duas respostas iguais seguidas (ou vazias), sem ferramenta no meio, também encerram.
+  - **Passos:** até 400 (ferramentas e respostas), em vez de 60.
+  - **O que continua valendo:** o **Parar** e as **permissões**.
+- **Página fechada no meio:** nesse modo, o agente **continua**. Abra a página de novo para ver o que ele já fez: o texto,
+  as ferramentas e as mídias. Uma permissão espera você voltar por até 30 minutos; depois conta como "não". Fora desse
+  modo, fechar a página para o agente, como antes.
+- **Também no terminal:**
+  - `/ate-terminar` no chat;
+  - `gemini-code run --ate-terminar "tarefa"`;
+  - para começar sempre ligado: `gemini-code config set-ate-terminar on`.
 
 ## A versão chat (v0.49.0)
 
@@ -94,7 +136,14 @@ O modo site roda o agente com as ferramentas dele, então o servidor é fechado:
 - a página só carrega os próprios arquivos (CSP fechada), não abre dentro de outro site e mostra tudo como texto — uma
   resposta do modelo nunca vira código na página;
 - uma conversa por vez; mensagens de até 16.000 caracteres;
-- página fechada no meio = agente parado (ninguém olhando, nada de seguir usando ferramentas nem gastando cota).
+- página fechada no meio = agente parado (ninguém olhando, nada de seguir usando ferramentas nem gastando cota). A
+  exceção é o modo até terminar, que você ligou para isso (v0.52.0).
+- **A chave pela página (v0.52.0):**
+  - a rota exige a mesma chave da sessão e as mesmas travas de origem e de `Host`;
+  - aceita só o formato de uma chave do Gemini;
+  - limites: uma conferência por vez e até 10 tentativas a cada 10 minutos;
+  - a chave nunca volta nas respostas nem vai para o log;
+  - a conferência só fala com o endereço fixo do Google e não segue redirecionamento.
 - **Envio de arquivo (v0.51.0):**
   - É a única rota que não é JSON. Exige a mesma chave e passa pelas mesmas travas de origem e de `Host`.
   - Só aceita os tipos de foto, vídeo e áudio da lista. Os tipos que outro site consegue mandar sem pedir licença ao
@@ -122,3 +171,7 @@ O modo site roda o agente com as ferramentas dele, então o servidor é fechado:
   - **Não testado:** o navegador de um celular de verdade (Chrome do Android, Safari do iPhone).
   - **Prévia na memória:** a prévia de um vídeo grande é carregada inteira na memória do navegador.
   - **Arquivos ficam:** "Nova conversa" tira as prévias da página; os arquivos continuam em `midia-recebida/`.
+- A chave e o modo até terminar (v0.52.0):
+  - **Testado:** num Chromium de verdade, com um Gemini **falso**, porque este ambiente não tem internet nem modelo de
+    IA: o cartão da chave, salvar e conversar, o botão "Até terminar" e a página que volta no meio.
+  - **Não testado:** uma chave de verdade conferida com o Google, e o modelo real seguindo as marcas de fim.

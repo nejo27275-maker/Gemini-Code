@@ -51,6 +51,7 @@ const DESCRICAO_PRESETS = {
   computador: 'usa o computador como você: print da tela, mouse, teclado e janelas (pergunta a cada ação) + navegador e web',
   central: 'computador, celular/TV (adb), sites (navegador), redes sociais e desafios na mesma conversa — cada ação com a confirmação dela',
   desafios: 'acompanha seus desafios (marca o dia, lembrete, sequência) e posta o progresso nas redes (pergunta antes)',
+  futebol: 'treinador de futebol: treinos, semana até o jogo, carga, prancheta tática, cortes do vídeo do jogo e artes + web',
   completo: 'todas as ferramentas da sessão (grava arquivos e roda comandos, com as confirmações de sempre)',
 };
 

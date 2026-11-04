@@ -1,7 +1,9 @@
 /* versão chat do modo site (v0.49.0): uma conversa por texto, comum — sem esfera nem voz. A mesma API e a mesma
  * segurança da página de voz (src/site/servidor.js); o que vem do modelo entra como texto (Markdown de comum.js).
  * v0.51.0: foto, vídeo e áudio — pelo clipe, arrastando ou colando; o arquivo sobe na hora (com o progresso), aparece
- * na sua mensagem, e o que o agente criar (a foto editada, o vídeo) aparece na resposta, com o botão de baixar. */
+ * na sua mensagem, e o que o agente criar (a foto editada, o vídeo) aparece na resposta, com o botão de baixar.
+ * v0.52.0: o pedido da chave do Gemini quando falta (o site só precisa dela) e o modo até terminar (botão no topo):
+ * o agente continua sozinho, a página fechada não o para e, ao voltar, a página mostra o andamento. */
 (function () {
   'use strict';
 
@@ -22,6 +24,7 @@
   const elAnexos = $('anexos');
   const elArquivo = $('arquivo');
   const elAnexar = $('btn-anexar');
+  const elAte = $('btn-ate');
   // no PC, Enter envia; no celular, Enter quebra a linha e quem envia é o botão
   const ponteiroFino = Boolean(window.matchMedia && window.matchMedia('(pointer: fine)').matches);
 
@@ -85,12 +88,14 @@
     const conteudo = criar('div', 'conteudo md');
     const midias = criar('div', 'midias');
     midias.hidden = true;
+    const seguindo = criar('p', 'seguindo'); // v0.52.0: "continuando sozinho (2)"
+    seguindo.hidden = true;
     const acoes = criar('div', 'acoes-msg');
     acoes.hidden = true;
     const copiar = criar('button', 'acao', 'Copiar resposta');
     copiar.type = 'button';
     acoes.append(copiar);
-    corpo.append(ferramentas, digitando, conteudo, midias, acoes);
+    corpo.append(ferramentas, digitando, conteudo, midias, seguindo, acoes);
     li.append(avatar, corpo);
     li.setAttribute('aria-busy', 'true');
     adicionar(li, true);
@@ -129,11 +134,26 @@
         digitando.hidden = true;
         if (!agendado) { agendado = true; requestAnimationFrame(desenhar); }
       },
-      /** Fim: o texto final (quando nada chegou aos pedaços), uma nota (parada) ou um erro. */
-      fim({ final = '', nota = '', erro = '' } = {}) {
+      /** v0.52.0: o texto inteiro de uma vez (o andamento visto ao voltar para a página). */
+      substituir(t) {
+        if (t === texto) return;
+        texto = String(t || '');
+        digitando.hidden = Boolean(texto);
+        if (!agendado) { agendado = true; requestAnimationFrame(desenhar); }
+      },
+      /** v0.52.0: modo até terminar — ele parou sem terminar e segue sozinho. */
+      continuando(n) {
+        seguindo.hidden = false;
+        seguindo.textContent = `Ainda não terminou: continuando sozinho (${n})…`;
+        rolar();
+      },
+      /** Fim: o texto final (quando nada chegou aos pedaços), uma nota (parada), um erro ou o selo do modo até terminar. */
+      fim({ final = '', nota = '', erro = '', selo = '' } = {}) {
         if (!texto && final) texto = final;
         digitando.hidden = true;
+        seguindo.hidden = true;
         desenhar();
+        if (selo) corpo.insertBefore(criar('p', selo.startsWith('✓') ? 'selo selo-ok' : 'selo', selo), acoes);
         if (nota) corpo.insertBefore(criar('p', 'nota-msg', nota), acoes);
         if (erro) corpo.insertBefore(criar('p', 'erro-msg', erro), acoes);
         acoes.hidden = !texto;
@@ -224,6 +244,7 @@
     const prontos = anexos.filter((a) => a.estado === 'pronto');
     if ((!texto && !prontos.length) || ocupado) return;
     if (!token) { semChave(); return; }
+    if (cartaoDaChave) { anunciar('Cole a chave da API do Gemini primeiro.'); focarChave(); return; }
     marcarOcupado(true);
     // o histórico entra primeiro: se a mensagem fosse antes, ela voltaria junto com o histórico e apareceria duas vezes
     await pronto;
@@ -235,8 +256,9 @@
     let final = '';
     let interrompida = false;
     let erro = '';
+    let selo = '';
     try {
-      const res = await api('/api/conversa', { texto, ...(prontos.length ? { anexos: prontos.map((a) => a.id) } : {}) });
+      const res = await api('/api/conversa', { texto, ...(prontos.length ? { anexos: prontos.map((a) => a.id) } : {}), ...(ateTerminar ? { ateTerminar: true } : {}) });
       if (!res.ok) {
         const e = await res.json().catch(() => ({}));
         throw new Error(e.erro || `HTTP ${res.status}`);
@@ -260,10 +282,17 @@
         } else if (ev.tipo === 'midia') {
           segmento().midia(ev);
           anunciar(`Pronto: ${ev.nome}`);
+        } else if (ev.tipo === 'continuando') {
+          segmento().continuando(ev.n);
+          if (!parando) anunciar(`Continuando sozinho (${ev.n})…`);
         } else if (ev.tipo === 'resposta') {
           final = ev.texto || '';
           interrompida = Boolean(ev.interrompido);
-        } else if (ev.tipo === 'erro') erro = ev.texto || 'Erro.';
+          selo = G.seloDoFim(ev.fim);
+        } else if (ev.tipo === 'erro') {
+          erro = ev.texto || 'Erro.';
+          if (ev.chave) pedirChave('O Gemini recusou a chave (ou ela falta): cole a sua');
+        }
       }
     } catch (e) {
       erro = `Não consegui falar com o agente: ${e.message}`;
@@ -271,7 +300,7 @@
     fecharPerguntas(interrompida ? 'Parado: contou como "não".' : 'A conversa terminou: contou como "não".');
     const nota = interrompida ? 'Você parou a resposta.' : '';
     const m = atual || ((final && !interrompida) || nota || erro ? msgAgente() : null);
-    if (m) m.fim({ final: interrompida ? '' : final, nota, erro });
+    if (m) m.fim({ final: interrompida ? '' : final, nota, erro, selo: interrompida ? '' : selo });
     parando = false;
     marcarOcupado(false);
     anunciar(erro ? 'Algo deu errado.' : interrompida ? 'Resposta parada.' : 'Resposta pronta.');
@@ -285,6 +314,55 @@
     elEnviar.disabled = true;
     elNova.disabled = true;
     elAnexar.disabled = true;
+    elAte.disabled = true;
+  }
+
+  // ---------------------------------------------------------------------------
+  // v0.52.0: a chave da API do Gemini (o site só precisa dela)
+  // ---------------------------------------------------------------------------
+  let cartaoDaChave = null;
+  const focarChave = () => { const c = cartaoDaChave && cartaoDaChave.querySelector('input'); if (c) c.focus(); };
+  function pedirChave(motivo) {
+    if (cartaoDaChave) { focarChave(); return; }
+    const li = criar('li', 'msg msg-chave');
+    li.append(G.cartaoChave(api, {
+      motivo,
+      aoSalvar: () => {
+        anunciar('Chave salva. Pode conversar.');
+        setTimeout(() => { li.remove(); atualizarVazio(); }, 2500);
+        cartaoDaChave = null;
+        if (ponteiroFino) elTexto.focus({ preventScroll: true });
+      },
+    }));
+    cartaoDaChave = li;
+    adicionar(li, true);
+    focarChave();
+  }
+
+  // ---------------------------------------------------------------------------
+  // v0.52.0: modo até terminar (o botão do topo; fica lembrado nesta aba)
+  // ---------------------------------------------------------------------------
+  let ateTerminar = false;
+  function marcarAte(ligado, { lembrar = true } = {}) {
+    ateTerminar = Boolean(ligado);
+    elAte.setAttribute('aria-pressed', String(ateTerminar));
+    if (lembrar) { try { sessionStorage.setItem('gc-ate-terminar', ateTerminar ? '1' : '0'); } catch { /* sem armazenamento */ } }
+  }
+  elAte.addEventListener('click', () => {
+    marcarAte(!ateTerminar);
+    anunciar(ateTerminar ? 'Modo até terminar ligado: o agente continua sozinho até a tarefa estar feita (você ainda pode parar).' : 'Modo até terminar desligado.');
+  });
+
+  /** v0.52.0: as sugestões do aliado no lugar das da página (como texto, cada uma um botão). */
+  function trocarSugestoes(lista) {
+    const caixa = document.querySelector('.sugestoes');
+    if (!caixa) return;
+    caixa.replaceChildren(...lista.slice(0, 4).map((t) => {
+      const b = criar('button', 'sugestao', String(t));
+      b.type = 'button';
+      b.addEventListener('click', () => enviar(b.textContent));
+      return b;
+    }));
   }
 
   /**
@@ -300,6 +378,10 @@
       d = await r.json();
     } catch { return; /* sem conexão: a página segue vazia */ }
     if (d.aliado) elSubtitulo.textContent = `Chat com o aliado "${d.aliado}"`;
+    if (Array.isArray(d.sugestoes) && d.sugestoes.length) trocarSugestoes(d.sugestoes);
+    let lembrado = null;
+    try { lembrado = sessionStorage.getItem('gc-ate-terminar'); } catch { /* sem armazenamento */ }
+    marcarAte(lembrado === null ? d.ateTerminarPadrao === true : lembrado === '1', { lembrar: false });
     if (substituir) elLista.replaceChildren();
     const depois = elLista.firstChild;
     const inicio = elLista.childElementCount;
@@ -315,23 +397,42 @@
     if (depois) for (const n of [...elLista.children].slice(inicio)) elLista.insertBefore(n, depois);
     atualizarVazio();
     rolar(true);
+    if (d.chave && d.chave.precisa) pedirChave();
     // ocupada com outra resposta (de outra aba, ou de antes de recarregar): espera terminar. A nossa, não.
     if (d.ocupado && !esperando && !ocupado) esperarLivre();
   }
 
-  // a página recarregou no meio de uma resposta: o servidor já mandou parar; espera terminar e mostra a conversa
+  // A página recarregou no meio de uma resposta. Normalmente o servidor já mandou parar: espera terminar e mostra a
+  // conversa. v0.52.0: no modo até terminar ele segue — aqui aparece o andamento (texto, ferramentas, mídias) e as
+  // perguntas que esperavam por você; sem limite de tempo (a pessoa pode parar pelo botão).
   async function esperarLivre() {
     esperando = true;
     marcarOcupado(true);
     const nota = aviso('Terminando a resposta anterior…');
-    for (let n = 0; n < 120; n++) {
+    let vivo = null;
+    const vistas = new Set();
+    const perguntasVistas = new Set();
+    for (let n = 0; ; n++) {
       await new Promise((r) => setTimeout(r, 1500));
+      let d = null;
       try {
         const r = await api('/api/historico', {});
-        if (r.ok && !(await r.json()).ocupado) break;
+        if (r.ok) d = await r.json();
       } catch { /* tenta de novo */ }
+      if (d && !d.ocupado) break;
+      if (!d) { if (n > 400) break; continue; }
+      if (d.andamento && d.andamento.ateTerminar) {
+        nota.textContent = 'O agente continua trabalhando (modo até terminar)…';
+        if (!vivo) vivo = msgAgente();
+        vivo.substituir(d.andamento.texto || '');
+        for (const f of d.andamento.ferramentas || []) vivo.ferramenta(f);
+        for (const m of d.andamento.midias || []) if (!vistas.has(m.id)) { vistas.add(m.id); vivo.midia(m); }
+        if (d.andamento.continuacoes) vivo.continuando(d.andamento.continuacoes);
+      } else if (n > 120) break; // fora do modo até terminar, a resposta antiga já foi parada
+      for (const p of d.perguntas || []) if (!perguntasVistas.has(p.id)) { perguntasVistas.add(p.id); cartaoPergunta(p); }
     }
     nota.remove();
+    if (vivo) vivo.li.remove();
     parando = false;
     marcarOcupado(false);
     esperando = false;

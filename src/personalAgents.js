@@ -67,6 +67,9 @@ const PRESETS = Object.freeze({
   computador: Object.freeze(['computador', 'imagem', 'browser', 'web_fetch']),
   // v0.47.0: a central — computador, celular/TV, sites e redes sociais na mesma conversa (cada ação com a confirmação dela)
   central: Object.freeze(['computador', 'adb', 'browser', 'redes', 'desafio', 'imagem', 'web_fetch']),
+  // v0.52.0: o treinador de futebol — treinos, semana até o jogo, carga e prancheta; cortar os lances do vídeo do jogo,
+  // criar artes, desafios do time e a web para estudar o adversário
+  futebol: Object.freeze(['futebol', 'video', 'imagem', 'desafio', 'web_fetch']),
   completo: null,
 });
 const PRESET_PADRAO = 'pesquisa';
