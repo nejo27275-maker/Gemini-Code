@@ -232,8 +232,10 @@ test('publicar nas 8 redes AO MESMO TEMPO: cada pedido no formato da API oficial
     const res = await redes.publicar(plano, { store, cliente: clienteDe(f.base) });
     const duracao = Date.now() - inicio;
     assert.deepEqual(res.map((r) => [r.rede, r.ok]), plano.itens.map((i) => [i.rede, true]), JSON.stringify(res));
-    assert.ok(f.max() >= 5, `deveriam ficar várias abertas juntas (máx ${f.max()})`);
-    assert.ok(duracao < ATRASO * 4, `em paralelo deveria levar ~${ATRASO} ms, levou ${duracao}`);
+    // v0.50.1: a prova de "ao mesmo tempo" é o servidor ver o pedido de TODAS as redes aberto junto (em sequência,
+    // seria 1 por vez). O tempo de relógio dependia da carga da máquina: com testes pesados de vídeo rodando ao lado,
+    // passava de 600 ms (medido: 222 ms folgada, até 696 ms sobrecarregada; o máximo de abertos foi 7 nos dois casos).
+    assert.ok(f.max() >= plano.itens.length, `as ${plano.itens.length} redes deveriam ficar abertas juntas (máx ${f.max()}, ${duracao} ms)`);
     const url = Object.fromEntries(res.map((r) => [r.rede, r.url]));
     assert.equal(url.bluesky, 'https://bsky.app/profile/maria.bsky.social/post/3kxyz');
     assert.equal(url.mastodon, 'https://masto.example/@maria/1');

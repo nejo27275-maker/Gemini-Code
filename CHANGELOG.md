@@ -45,6 +45,17 @@ verdade e com estresse. Um bug real apareceu, junto com dois acabamentos.
 - Os de HDR, do espaço e da prévia falham no código anterior (conferido). Os do vídeo em pé e dos caminhos passam
   também nele: medem o que já funcionava.
 
+**Achado ao rodar a suíte inteira:** o teste "publicar nas 8 redes AO MESMO TEMPO" falhou uma vez ("levou 642 ms").
+- **A causa:** ele provava o paralelismo pelo tempo de relógio (menos de 600 ms). Com os testes de vídeo novos, que usam
+  muito processador, rodando ao lado, a máquina fica carregada.
+- **Medido:**
+  - com a máquina folgada, 222 a 243 ms;
+  - com 8 processos gastando CPU, até 696 ms;
+  - em ambos os casos, as 7 redes ficaram com o pedido aberto ao mesmo tempo.
+- **Agora:** o teste prova o "ao mesmo tempo" pelo servidor falso: todas as redes do plano abertas juntas, o que é mais
+  forte que o "pelo menos 5" de antes e não depende da carga.
+- **Conferido:** com a publicação trocada de propósito por uma em sequência, o teste falha ("máx 1, 1198 ms").
+
 ## 0.50.0 — editar como um profissional: código, vídeo e foto
 
 Base: a 0.49.3 (no PR [#7](https://github.com/nejo27275-maker/Gemini-Code/pull/7)). Pedido: "faça ele editar feito um

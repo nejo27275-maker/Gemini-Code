@@ -13,3 +13,8 @@
   - caminhos com `'`, `:`, `,`, `[`, `]` no ffmpeg;
   - vídeo de celular gravado em pé.
 - **Testes:** +8 (3 de código, 4 de vídeo, 1 de foto). Os de HDR, do espaço e da prévia falham no código anterior.
+- **Teste das redes que dependia da carga da máquina:**
+  - **Antes:** provava o paralelismo pelo tempo de relógio, e falhou uma vez com os testes de vídeo pesados rodando ao
+    lado.
+  - **Agora:** prova pelo servidor falso: as 7 redes com o pedido aberto ao mesmo tempo. Medido igual com a máquina
+    folgada e sobrecarregada. Com a publicação em sequência, o teste falha.
