@@ -50,6 +50,28 @@ verdade e medi o resultado.
   Os 3 falham no código anterior (conferido).
 - `site.test.js` (+1): contraste de todos os pares de texto e fundo do chat, nos temas claro e escuro. Falha com o azul
   antigo.
+- Suíte inteira: 1008 testes (1007 passando, 1 pulado como root) no Node 22, no Node 20 e no fuso de São Paulo. ESLint 0
+  problemas.
+
+**Achado no CI deste PR** (commit ee0ae20; corrigido no commit seguinte):
+- **O que aconteceu:** o Node 24 passou, mas no Node 20 e no 22 o passo dos testes ficou parado até o limite de 15 min e
+  foi cancelado.
+- **A causa** é uma corrida entre arquivos de teste, latente desde a v0.48.0:
+  - O teste do print do navegador conta as pastas de perfil `gemini-code-navegador-*` no /tmp antes e depois de abrir o
+    navegador.
+  - O `site.test.js` também abre o navegador de verdade e roda em paralelo. Quando os dois coincidiam, a conta dava 2
+    em vez de 1.
+  - Esse teste era o único que não fechava o navegador ao falhar. O Chrome aberto segurava o arquivo de teste para sempre.
+  - O arquivo de teste novo mudou a ordem em que o `node --test` distribui os arquivos, e os dois passaram a coincidir.
+- **Reproduzido aqui** com um "intruso" criando perfis no /tmp: a mesma falha (`2 !== 1`), o teste pendurado e um Chrome
+  órfão.
+- **Agora:**
+  - o `navegador.test.js` usa uma pasta temporária só dele;
+  - o teste do print fecha o navegador mesmo quando falha.
+- **Conferido:**
+  - com o intruso, o teste passa;
+  - com uma falha forçada, o arquivo termina sozinho em 6 s, sem Chrome sobrando;
+  - `navegador.test.js` e `site.test.js` juntos: 5 rodadas, 34/34 em todas.
 
 ## 0.49.2 — o "você>" à prova de dedo e a pasta do usuário sempre certa
 

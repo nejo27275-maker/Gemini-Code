@@ -10,9 +10,15 @@ const net = require('net');
 const HOME_FALSO = fs.mkdtempSync(path.join(os.tmpdir(), 'gemini-code-teste-nav-'));
 process.env.HOME = HOME_FALSO;
 process.env.USERPROFILE = HOME_FALSO;
+// v0.49.3: uma pasta temporária só deste arquivo (os.tmpdir() lê o TMPDIR). O site.test.js também abre o navegador de
+// verdade e roda em paralelo (node --test): no /tmp compartilhado, a conta dos perfis "gemini-code-navegador-*" pegava
+// o perfil dele, e o teste do print falhava no CI.
+const TMP_PROPRIO = fs.mkdtempSync(path.join(os.tmpdir(), 'gemini-code-teste-nav-tmp-'));
+process.env.TMPDIR = TMP_PROPRIO;
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+test.after(() => fs.rmSync(TMP_PROPRIO, { recursive: true, force: true, maxRetries: 3 }));
 const { criarProxy, acharNavegador, explicarFalha, Navegador } = require('../src/navegador');
 const { criarFerramenta, chaveAprovacao, declarations } = require('../src/tools/browserTools');
 const permissions = require('../src/permissions');
@@ -268,7 +274,9 @@ test('navegador real: print só cria .png novo fora das áreas protegidas; fecha
   const { srv } = site();
   const porta = await escutar(srv);
   const f = criarFerramenta({ ask: async () => 's', loadConfig: () => ({ navegadorPermitirLocal: true }) });
-  t.after(() => srv.close());
+  // v0.49.3: fecha o navegador mesmo se o teste falhar no meio (o Chrome aberto segurava o arquivo de teste para sempre)
+  t.after(async () => { await f.encerrar(); srv.close(); });
+  assert.equal(os.tmpdir(), TMP_PROPRIO, 'os perfis vão para a pasta temporária só deste arquivo');
   const perfis = () => fs.readdirSync(os.tmpdir()).filter((n) => n.startsWith('gemini-code-navegador-'));
   const antes = perfis();
   await f.execute('browser', { acao: 'abrir', url: `http://127.0.0.1:${porta}/` });

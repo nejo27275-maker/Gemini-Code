@@ -17,3 +17,10 @@
   - `pastaDoUsuario.test.js` (novo, 3);
   - `site.test.js` (+1, contraste);
   - todos falham no código anterior (conferido).
+- **Achado no CI (commit ee0ae20):** no Node 20 e no 22, o passo dos testes ficou parado até ser cancelado.
+  - **Causa:** uma corrida entre o `navegador.test.js` e o `site.test.js`, que abrem o navegador em paralelo e
+    compartilhavam o /tmp. O teste que falhava não fechava o Chrome, e o arquivo ficava pendurado.
+  - **Correção:** o `navegador.test.js` usa uma pasta temporária só dele, e o teste do print sempre fecha o navegador.
+    Reproduzido antes e conferido depois.
+- **Suíte inteira:** 1008 testes no Node 22, no 20 e no fuso de São Paulo (1007 passando, 1 pulado como root). ESLint 0
+  problemas.
