@@ -18,3 +18,5 @@
     lado.
   - **Agora:** prova pelo servidor falso: as 7 redes com o pedido aberto ao mesmo tempo. Medido igual com a máquina
     folgada e sobrecarregada. Com a publicação em sequência, o teste falha.
+- **Suíte inteira:** 1057 no Node 22, no 20 e no fuso de São Paulo (1056 passando, 1 pulado como root).
+- **CI do PR #7 (commit 4b93c8a):** 1057/1057 nos Node 20, 22 e 24, nenhum pulado.

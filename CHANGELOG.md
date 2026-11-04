@@ -55,6 +55,12 @@ verdade e com estresse. Um bug real apareceu, junto com dois acabamentos.
 - **Agora:** o teste prova o "ao mesmo tempo" pelo servidor falso: todas as redes do plano abertas juntas, o que é mais
   forte que o "pelo menos 5" de antes e não depende da carga.
 - **Conferido:** com a publicação trocada de propósito por uma em sequência, o teste falha ("máx 1, 1198 ms").
+- **Com a máquina sobrecarregada:** passou 5 de 5 vezes.
+
+**Suíte inteira:** 1057 testes (1056 passando, 1 pulado como root) no Node 22, no Node 20 e no fuso de São Paulo.
+ESLint 0 problemas.
+
+**CI do PR #7 (commit 4b93c8a):** 1057/1057 nos Node 20, 22 e 24, nenhum pulado.
 
 ## 0.50.0 — editar como um profissional: código, vídeo e foto
 
