@@ -30,6 +30,7 @@
 - **Suíte inteira:** 1082 testes no Node 22, no 20 e no fuso de São Paulo (1081 passando, 1 pulado como root).
   Depois do último ajuste, os 6 arquivos de teste da mídia e do modo site rodaram de novo nos três: 79/79.
 - **Checagens:** ESLint com 0 problemas, varredura de segredos limpa e autoteste das avaliações 7/7.
+- **CI do PR #7 (commit 9e9af10):** 1082/1082 nos Node 20, 22 e 24, nenhum pulado.
 - **Demonstração:**
   - **Material:** foto e vídeo desenhados aqui (sem internet).
   - **De verdade:** a edição, o envio e a página, num Chromium com a tela de um Pixel 7.

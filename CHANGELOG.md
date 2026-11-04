@@ -58,6 +58,12 @@ modelo de IA.
   Pixel 7.
 - **Roteiro:** o texto das respostas do agente.
 
+**Verificado:**
+- **Local:** 1082 testes no Node 22, no 20 e no fuso de São Paulo (1 pulado como root).
+- **CI do PR #7** (commit `9e9af10`, [execução](https://github.com/nejo27275-maker/Gemini-Code/actions/runs/41914679928)):
+  1082/1082 nos Node 20, 22 e 24, nenhum pulado.
+- **Checagens:** ESLint com 0 problemas, varredura de segredos limpa e autoteste das avaliações 7/7.
+
 **Limites:**
 - O navegador de um celular de verdade não foi testado.
 - Foto HEIC ainda não é aceita: no iPhone, use "Mais Compatível".
