@@ -87,9 +87,11 @@ Base: a 0.51.0 (no PR [#7](https://github.com/nejo27275-maker/Gemini-Code/pull/7
 - 12 da chave, das sugestões do aliado e do modo até terminar no site;
 - 10 do modo até terminar;
 - 4 de criar imagem.
-- No Chromium de verdade: o cartão da chave e o botão "Até terminar".
-- Num pseudo-terminal de verdade: o `/ate-terminar`.
-- Com o ImageMagick de verdade: a prancheta, conferida pelos pixels.
+
+Em ambiente de verdade:
+- no Chromium: o cartão da chave, as sugestões do aliado e o botão "Até terminar";
+- num pseudo-terminal: o `/ate-terminar`;
+- com o ImageMagick: a prancheta, conferida pelos pixels.
 
 **Limites honestos:** este ambiente não tem internet nem modelo de IA.
 - **Testado aqui,** com um Gemini falso: a conversa, a chave e o modo até terminar.
