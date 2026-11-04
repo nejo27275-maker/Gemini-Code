@@ -72,6 +72,8 @@ verdade e medi o resultado.
   - com o intruso, o teste passa;
   - com uma falha forçada, o arquivo termina sozinho em 6 s, sem Chrome sobrando;
   - `navegador.test.js` e `site.test.js` juntos: 5 rodadas, 34/34 em todas.
+- **CI do PR #7 (commit 2a7de2a):** 1008/1008 nos Node 20, 22 e 24, nenhum pulado. O passo dos testes levou de 39 a 42 s,
+  sem processo órfão na limpeza. ESLint e varredura de segredos limpos.
 
 ## 0.49.2 — o "você>" à prova de dedo e a pasta do usuário sempre certa
 

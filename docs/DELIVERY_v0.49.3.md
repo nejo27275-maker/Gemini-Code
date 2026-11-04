@@ -24,3 +24,4 @@
     Reproduzido antes e conferido depois.
 - **Suíte inteira:** 1008 testes no Node 22, no 20 e no fuso de São Paulo (1007 passando, 1 pulado como root). ESLint 0
   problemas.
+- **CI do PR #7 (commit 2a7de2a):** 1008/1008 nos Node 20, 22 e 24, nenhum pulado.
