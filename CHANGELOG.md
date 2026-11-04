@@ -82,7 +82,10 @@ profissional" — código e também vídeo e foto (a pessoa escolheu "os dois").
   - o CRLF agora edita, em vez de recusar;
   - os testes do `rewind` leem o arquivo antes de sobrescrever;
   - as contagens de linha do `edit_files` agora ignoram o diff.
-- Suíte inteira: 1049 testes (1048 passando, 1 pulado como root) no Node 22. ESLint 0 problemas.
+- Suíte inteira: 1049 testes (1048 passando, 1 pulado como root) no Node 22, no Node 20 e no fuso de São Paulo. ESLint
+  0 problemas.
+- **CI do PR #7 (commit 8bc5cb2):** 1049/1049 nos Node 20, 22 e 24, nenhum pulado; ffmpeg e ImageMagick de verdade. O
+  passo dos testes levou de 55 a 61 s.
 
 ## 0.49.3 — caça aos bugs: a pasta do usuário em todo lugar e o contraste do chat
 

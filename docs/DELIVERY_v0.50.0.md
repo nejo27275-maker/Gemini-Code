@@ -21,5 +21,7 @@
 - **Testes:**
   - 3 arquivos novos, com 41 testes, rodando com ffmpeg e ImageMagick de verdade;
   - 13 testes de código falham no código anterior.
-- **Suíte inteira:** 1049 no Node 22 (1048 passando, 1 pulado como root). ESLint 0 problemas.
+- **Suíte inteira:** 1049 no Node 22, no 20 e no fuso de São Paulo (1048 passando, 1 pulado como root). ESLint 0
+  problemas.
+- **CI do PR #7 (commit 8bc5cb2):** 1049/1049 nos Node 20, 22 e 24, nenhum pulado.
 - **Guia:** `docs/EDICAO.md`.
