@@ -129,7 +129,7 @@ async function executeVideo(a) {
     const i = await deps.videoEdicao().info(a.arquivo);
     if (!i.largura) return `Erro: não achei imagem em ${a.arquivo} (é só áudio?).`;
     const dur = i.duracao ? `${Math.floor(i.duracao / 60)}:${String(Math.round(i.duracao % 60)).padStart(2, '0')}` : 'duração desconhecida';
-    return `${rel(i.arquivo)}: ${dur}, ${i.largura}x${i.altura}${i.fps ? `, ${i.fps} fps` : ''}, ${i.temAudio ? 'com áudio' : 'sem áudio'}${i.rotacao ? `, gravado girado ${i.rotacao}°` : ''}.`;
+    return `${rel(i.arquivo)}: ${dur}, ${i.largura}x${i.altura}${i.fps ? `, ${i.fps} fps` : ''}, ${i.temAudio ? 'com áudio' : 'sem áudio'}${i.rotacao ? `, gravado girado ${i.rotacao}°` : ''}${i.hdr ? `, HDR (${i.hdr.toUpperCase()}; "editar" converte para cores normais)` : ''}.`;
   }
   const base = acao === 'juntar' ? path.join(process.cwd(), 'juntado.mp4') : (typeof a.arquivo === 'string' && a.arquivo ? a.arquivo : path.join(process.cwd(), 'video.mp4'));
   const recusa = await confirmarForaDaArea([path.resolve(a.saida || base)]);

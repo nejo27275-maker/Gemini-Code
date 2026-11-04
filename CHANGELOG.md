@@ -1,3 +1,50 @@
+## 0.50.1 — acabamento para vídeo de celular e a edição posta à prova
+
+Base: a 0.50.0 (no PR [#7](https://github.com/nejo27275-maker/Gemini-Code/pull/7)). Testei a edição nova com casos de
+verdade e com estresse. Um bug real apareceu, junto com dois acabamentos.
+
+**Corrigido:**
+- **Vídeo HDR saía com as cores erradas.** iPhone e celular top de linha gravam em HDR (HLG, 10 bits). Reproduzido com
+  um vídeo HLG: a saída era H.264 de 8 bits ainda marcada como HDR, e no Instagram/WhatsApp as cores ficam desbotadas.
+  - Agora `editar`, `juntar` e `capa` convertem para cores normais (SDR BT.709) com `zscale` + `tonemap`, para HLG e
+    para PQ (HDR10). Conferi olhando o quadro: as cores saíram vivas.
+  - O `info` mostra quando o vídeo é HDR.
+  - Num ffmpeg sem `zscale`, o resultado avisa que as cores podem ficar desbotadas.
+- **Espaço do fim da linha na edição tolerante.** Quando o `old_text` começa (ou termina) com o espaço do fim de uma
+  linha, a troca agora leva junto o espaço que o arquivo tem ali. Antes, sobrava um tab colado no texto novo. Fora do
+  trecho, nada mudava.
+- **A prévia do `/passo` mostra o diff de verdade,** com números de linha, no `edit_file` e no `write_file` (antes, as
+  primeiras linhas do conteúdo novo).
+  - Ela nunca lê um arquivo de segredo do gemini-code: nele, mostra só o texto pedido, como antes.
+
+**Procurado e não achado (medido):**
+- **Motor de edição:** 100.000 edições sorteadas (CRLF, espaços no fim, trechos parecidos, `replace_all`), 0 quebras das
+  invariantes:
+  - a troca exata é igual à troca ingênua;
+  - a troca tolerante não muda nada fora do trecho;
+  - a contagem do diff bate com a diferença de linhas.
+- **Escape do texto para o ImageMagick:** 20.000 textos sorteados (`%w`, `%[fx:...]`, `@/etc/hostname`, `\`, aspas,
+  emoji) saíram exatamente iguais no `-print` do próprio ImageMagick. A única diferença é o espaço do começo, que o
+  ImageMagick tira até sem escape, e os textos já chegam aparados.
+- **Escape dos filtros do ffmpeg:** a pasta temporária e os arquivos num caminho com `'`, `:`, `,`, `[`, `]`, `;`, `=`,
+  `%` e acentos. O texto e a legenda saíram certos (conferido olhando o quadro), e a pasta temporária ficou limpa.
+- **Vídeo de celular gravado em pé** (rotação 90° no arquivo): sai 360x640, em pé e sem distorcer (conferido olhando o
+  quadro).
+
+**Testes:**
+- +3 em `edicaoProfissional.test.js`:
+  - o espaço do fim de linha;
+  - um estresse determinístico de 3.000 edições;
+  - a prévia do `/passo`, inclusive o segredo.
+- +4 em `videoEdicao.test.js`:
+  - HDR no plano;
+  - HDR de verdade no editar/juntar/capa;
+  - celular em pé;
+  - caminhos estranhos.
+- +1 em `imagemEdicao.test.js`: 500 textos no `-print` de verdade.
+- Os de HDR, do espaço e da prévia falham no código anterior (conferido). Os do vídeo em pé e dos caminhos passam
+  também nele: medem o que já funcionava.
+
 ## 0.50.0 — editar como um profissional: código, vídeo e foto
 
 Base: a 0.49.3 (no PR [#7](https://github.com/nejo27275-maker/Gemini-Code/pull/7)). Pedido: "faça ele editar feito um

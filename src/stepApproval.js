@@ -27,6 +27,28 @@ function cortar(texto, rotulo) {
   return mostra.join('\n');
 }
 
+/**
+ * v0.50.1: o diff de verdade (com números de linha) do que a edição faria no arquivo, para aprovar vendo o que muda.
+ * null quando não dá: arquivo novo, segredo do gemini-code (a prévia nunca mostra o conteúdo dele), grande, binário,
+ * não UTF-8 ou trecho não encontrado (aí vale a prévia antiga, só com o texto pedido).
+ */
+const MAX_BYTES_PREVIA = 2 * 1024 * 1024;
+function textoDoArquivo(alvo) {
+  try {
+    const p = path.resolve(alvo);
+    if (require('./tools/protectedPaths').isSecret(p)) return null;
+    const st = fs.statSync(p);
+    if (!st.isFile() || st.size > MAX_BYTES_PREVIA) return null;
+    const buf = fs.readFileSync(p);
+    if (buf.subarray(0, 8000).includes(0)) return null;
+    const texto = buf.toString('utf8');
+    return Buffer.from(texto, 'utf8').equals(buf) ? texto : null;
+  } catch { return null; }
+}
+function diffPrevio(antes, depois) {
+  try { return require('./tools/edicao').resumoDiff(antes, depois, { maxLinhas: MAX_LINHAS + 4 }); } catch { return null; }
+}
+
 /** Texto da prévia mostrada ao usuário. Nunca lança. */
 function previa(nome, args = {}) {
   try {
@@ -38,6 +60,13 @@ function previa(nome, args = {}) {
     }
     const alvo = String(args.path || '(sem caminho)');
     if (nome === 'edit_file') {
+      const atual = args.path ? textoDoArquivo(alvo) : null;
+      if (atual !== null && typeof args.old_text === 'string' && args.old_text && typeof args.new_text === 'string') {
+        const edicao = { old_text: args.old_text, new_text: args.new_text, ...(typeof args.replace_all === 'boolean' ? { replace_all: args.replace_all } : {}) };
+        const r = require('./tools/multiEditTools').aplicarEdicoes(atual, [edicao]);
+        const d = r.ok ? diffPrevio(atual, r.conteudo) : null;
+        if (d && d.texto) return `edit_file ${alvo} (+${d.mais} -${d.menos} linhas)\n${d.texto}`;
+      }
       return `edit_file ${alvo}\n${cortar(args.old_text ?? '', '-')}\n${cortar(args.new_text ?? '', '+')}`;
     }
     const conteudo = typeof args.content === 'string' ? args.content : '';
@@ -45,6 +74,10 @@ function previa(nome, args = {}) {
     let existe = false; let linhasAntes = 0;
     try { const st = fs.statSync(path.resolve(alvo)); if (st.isFile()) { existe = true; linhasAntes = fs.readFileSync(path.resolve(alvo), 'utf8').split('\n').length; } } catch { /* novo */ }
     const cab = existe ? `write_file ${alvo} — SOBRESCREVE (${linhasAntes} → ${linhasNovas} linhas)` : `write_file ${alvo} — arquivo NOVO (${linhasNovas} linhas)`;
+    // sobrescrita: o que muda de verdade (o que sai e o que entra), não só o começo do conteúdo novo
+    const atual = existe ? textoDoArquivo(alvo) : null;
+    const d = atual !== null ? diffPrevio(atual, conteudo) : null;
+    if (d && d.texto) return `${cab}, +${d.mais} -${d.menos}\n${d.texto}`;
     return `${cab}\n${cortar(conteudo, '+')}`;
   } catch { return `${nome} (prévia indisponível)`; }
 }

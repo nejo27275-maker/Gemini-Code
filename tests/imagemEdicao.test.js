@@ -58,6 +58,21 @@ test('texto para o ImageMagick: % e \\ viram literais e um "@" no começo não l
   assert.equal(ie.textoMagick('siga @loja'), 'siga @loja', '@ no meio é texto normal');
 });
 
+test('texto para o ImageMagick (v0.50.1): 500 textos sorteados saem exatamente iguais no -print de verdade', { skip: pular }, () => {
+  // o -print interpreta o texto como o -annotate: nada de ler arquivo (@), expandir %w/%[fx:...] nem comer a barra
+  const PEDACOS = ['%', '%w', '%[fx:1+1]', '@', '@/etc/hostname', '\\', '\\n', "'", '"', '$(id)', '[', ']', ':', ';', 'a', 'ç', '😀', ' ', '&', '|'];
+  let semente = 3;
+  const r = () => { semente = (semente * 1103515245 + 12345) % 2147483648; return semente / 2147483648; };
+  const textos = Array.from({ length: 500 }, () => Array.from({ length: 1 + Math.floor(r() * 6) }, () => PEDACOS[Math.floor(r() * PEDACOS.length)]).join('').trim()).filter(Boolean);
+  for (let i = 0; i < textos.length; i += 100) {
+    const lote = textos.slice(i, i + 100);
+    const args = ['-size', '1x1', 'xc:white'];
+    for (const t of lote) args.push('-print', ie.textoMagick(t), '-print', '\u0001');
+    const saida = execFileSync(magick, [...args, 'null:'], { encoding: 'utf8' }).split('\u0001');
+    lote.forEach((t, k) => assert.equal(saida[k], t, `texto ${JSON.stringify(t)}`));
+  }
+});
+
 test('receita: padrões, apelidos e erros explicados', () => {
   const x = ie.normalizarReceita({});
   assert.equal(x.tirarLocalizacao, true, 'por padrão a localização sai');

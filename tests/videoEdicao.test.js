@@ -24,12 +24,12 @@ const CLI = path.join(__dirname, '..', 'bin', 'gemini-code.js');
 test.after(() => { for (const d of [HOME, PROJ]) fs.rmSync(d, { recursive: true, force: true }); });
 
 const lavfi = (args, saida) => execFileSync(ffmpeg, ['-hide_banner', '-loglevel', 'error', ...args, saida]);
+const p = (n) => path.join(PROJ, n);
 let entradas = null;
 /** Clipe 640x360 de 6 s com som, clipe 320x480 de 3 s sem som, música, logo e legenda (uma vez só). */
 function arquivos() {
   if (entradas) return entradas;
   assert.ok(ffmpeg, 'ffmpeg não encontrado (GEMINI_CODE_EXIGIR_MIDIA=1)');
-  const p = (n) => path.join(PROJ, n);
   lavfi(['-f', 'lavfi', '-i', 'testsrc2=duration=6:size=640x360:rate=30', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=6', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest'], p('clipe.mp4'));
   lavfi(['-f', 'lavfi', '-i', 'testsrc=duration=3:size=320x480:rate=25', '-c:v', 'libx264', '-pix_fmt', 'yuv420p'], p('mudo.mp4'));
   lavfi(['-f', 'lavfi', '-i', 'sine=frequency=220:duration=10'], p('musica.mp3'));
@@ -145,11 +145,27 @@ test('legenda: os tempos seguem o corte e a velocidade (SRT, VTT e ASS); nunca f
 
 test('info: lê duração, tamanho, áudio e a rotação do celular (troca largura e altura)', () => {
   const celular = 'Duration: 00:00:12.34, start: 0.000000, bitrate: 900 kb/s\n  Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(tv, bt709), 1920x1080, 900 kb/s, 29.97 fps\n    Side data:\n      displaymatrix: rotation of -90.00 degrees\n  Stream #0:1[0x2](und): Audio: aac (LC), 48000 Hz, stereo';
-  assert.deepEqual(ve.lerInfo(celular), { duracao: 12.34, largura: 1080, altura: 1920, fps: 29.97, temAudio: true, rotacao: -90 });
+  assert.deepEqual(ve.lerInfo(celular), { duracao: 12.34, largura: 1080, altura: 1920, fps: 29.97, temAudio: true, rotacao: -90, hdr: null });
   const semAudio = ve.lerInfo('Duration: N/A, bitrate: N/A\n  Stream #0:0: Video: mjpeg, yuvj420p, 640x480, 25 fps');
   assert.equal(semAudio.duracao, null);
   assert.equal(semAudio.temAudio, false);
   assert.deepEqual([semAudio.largura, semAudio.altura], [640, 480]);
+});
+
+test('HDR (v0.50.1): reconhece HLG e PQ; com o zscale converte para SDR, sem ele avisa', () => {
+  const linha = (curva) => `Duration: 00:00:02.00\n  Stream #0:0: Video: hevc (Main 10), yuv420p10le(tv, bt2020nc/bt2020/${curva}, progressive), 1920x1080, 30 fps`;
+  assert.equal(ve.lerInfo(linha('arib-std-b67')).hdr, 'hlg');
+  assert.equal(ve.lerInfo(linha('smpte2084')).hdr, 'pq');
+  assert.equal(ve.lerInfo('Stream #0:0: Video: h264, yuv420p(tv, bt709), 640x360, 30 fps').hdr, null);
+  const inf = { duracao: 2, largura: 1920, altura: 1080, temAudio: false, hdr: 'hlg' };
+  const com = ve.montarEdicao(inf, ve.normalizarReceita({}), { converterHdr: true });
+  assert.match(com.filtro, /^\[0:v\]zscale=tin=arib-std-b67:pin=bt2020:min=bt2020nc:t=linear.*tonemap=tonemap=hable.*zscale=t=bt709:m=bt709:r=tv,format=yuv420p/);
+  assert.match(com.passos.join(' '), /HDR \(HLG\) convertido para cores normais/);
+  const pq = ve.montarEdicao({ ...inf, hdr: 'pq' }, ve.normalizarReceita({}), { converterHdr: true });
+  assert.match(pq.filtro, /zscale=tin=smpte2084/);
+  const sem = ve.montarEdicao(inf, ve.normalizarReceita({}), { converterHdr: false });
+  assert.doesNotMatch(sem.filtro, /zscale/);
+  assert.match(sem.passos.join(' '), /ATENÇÃO: o vídeo é HDR \(HLG\).*zscale/);
 });
 
 test('argv do ffmpeg: toda entrada com -protocol_whitelist file e "file:", -n, saída "file:", e o texto fora da linha de comando', async () => {
@@ -235,6 +251,54 @@ test('capa, áudio e info de verdade', { skip: pular, timeout: 120000 }, async (
   const i = await ve.info(e.clipe);
   assert.deepEqual([i.largura, i.altura, i.temAudio], [640, 360, true]);
   perto(i.duracao, 6, 0.1, 'duração');
+});
+
+test('de verdade (v0.50.1): vídeo de celular gravado em pé (rotação no arquivo) sai em pé, sem distorcer', { skip: pular, timeout: 120000 }, async (t) => {
+  const e = arquivos();
+  const emPe = p('celular-em-pe.mp4');
+  const r = spawnSync(ffmpeg, ['-hide_banner', '-loglevel', 'error', '-display_rotation', '90', '-i', e.clipe, '-c', 'copy', emPe], { encoding: 'utf8' });
+  if (r.status !== 0) { t.skip(`este ffmpeg não tem -display_rotation: ${r.stderr.trim().slice(0, 120)}`); return; }
+  const i = await ve.info(emPe);
+  assert.deepEqual([i.largura, i.altura, i.rotacao], [360, 640, 90]);
+  const o = await ve.info((await ve.editar(emPe, { textos: ['Em pé'] }, { cwd: PROJ })).arquivo);
+  assert.deepEqual([o.largura, o.altura, o.rotacao], [360, 640, 0], 'girado de verdade, sem marca de rotação');
+});
+
+test('de verdade (v0.50.1): vídeo HDR (HLG, 10 bits) vira SDR BT.709 no editar, no juntar e na capa', { skip: pular, timeout: 240000 }, async (t) => {
+  const e = arquivos();
+  const enc = spawnSync(ffmpeg, ['-hide_banner', '-encoders'], { encoding: 'utf8' }).stdout;
+  if (!/\slibx265\s/.test(enc)) { t.skip('este ffmpeg não tem o libx265 para criar o vídeo HDR de teste'); return; }
+  const hdr = p('hdr.mp4');
+  lavfi(['-f', 'lavfi', '-i', 'testsrc2=duration=2:size=640x360:rate=30', '-vf', 'format=yuv420p10le', '-c:v', 'libx265', '-x265-params', 'log-level=error',
+    '-color_primaries', 'bt2020', '-color_trc', 'arib-std-b67', '-colorspace', 'bt2020nc'], hdr);
+  assert.equal((await ve.info(hdr)).hdr, 'hlg');
+  const descrever = (f) => spawnSync(ffmpeg, ['-hide_banner', '-i', f], { encoding: 'utf8' }).stderr.match(/Video: .*/)[0];
+  const r = await ve.editar(hdr, { formato: 'quadrado' }, { cwd: PROJ });
+  assert.match(r.passos.join(' '), /HDR \(HLG\) convertido/);
+  assert.match(descrever(r.arquivo), /yuv420p\(tv, bt709/, 'saiu em 8 bits e marcado como BT.709');
+  assert.equal((await ve.info(r.arquivo)).hdr, null);
+  const j = await ve.juntar([hdr, e.clipe], { cwd: PROJ });
+  assert.match(j.passos.join(' '), /clipes HDR convertidos/);
+  assert.match(descrever(j.arquivo), /bt709/);
+  assert.equal((await ve.capa(hdr, { cwd: PROJ })).hdrConvertido, true);
+});
+
+test('de verdade (v0.50.1): pasta temporária e arquivos com aspas, dois-pontos, vírgula e colchetes no caminho', { skip: pular || (process.platform === 'win32' && 'caminhos com dois-pontos não existem no Windows'), timeout: 120000 }, async () => {
+  const e = arquivos();
+  const estranha = p("tmp it's: a, [b]; c=d % ação");
+  const pasta = p("Minhas fotos (1) – cópia, it's [x]");
+  fs.mkdirSync(estranha, { recursive: true });
+  fs.mkdirSync(pasta, { recursive: true });
+  fs.copyFileSync(e.clipe, path.join(pasta, 'viagem: dia 1.mp4'));
+  fs.writeFileSync(path.join(pasta, 'falas [pt].srt'), "1\n00:00:00,500 --> 00:00:02,000\nCom: vírgula, [colchete] e 'aspas'\n");
+  const antes = process.env.TMPDIR;
+  process.env.TMPDIR = estranha; // os arquivos de texto e de legenda vão para cá: o caminho entra no filtro (escaparValor)
+  try {
+    const r = await ve.editar(path.join(pasta, 'viagem: dia 1.mp4'), { textos: ['Texto: com, tudo [junto]; e % e \\ fim'], legenda: path.join(pasta, 'falas [pt].srt'), formato: 'quadrado' }, { cwd: pasta });
+    assert.match(r.arquivo, /viagem: dia 1-editado\.mp4$/);
+    assert.deepEqual([(await ve.info(r.arquivo)).largura], [1080]);
+  } finally { if (antes === undefined) delete process.env.TMPDIR; else process.env.TMPDIR = antes; }
+  assert.deepEqual(fs.readdirSync(estranha), [], 'a pasta temporária ficou limpa');
 });
 
 test('ferramenta "video": editar, info e ação desconhecida', { skip: pular, timeout: 120000 }, async () => {

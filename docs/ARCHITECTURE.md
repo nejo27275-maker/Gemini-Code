@@ -91,6 +91,8 @@ documento é sobre como o código por trás disso está organizado.
   - **Vídeo:** `src/videoEdicao.js` (ffmpeg) monta a receita num filtro só (`montarEdicao`) e tem `juntar`, `capa`,
     `extrairAudio` e `info`.
   - **Foto:** `src/imagemEdicao.js` (ImageMagick) faz o "ajustar", com o texto escapado por `textoMagick`.
+- **v0.50.1** — o vídeo HDR (HLG/PQ) é convertido para SDR BT.709 (`cadeiaSdr`, `zscale` + `tonemap`) no editar,
+  no juntar e na capa; a prévia do `/passo` (`src/stepApproval.js`) mostra o diff de verdade, sem nunca ler um segredo.
 - **`src/routineRunner.js`** — executor das rotinas: `http-check` e, desde a v0.44.0,
   `agente` (o agente roda sozinho; `src/ui/prompt.js` responde "não" a toda confirmação).
 - Os provedores `llamacpp`, `ollama` e `openai` pedem **sempre** em streaming; o
@@ -248,7 +250,7 @@ extra). Cobertura atual:
 | versão chat (v0.49.0): páginas e CSP, histórico para a página (`paraExibicao`, `/api/historico`), Markdown seguro (blocos, links só http/https, HTML vira texto, texto hostil/enorme não trava) e o chat de ponta a ponta num Chromium de verdade; contraste WCAG AA de todos os pares de cor, nos temas claro e escuro (v0.49.3) | `site.test.js` |
 | `HOME` vazio (v0.49.3): a trava do `add-pasta-gravavel`, a pergunta antes de gravar `~/.bashrc` com o projeto na pasta do usuário e os checkpoints usam a pasta do usuário de verdade, não a pasta atual | `pastaDoUsuario.test.js` |
 | edição profissional de código (v0.50.0): motor (espaço no fim da linha, CRLF, trecho mais parecido, diff), `write_file` que não sobrescreve o que não leu nem o que mudou, CRLF/BOM mantidos, sintaxe conferida (JS/ESM, JSON/JSONC, Python, shell) sem rodar o código e sem um `python3`/`bash` plantado | `edicaoProfissional.test.js` |
-| edição profissional de vídeo (v0.50.0): tempos, corte, atempo, escape do filtergraph, receita, plano do ffmpeg, textos empilhados, legenda deslocada, info com rotação, argv seguro e, com o ffmpeg de verdade, editar (volume -14 LUFS medido), juntar, capa, áudio, ferramenta e terminal | `videoEdicao.test.js` |
+| edição profissional de vídeo (v0.50.0): tempos, corte, atempo, escape do filtergraph, receita, plano do ffmpeg, textos empilhados, legenda deslocada, info com rotação, argv seguro e, com o ffmpeg de verdade, editar (volume -14 LUFS medido), juntar, capa, áudio, ferramenta e terminal; v0.50.1: HDR (HLG/PQ) convertido para SDR, vídeo de celular em pé, caminhos com aspas/dois-pontos/colchetes | `videoEdicao.test.js` |
 | edição profissional de foto (v0.50.0): escape do texto para o ImageMagick, receita, argumentos e, com o ImageMagick de verdade, formato, textos, marca d'água, lote, EXIF retirado e foto girada endireitada, ferramenta e terminal | `imagemEdicao.test.js` |
 | "Parar": `runOnce` com signal (antes do modelo, durante a resposta, entre ferramentas; histórico consistente); provedores sem repetir, sem trocar de lado, sem reserva e sem ligar o llama.cpp depois do "Parar"; conexão cortada de verdade (v0.48.1) | `parar.test.js` |
 | hooks `UserPromptSubmit`, `SessionStart`, `Stop` | `hooksEventos.test.js` |

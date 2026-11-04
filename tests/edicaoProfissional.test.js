@@ -50,6 +50,51 @@ test('motor: acha o trecho quando a diferença é só espaço no fim das linhas 
   assert.match(duas.erro, /aparece 2 vezes \(sem contar os espaços/);
 });
 
+test('motor (v0.50.1): o trecho que começa ou termina com o espaço do fim de uma linha leva esse espaço junto', () => {
+  // antes, sobrava o "\t" do arquivo colado no texto novo ("a\t X")
+  assert.equal(aplicarUmaEdicao('a\t\nfoo\n', { old_text: ' \t\nfoo', new_text: ' X\nbar' }).texto, 'a X\nbar\n');
+  assert.equal(aplicarUmaEdicao('foo\t\nbar', { old_text: 'foo  ', new_text: 'X' }).texto, 'X\nbar');
+});
+
+test('motor: estresse com 3.000 edições sorteadas — a troca exata é a ingênua e nada muda fora do trecho trocado', () => {
+  let semente = 5;
+  const r = () => { semente = (semente * 1103515245 + 12345) % 2147483648; return semente / 2147483648; };
+  const escolhe = (l) => l[Math.floor(r() * l.length)];
+  const PEDACOS = ['a', 'foo', '{', '}', ';', ' ', '\t', 'x = 1', 'ç'];
+  const texto = () => {
+    const nl = r() < 0.3 ? '\r\n' : '\n';
+    return Array.from({ length: 1 + Math.floor(r() * 8) }, () => Array.from({ length: Math.floor(r() * 4) }, () => escolhe(PEDACOS)).join('') + (r() < 0.3 ? escolhe([' ', '\t']) : '')).join(nl) + nl;
+  };
+  const N2 = (s) => s.replace(/[ \t]+(?=\r?\n|$)/g, '');
+  for (let caso = 0; caso < 3000; caso++) {
+    const t = texto();
+    const i = Math.floor(r() * t.length);
+    let antigo = t.slice(i, i + 1 + Math.floor(r() * 15));
+    if (r() < 0.3) antigo = N2(antigo);
+    if (!antigo) continue;
+    const novo = texto().slice(0, 10);
+    const res = aplicarUmaEdicao(t, { old_text: antigo, new_text: novo });
+    if (!res.ok) continue;
+    if (!res.ajuste) {
+      assert.equal(res.texto, t.slice(0, t.indexOf(antigo)) + novo + t.slice(t.indexOf(antigo) + antigo.length), JSON.stringify({ t, antigo, novo }));
+      continue;
+    }
+    // res = t[0:de] + X + t[ate:], com o trecho trocado igual ao old_text sem contar os espaços nos fins de linha
+    const Xs = [novo, novo.replace(/\r?\n/g, '\r\n'), novo.replace(/\r\n/g, '\n')];
+    const As = [antigo, antigo.replace(/\r?\n/g, '\r\n'), antigo.replace(/\r\n/g, '\n')].map(N2);
+    let L = 0;
+    while (L < t.length && t[L] === res.texto[L]) L++;
+    let achou = false;
+    for (let de = 0; de <= L && !achou; de++) {
+      for (const X of Xs) {
+        const ate = t.length - (res.texto.length - de - X.length);
+        if (res.texto.slice(de, de + X.length) === X && ate >= de && t.slice(ate) === res.texto.slice(de + X.length) && As.includes(N2(t.slice(de, ate)))) { achou = true; break; }
+      }
+    }
+    assert.ok(achou, JSON.stringify({ t, antigo, novo, saiu: res.texto }));
+  }
+});
+
 test('motor: mantém o fim de linha do arquivo (CRLF com trecho em LF e o contrário)', () => {
   const crlf = aplicarUmaEdicao('um\r\ndois\r\ntrês\r\n', { old_text: 'um\ndois', new_text: 'UM\nDOIS' });
   assert.equal(crlf.texto, 'UM\r\nDOIS\r\ntrês\r\n');
@@ -248,6 +293,30 @@ test('edit_files: avisa quando o arquivo mudou no disco desde a última leitura 
   assert.equal(ler(p), 'arroz\nfeijão preto\nmacarrão\n', 'a mudança de fora continua lá');
   // depois desta edição o agente conhece o conteúdo: a próxima não avisa
   assert.doesNotMatch(await multi.execute('edit_files', { edits: [{ path: p, old_text: 'arroz', new_text: 'arroz integral' }] }), /Aviso:/);
+});
+
+test('/passo (v0.50.1): a prévia mostra o diff de verdade, com números de linha; de um segredo, nunca o conteúdo', () => {
+  const sa = require('../src/stepApproval');
+  const dir = projeto();
+  const p = criar(dir, 'conta.js', 'const a = 1;\nconst b = 2;\nconsole.log(a + b);\n');
+  const e = sa.previa('edit_file', { path: p, old_text: 'const b = 2;', new_text: 'const b = 3;' });
+  assert.match(e, /^edit_file .*conta\.js \(\+1 -1 linhas\)$/m);
+  assert.match(e, /^-2\tconst b = 2;$/m);
+  assert.match(e, /^\+2\tconst b = 3;$/m);
+  assert.match(e, /^ 1\tconst a = 1;$/m, 'com o contexto em volta');
+  const w = sa.previa('write_file', { path: p, content: 'const a = 1;\nconst b = 20;\nconsole.log(a * b);\n' });
+  assert.match(w, /SOBRESCREVE \(4 → 4 linhas\), \+2 -2/);
+  assert.match(w, /^-3\tconsole\.log\(a \+ b\);$/m);
+  // trecho que não existe: a prévia antiga (só o texto pedido)
+  assert.match(sa.previa('edit_file', { path: p, old_text: 'nao tem', new_text: 'x' }), /- nao tem\n\+ x/);
+  // segredo do gemini-code: a prévia nunca lê o arquivo
+  const { CONFIG_PATH } = require('../src/config');
+  fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
+  fs.writeFileSync(CONFIG_PATH, '{\n  "apiKey": "SEGREDO-DA-PREVIA"\n}\n');
+  try {
+    assert.doesNotMatch(sa.previa('edit_file', { path: CONFIG_PATH, old_text: '"apiKey"', new_text: '"x"' }), /SEGREDO-DA-PREVIA/);
+    assert.doesNotMatch(sa.previa('write_file', { path: CONFIG_PATH, content: '{}' }), /SEGREDO-DA-PREVIA/);
+  } finally { fs.rmSync(CONFIG_PATH, { force: true }); }
 });
 
 test('instrução do agente: editar como um profissional', () => {

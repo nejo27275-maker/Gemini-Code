@@ -208,6 +208,17 @@ function normalizarReceita(r = {}, { cwd = process.cwd() } = {}) {
   return x;
 }
 
+/**
+ * HDR -> SDR (BT.709), como um editor faz ao exportar para as redes: sem isso, um vídeo HDR do celular sai em 8 bits
+ * ainda marcado como HDR, e o Instagram/WhatsApp mostram as cores desbotadas. Precisa do filtro zscale.
+ */
+function cadeiaSdr(hdr) {
+  const curva = hdr === 'pq' ? 'smpte2084' : 'arib-std-b67';
+  return `zscale=tin=${curva}:pin=bt2020:min=bt2020nc:t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,` +
+    'tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuv420p';
+}
+const MARCAS_SDR = ['-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709'];
+
 /** Tamanho final: o do formato; sem formato, o do vídeo (pares; no máximo 720 de altura na qualidade "leve"). */
 function tamanhoFinal(inf, x) {
   if (x.formato) return { w: FORMATOS[x.formato].w, h: FORMATOS[x.formato].h };
@@ -271,7 +282,7 @@ function posicionarTextos(textos, textosArquivos, w, h, { legenda = false } = {}
  * índice das entradas de música e marca d'água.
  * @returns {{filtro: string, temAudio: boolean, duracao: number|null, largura: number, altura: number, passos: string[]}}
  */
-function montarEdicao(inf, x, { textosArquivos = [], legenda = null, legendaEstilo = true, fonte = null, entradaMusica = null, entradaMarca = null } = {}) {
+function montarEdicao(inf, x, { textosArquivos = [], legenda = null, legendaEstilo = true, fonte = null, entradaMusica = null, entradaMarca = null, converterHdr = false } = {}) {
   const passos = [];
   const vel = x.velocidade || 1;
   const ini = x.inicio || 0;
@@ -280,6 +291,8 @@ function montarEdicao(inf, x, { textosArquivos = [], legenda = null, legendaEsti
   const { w, h } = tamanhoFinal(inf, x);
   const vertical = h > w;
   const cadeia = [];
+  if (inf.hdr && converterHdr) { cadeia.push(cadeiaSdr(inf.hdr)); passos.push(`HDR (${inf.hdr.toUpperCase()}) convertido para cores normais (SDR)`); }
+  else if (inf.hdr) passos.push(`ATENÇÃO: o vídeo é HDR (${inf.hdr.toUpperCase()}) e este ffmpeg não tem o filtro zscale para converter; as cores podem ficar desbotadas`);
   if (x.inicio || x.fim !== undefined) passos.push(`cortado de ${fmt(ini)} s a ${fimOrigem ? `${fmt(fimOrigem)} s` : 'o fim'}`);
   if (vel !== 1) { cadeia.push(`setpts=PTS/${fmt(vel)}`); passos.push(`velocidade ${String(fmt(vel)).replace('.', ',')}x`); }
   if (x.estabilizar) { cadeia.push('deshake'); passos.push('estabilizado'); }
@@ -396,14 +409,22 @@ function acharFonte(existe = fs.existsSync) {
   return FONTES.find((f) => { try { return existe(f); } catch { return false; } }) || null;
 }
 
-/** Duração, tamanho (já com a rotação do celular), quadros por segundo, áudio. Lê o cabeçalho que o ffmpeg imprime. */
+/**
+ * Duração, tamanho (já com a rotação do celular), quadros por segundo, áudio e HDR. Lê o cabeçalho que o ffmpeg
+ * imprime. hdr: "hlg" (iPhone, a maioria dos celulares) ou "pq" (HDR10), pela curva de transferência do vídeo.
+ */
 function lerInfo(saida) {
   const s = String(saida || '');
   const dur = /Duration: (\d+):(\d+):(\d+(?:\.\d+)?)/.exec(s);
   const v = /Stream #\d+:\d+[^\n]*?: Video: [^\n]*?, (\d{2,5})x(\d{2,5})(?=[,\s[])/.exec(s);
   const fps = /, (\d+(?:\.\d+)?) fps/.exec(s);
   const rot = /rotation of (-?\d+(?:\.\d+)?) degrees/.exec(s) || /rotate\s*:\s*(-?\d+)/.exec(s);
-  const r = { duracao: dur ? Number(dur[1]) * 3600 + Number(dur[2]) * 60 + Number(dur[3]) : null, largura: null, altura: null, fps: fps ? Number(fps[1]) : null, temAudio: /Stream #\d+:\d+[^\n]*?: Audio:/.test(s), rotacao: rot ? Number(rot[1]) : 0 };
+  const curva = /Stream #\d+:\d+[^\n]*?: Video: [^\n]*?(arib-std-b67|smpte2084)/.exec(s);
+  const r = {
+    duracao: dur ? Number(dur[1]) * 3600 + Number(dur[2]) * 60 + Number(dur[3]) : null, largura: null, altura: null,
+    fps: fps ? Number(fps[1]) : null, temAudio: /Stream #\d+:\d+[^\n]*?: Audio:/.test(s), rotacao: rot ? Number(rot[1]) : 0,
+    hdr: curva ? (curva[1] === 'smpte2084' ? 'pq' : 'hlg') : null,
+  };
   if (v) {
     r.largura = Number(v[1]);
     r.altura = Number(v[2]);
@@ -425,6 +446,26 @@ function info(arquivo, { cwd = process.cwd(), ffmpeg = video.acharFfmpeg(), exec
 }
 
 function tmpSeguro() { return fs.mkdtempSync(path.join(os.tmpdir(), 'gemini-code-edicao-')); }
+
+// este ffmpeg tem o zscale e o tonemap (para converter HDR)? Pergunta uma vez por ffmpeg, só quando aparece um HDR.
+const filtrosHdr = new Map();
+function temConversorHdr(ffmpeg, execFileFn = execFile) {
+  if (!filtrosHdr.has(ffmpeg)) {
+    filtrosHdr.set(ffmpeg, new Promise((resolve) => {
+      execFileFn(ffmpeg, ['-hide_banner', '-filters'], { timeout: 20000, maxBuffer: 4 * 1024 * 1024 }, (err, stdout) => {
+        const s = String(stdout || '');
+        resolve(/\szscale\s/.test(s) && /\stonemap\s/.test(s));
+      });
+    }));
+  }
+  return filtrosHdr.get(ffmpeg);
+}
+
+/** HDR em alguma entrada: converte (se der) e marca a saída como BT.709; senão, nada muda. */
+async function planoHdr(infos, ffmpeg, execFileFn) {
+  if (!infos.some((i) => i && i.hdr)) return { converter: false, marcas: [] };
+  return { converter: await temConversorHdr(ffmpeg, execFileFn), marcas: MARCAS_SDR };
+}
 
 const saidaVideo = (q, temAudio) => [
   '-c:v', 'libx264', '-preset', 'medium', '-crf', String(QUALIDADES[q].crf), '-pix_fmt', 'yuv420p', '-movflags', '+faststart',
@@ -469,11 +510,12 @@ async function editar(arquivo, receita = {}, { saida, cwd = process.cwd(), ffmpe
     let entradaMarca = null;
     if (x.musica) { entradas.push('-stream_loop', '-1', ...video.entrada(x.musica)); entradaMusica = proxima++; }
     if (x.marca) { entradas.push(...video.entrada(x.marca)); entradaMarca = proxima++; }
-    const plano = montarEdicao(inf, x, { textosArquivos, legenda, legendaEstilo: legenda && !legenda.endsWith('.ass'), fonte: acharFonte(), entradaMusica, entradaMarca });
+    const hdr = await planoHdr([inf], ffmpeg, execFileFn);
+    const plano = montarEdicao(inf, x, { textosArquivos, legenda, legendaEstilo: legenda && !legenda.endsWith('.ass'), fonte: acharFonte(), entradaMusica, entradaMarca, converterHdr: hdr.converter });
     const limite = x.musica ? (plano.duracao ? ['-t', fmt(plano.duracao)] : ['-shortest']) : [];
     await video.rodar(ffmpeg, ['-hide_banner', '-loglevel', 'error', '-n', ...entradas,
       '-filter_complex', plano.filtro, '-map', '[v]', ...(plano.temAudio ? ['-map', '[a]'] : []),
-      ...saidaVideo(x.qualidade, plano.temAudio), ...limite, `file:${destino}`], { execFileFn });
+      ...saidaVideo(x.qualidade, plano.temAudio), ...hdr.marcas, ...limite, `file:${destino}`], { execFileFn });
     return { arquivo: destino, duracao: plano.duracao, largura: plano.largura, altura: plano.altura, passos: plano.passos };
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
@@ -500,9 +542,12 @@ async function juntar(arquivos, { transicao = 'nenhuma', formato, enquadrar = 'b
   const { w, h } = tamanhoFinal(infos[0], x);
   const minDur = Math.min(...infos.map((i) => i.duracao));
   const d = transicao === 'suave' ? Math.min(0.6, minDur / 3) : 0;
+  const hdr = await planoHdr(infos, ffmpeg, execFileFn);
   const partes = [];
   infos.forEach((inf, i) => {
-    partes.push(geometria(`${i}:v`, `g${i}`, w, h, enquadrar, `j${i}`));
+    // um clipe HDR no meio de clipes normais: convertido antes de juntar, senão ele sai desbotado
+    if (inf.hdr && hdr.converter) partes.push(`[${i}:v]${cadeiaSdr(inf.hdr)}[s${i}]`);
+    partes.push(geometria(inf.hdr && hdr.converter ? `s${i}` : `${i}:v`, `g${i}`, w, h, enquadrar, `j${i}`));
     partes.push(`[g${i}]fps=30,format=yuv420p,settb=AVTB[v${i}]`);
     partes.push(inf.temAudio
       ? `[${i}:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo[a${i}]`
@@ -532,9 +577,14 @@ async function juntar(arquivos, { transicao = 'nenhuma', formato, enquadrar = 'b
   partes.push(`[${aFinal}]${normalizar ? 'loudnorm=I=-14:TP=-1.5:LRA=11,aresample=48000' : 'anull'}[a]`);
   const destino = video.destinoVideo({ saida: saida || 'juntado.mp4', cwd });
   await video.rodar(ffmpeg, ['-hide_banner', '-loglevel', 'error', '-n', ...clipes.flatMap((c) => video.entrada(c)),
-    '-filter_complex', partes.join(';'), '-map', '[v]', '-map', '[a]', ...saidaVideo(qualidade, true), `file:${destino}`], { execFileFn });
+    '-filter_complex', partes.join(';'), '-map', '[v]', '-map', '[a]', ...saidaVideo(qualidade, true), ...hdr.marcas, `file:${destino}`], { execFileFn });
   const duracao = infos.reduce((s, i) => s + i.duracao, 0) - d * (infos.length - 1);
-  return { arquivo: destino, clipes: clipes.length, duracao, largura: w, altura: h, transicao };
+  const passos = [];
+  if (infos.some((i) => i.hdr)) {
+    passos.push(hdr.converter ? 'clipes HDR convertidos para cores normais (SDR)'
+      : 'ATENÇÃO: há clipe HDR e este ffmpeg não tem o filtro zscale para converter; as cores dele podem ficar desbotadas');
+  }
+  return { arquivo: destino, clipes: clipes.length, duracao, largura: w, altura: h, transicao, passos };
 }
 
 /** A capa: a imagem de um instante (tempo) ou a mais representativa do começo do vídeo, em .jpg. */
@@ -546,9 +596,12 @@ async function capa(arquivo, { tempo, saida, cwd = process.cwd(), ffmpeg = video
   if (t !== null && inf.duracao && t >= inf.duracao) throw new Error(`o vídeo tem ${fmt(inf.duracao)} s; escolha um tempo antes disso.`);
   const destino = require('./imagem').destinoNovo({ saida, base: abs, sufixo: '-capa', ext: '.jpg', cwd });
   const inicio = t !== null ? t : (inf.duracao ? Math.min(inf.duracao * 0.1, 3) : 0);
+  // a capa de um vídeo HDR também sai com as cores normais (um .jpg é sempre SDR)
+  const hdr = await planoHdr([inf], ffmpeg, execFileFn);
+  const filtros = [...(hdr.converter ? [cadeiaSdr(inf.hdr)] : []), ...(t === null ? ['thumbnail=90'] : [])];
   await video.rodar(ffmpeg, ['-hide_banner', '-loglevel', 'error', '-n', '-ss', fmt(inicio), ...video.entrada(abs),
-    ...(t === null ? ['-vf', 'thumbnail=90'] : []), '-frames:v', '1', '-q:v', '2', `file:${destino}`], { execFileFn });
-  return { arquivo: destino, tempo: Number(fmt(inicio)) };
+    ...(filtros.length ? ['-vf', filtros.join(',')] : []), '-frames:v', '1', '-q:v', '2', `file:${destino}`], { execFileFn });
+  return { arquivo: destino, tempo: Number(fmt(inicio)), hdrConvertido: Boolean(inf.hdr && hdr.converter) };
 }
 
 /** Só o áudio: .mp3 (padrão) ou .m4a. */

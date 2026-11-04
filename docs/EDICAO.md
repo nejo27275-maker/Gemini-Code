@@ -28,6 +28,8 @@ Detalhes:
 - **Conferidores confiáveis:** o `python3` e o `bash` vêm das pastas do sistema, nunca de uma pasta onde o agente grava.
 - **Desligar a conferência:** `gemini-code config set-conferir-sintaxe off`.
 - **Desfazer:** `/rewind` no chat volta o último turno; `gemini-code backups ARQUIVO` lista as cópias de antes.
+- **Aprovar cada edição:** com `/passo` ligado no chat, antes de gravar o agente mostra o diff de verdade, com números de
+  linha, e pergunta. Num arquivo de segredo do gemini-code, a prévia nunca mostra o conteúdo.
 
 ## Vídeo: `gemini-code video editar`
 
@@ -55,6 +57,11 @@ gemini-code video editar viagem.mp4 \
 | `--estabilizar`, `--melhorar` | Tira a tremedeira; menos ruído e mais nitidez. |
 | `--qualidade alta\|normal\|leve` | `leve` é para o WhatsApp (até 720p). |
 | `--sem-normalizar` | Por padrão, o áudio sai no volume que as redes usam (-14 LUFS). Isto desliga. |
+
+Vídeo **HDR** (iPhone e celular top de linha gravam assim) sai convertido para cores normais (SDR). Sem a conversão, ele
+ficaria desbotado no Instagram e no WhatsApp. Vale também no `juntar` e na `capa`, e o `info` mostra quando o vídeo é
+HDR. A conversão precisa do filtro `zscale` no ffmpeg; sem ele, o resultado avisa. Vídeo gravado com o celular em pé
+sai em pé.
 
 Outros comandos:
 

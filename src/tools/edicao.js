@@ -97,8 +97,15 @@ function aplicarUmaEdicao(texto, { old_text: antigo, new_text: novo, replace_all
       }
       if (n !== 1) continue;
       const ini = base.texto.indexOf(alvo);
-      const de = paraOriginal(base.cortes, ini);
-      const ate = paraOriginal(base.cortes, ini + alvo.length - 1) + 1;
+      let de = paraOriginal(base.cortes, ini);
+      let ate = paraOriginal(base.cortes, ini + alvo.length - 1) + 1;
+      // o trecho começa (ou termina) com o espaço do fim de uma linha: a troca leva junto o espaço que o arquivo tem
+      // ali, senão sobra um pedaço dele colado no texto novo
+      if (/^[ \t]+\r?\n/.test(v.antigo)) while (de > 0 && (texto[de - 1] === ' ' || texto[de - 1] === '\t')) de--;
+      if (/[ \t]+$/.test(v.antigo)) {
+        const resto = /^[ \t]+(?=\r?\n|$)/.exec(texto.slice(ate));
+        if (resto) ate += resto[0].length;
+      }
       const ajuste = ['achado sem contar os espaços no fim das linhas', v.ajuste].filter(Boolean).join('; ');
       return { ok: true, texto: texto.slice(0, de) + v.novo + texto.slice(ate), ocorrencias: 1, ajuste };
     }

@@ -1495,7 +1495,7 @@ async function main() {
           const i = await ve.info(flags._[0]);
           if (!i.largura) throw new Error('não achei imagem nesse arquivo (é só áudio?).');
           const dur = i.duracao ? `${Math.floor(i.duracao / 60)}:${String(Math.round(i.duracao % 60)).padStart(2, '0')}` : '?';
-          console.log(`${i.arquivo}\n  duração ${dur} · ${i.largura}x${i.altura}${i.fps ? ` · ${i.fps} fps` : ''} · ${i.temAudio ? 'com áudio' : 'sem áudio'}${i.rotacao ? ` · gravado girado ${i.rotacao}°` : ''}`);
+          console.log(`${i.arquivo}\n  duração ${dur} · ${i.largura}x${i.altura}${i.fps ? ` · ${i.fps} fps` : ''} · ${i.temAudio ? 'com áudio' : 'sem áudio'}${i.rotacao ? ` · gravado girado ${i.rotacao}°` : ''}${i.hdr ? ` · HDR (${i.hdr.toUpperCase()})` : ''}`);
           return;
         }
         if (sub === 'melhorar' && flags._[0]) r = await v.melhorar(flags._[0], { saida: flags.saida, estabilizar: flags.estabilizar });
