@@ -1864,7 +1864,7 @@ async function main() {
       };
       const cfg = loadConfig();
       const bins = ['git', 'claude', 'codex', 'agy', 'hermes', 'kimi', 'kimi-code', 'higgsfield', 'ollama', 'docker'].map((name) => { const binPath = which(name); return { name, available: !!binPath, path: binPath }; });
-      const report = { node: process.version, platform: process.platform, cwd: process.cwd(), provider: cfg.provider, model: cfg.model, ollamaModel: cfg.ollamaModel, codeIa: (() => { try { const i = require('../src/code-ia/install'); return { instalado: fs.existsSync(i.modelPath()), arquivo: i.modelPath() }; } catch { return { instalado: false }; } })(), modoSolo: require('../src/solo').ativo(cfg), geminiKeyConfigured: Boolean(cfg.apiKey), llamaCpp: (() => { const srv = require('../src/localServer'); const c = srv.caminhos(); const l = require('../src/providers/llamacpp'); let livreMB = null; try { const st = fs.statfsSync(require('os').homedir()); livreMB = Math.round((st.bavail * st.bsize) / 1048576); } catch { /* sem statfs */ } return { servidorBinario: fs.existsSync(c.servidor), modeloGGUF: fs.existsSync(c.modelo), ctx: l.ctxTamanho(cfg), autoStart: cfg.llamaCppAutoStart === true, pid: srv.lerPid(), espacoLivreMB: livreMB }; })(), integrations: bins,
+      const report = { node: process.version, platform: process.platform, cwd: process.cwd(), provider: cfg.provider, model: cfg.model, ollamaModel: cfg.ollamaModel, codeIa: (() => { try { const i = require('../src/code-ia/install'); return { instalado: fs.existsSync(i.modelPath()), arquivo: i.modelPath() }; } catch { return { instalado: false }; } })(), modoSolo: require('../src/solo').ativo(cfg), geminiKeyConfigured: Boolean(cfg.apiKey), llamaCpp: (() => { const srv = require('../src/localServer'); const c = srv.caminhos(); const l = require('../src/providers/llamacpp'); let livreMB = null; try { const st = fs.statfsSync(require('../src/config').pastaDoUsuario()); livreMB = Math.round((st.bavail * st.bsize) / 1048576); } catch { /* sem statfs */ } return { servidorBinario: fs.existsSync(c.servidor), modeloGGUF: fs.existsSync(c.modelo), ctx: l.ctxTamanho(cfg), autoStart: cfg.llamaCppAutoStart === true, pid: srv.lerPid(), espacoLivreMB: livreMB }; })(), integrations: bins,
         // v0.43.3: ferramentas que dependem de algo fora do projeto: o adb (TV/celular) e o pacote ws (cowork).
         // v0.44.0: navegador do agente (ferramenta browser)
         navegador: (() => { const p = require('../src/navegador').acharNavegador({ caminho: cfg.navegadorPath || '' }); return { encontrado: Boolean(p), caminho: p || cfg.navegadorPath || null, abreLocalhost: cfg.navegadorPermitirLocal === true }; })(),
@@ -1898,7 +1898,7 @@ async function main() {
       if (sub && sub !== 'status') return console.log('Uso: gemini-code sandbox [status]  |  gemini-code sandbox testar "comando"');
       const modo = sb.modoDe(cfg);
       const r = sb.resumo({ cfg });
-      const home = require('os').homedir();
+      const home = require('../src/config').pastaDoUsuario();
       const curto = (p) => (p === home || p.startsWith(home + path.sep) ? `~${p.slice(home.length)}` : p);
       const explica = { auto: 'comandos que rodam sem você aprovar na hora (confirmShell desligado, regra "permitir", rotinas)', sempre: 'todos os comandos do run_shell', off: 'nenhum comando (desligada)' };
       console.log([

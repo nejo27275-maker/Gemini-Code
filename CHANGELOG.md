@@ -1,3 +1,56 @@
+## 0.49.3 — caça aos bugs: a pasta do usuário em todo lugar e o contraste do chat
+
+Base: a 0.49.2 (no PR [#7](https://github.com/nejo27275-maker/Gemini-Code/pull/7)). Nesta rodada, procurei bugs de
+verdade e medi o resultado.
+
+**Corrigido:**
+- **(segurança) Com `HOME` vazio, ainda sobravam lugares que confundiam a pasta do usuário com a pasta atual.** A 0.49.2
+  corrigiu a config e a sandbox. Agora todo o resto também usa `pastaDoUsuario()`:
+  - **`config add-pasta-gravavel`:** a trava que proíbe liberar a própria pasta do usuário (ou uma acima dela) comparava
+    com a pasta atual. Dava para liberar a pasta do usuário inteira, e aí o agente gravaria `~/.bashrc` sem perguntar.
+  - **`write_file`/`edit_file` com o projeto na pasta do usuário:** `~/.bashrc`, `~/.profile` e companhia contavam como
+    arquivos do projeto e eram gravados sem perguntar. Agora perguntam, como com o `HOME` normal.
+  - **`checkpoints`:** o checkpoint do projeto atual (o padrão) era recusado como "pasta pessoal inteira", e o da pasta
+    do usuário de verdade passava.
+  - **Outros lugares:** o `~` do `computador abrir`, a lista de apps do Linux, o cache do navegador, o `doctor` e o
+    `sandbox status`. Uma busca confirma que não sobrou nenhum `os.homedir()` solto.
+- **Contraste do chat no tema claro:** o azul dos links ficava em 4,26:1 sobre o fundo, abaixo do mínimo de leitura (WCAG
+  AA, 4,5:1). Agora é `#2563eb`: 4,82:1 no fundo e 5,17:1 nos cartões e no botão principal. A página de voz já passava em
+  tudo (o menor é 6,65:1).
+- **README:** começa pelo que o projeto é. O aviso do limite 429 desceu para antes das "Observações importantes", e o
+  MinhaIA veio para depois da lista. Os itens repetidos do modo site na lista viraram um só.
+
+**Procurado e não achado (medido):**
+- **Estresse dos comandos do terminal:** 10.248 execuções em 245 s, cada uma com uma pasta de usuário própria e o
+  provedor offline.
+  - **O que rodou:** os 57 comandos com argumentos estranhos (vazio, opção desconhecida, opção sem valor, `--`, texto de
+    5.000 caracteres, `$(id)`, acento e emoji, `-1`, `../../etc/passwd`) e 42 subcomandos comuns em cada um.
+  - **Resultado:** nenhum erro solto (pilha, TypeError), nenhum código de saída estranho e nenhum travamento.
+  - **Os 3 que passaram de 8 s** são `site`, `painel` e `web`, o servidor do modo site, que fica no ar de propósito.
+  - **O único caso marcado era alarme falso.** Em `sub list ../../etc/passwd`, o texto vira a tarefa do subagente, e a
+    palavra "TypeError" estava numa sugestão do assistente offline.
+- **Markdown seguro do modo site** (`comum.js`): 150.000 textos aleatórios, montados com pedaços de Markdown e de HTML
+  hostil, em 2,6 s (o mais lento levou 12 ms). Nenhum erro, nenhum elemento fora dos tipos conhecidos e nenhum link que
+  não seja http/https.
+- **Ctrl+C no modo voz do terminal** (`gemini-code live`): testado num pseudo-terminal de verdade, com o Termux:API falso
+  e um modelo falso.
+  - Funcionou durante a resposta, durante a fala e durante a escuta.
+  - Sai em menos de 50 ms, corta a conexão com o modelo e não deixa processo para trás.
+  - No `live`, Ctrl+C sai, como a tela avisa. Só o chat volta para o `você>`.
+- **Acessibilidade das duas páginas** (num Chromium de verdade, com permissão, código e link na tela):
+  - todos os elementos interativos têm nome (10 no chat, 12 na página de voz);
+  - as duas declaram `lang="pt-BR"`.
+- **Node 18:** o `package.json` promete Node >= 18, mas não há Node 18 nesta máquina e o download do nodejs.org foi
+  bloqueado (403). Uma busca no código por APIs mais novas que o Node 18 não achou nenhuma. **A suíte não rodou no
+  Node 18.**
+
+**Testes:**
+- `pastaDoUsuario.test.js` (novo, 3): com `HOME` vazio, valem a trava do `add-pasta-gravavel`, a pergunta antes de gravar
+  `~/.bashrc` e o checkpoint. O teste aponta a pasta do usuário para uma pasta temporária, então nada de verdade é tocado.
+  Os 3 falham no código anterior (conferido).
+- `site.test.js` (+1): contraste de todos os pares de texto e fundo do chat, nos temas claro e escuro. Falha com o azul
+  antigo.
+
 ## 0.49.2 — o "você>" à prova de dedo e a pasta do usuário sempre certa
 
 Base: a 0.49.1 (no PR [#7](https://github.com/nejo27275-maker/Gemini-Code/pull/7)). Três problemas reproduzidos num

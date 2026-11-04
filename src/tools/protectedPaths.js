@@ -145,7 +145,8 @@ const contem = (base, alvo) => alvo === base || alvo.startsWith(base.endsWith(pa
  * Se a pasta do projeto for a HOME (ou a raiz), os arquivos e pastas "ponto" da HOME (~/.bashrc, ~/.config...)
  * contam como fora: são configuração que roda sozinha no próximo terminal/login.
  */
-function foraDaAreaDeTrabalho(p, { raiz = process.cwd(), extras = [], home = require('os').homedir() } = {}) {
+// v0.49.3: home pela pastaDoUsuario() (src/config.js) — com HOME vazio o os.homedir() dava '' (= a pasta atual)
+function foraDaAreaDeTrabalho(p, { raiz = process.cwd(), extras = [], home = require('../config').pastaDoUsuario() } = {}) {
   const alvo = caminhoReal(p);
   const homeReal = caminhoReal(home);
   const raizReal = caminhoReal(raiz);

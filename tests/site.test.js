@@ -549,3 +549,27 @@ test('navegador real: a versão chat — Markdown, ferramenta, permissão no mei
   assert.match(r, /"Você parou a resposta\." apareceu/);
   assert.equal(sinais.at(-1).aborted, true, 'o servidor parou o agente');
 });
+
+test('versão chat: contraste das cores (WCAG AA, 4,5:1) nos temas claro e escuro', () => {
+  const css = fs.readFileSync(path.join(__dirname, '..', 'src', 'site', 'publico', 'chat.css'), 'utf8');
+  const bloco = (ini) => { const i = css.indexOf(ini); return css.slice(i, css.indexOf('}', css.indexOf('{', i) + 1)); };
+  const vars = (txt) => Object.fromEntries([...txt.matchAll(/--([\w-]+):\s*(#[0-9a-fA-F]{6})/g)].map((m) => [m[1], m[2]]));
+  const claro = vars(bloco(':root {'));
+  const iEscuro = css.indexOf('@media (prefers-color-scheme: dark)');
+  const escuro = { ...claro, ...vars(css.slice(iEscuro, css.indexOf('}\n}', iEscuro))) };
+  const lum = (h) => {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const razao = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+  // texto sobre fundo, como aparecem na página (a resposta do agente fica direto sobre o --fundo)
+  const pares = [['texto', 'fundo'], ['texto', 'superficie'], ['texto-2', 'fundo'], ['texto-2', 'superficie'], ['texto-2', 'superficie-2'],
+    ['acento', 'fundo'], ['acento', 'superficie'], ['acento-texto', 'acento'], ['voce-texto', 'voce'], ['aviso-texto', 'aviso-fundo'],
+    ['erro-texto', 'erro-fundo'], ['codigo-texto', 'codigo-fundo'], ['texto', 'codigo-inline']];
+  for (const [tema, v] of [['claro', claro], ['escuro', escuro]]) {
+    for (const [f, b] of pares) {
+      assert.ok(v[f] && v[b], `${tema}: faltam as cores --${f}/--${b}`);
+      assert.ok(razao(v[f], v[b]) >= 4.5, `${tema}: --${f} sobre --${b} tem ${razao(v[f], v[b]).toFixed(2)}:1 (mínimo 4,5:1)`);
+    }
+  }
+});

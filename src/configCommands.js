@@ -68,10 +68,11 @@ function aplicar(sub, args, saveConfig) {
   }
   if (sub === 'add-pasta-gravavel' || sub === 'rm-pasta-gravavel') {
     const path = require('path');
-    const os = require('os');
     const bruto = a.join(' ').trim();
     if (!bruto) return `Uso: gemini-code config ${sub} /caminho/da/pasta`;
-    const dir = path.resolve(bruto.replace(/^~(?=$|\/)/, os.homedir()));
+    // v0.49.3: a pasta do usuário de verdade (com HOME vazio, o os.homedir() dava '' e a checagem abaixo comparava com a pasta atual)
+    const casa = require('./config').pastaDoUsuario();
+    const dir = path.resolve(bruto.replace(/^~(?=$|\/)/, casa));
     const { loadConfig } = require('./config');
     const atuais = Array.isArray(loadConfig().pastasGravaveis) ? loadConfig().pastasGravaveis : [];
     if (sub === 'rm-pasta-gravavel') {
@@ -79,7 +80,7 @@ function aplicar(sub, args, saveConfig) {
       saveConfig({ pastasGravaveis: atuais.filter((d) => d !== dir) });
       return `Pasta removida: ${dir}`;
     }
-    const home = path.resolve(os.homedir());
+    const home = path.resolve(casa);
     if (dir === path.parse(dir).root || home === dir || home.startsWith(dir + path.sep)) return `Não dá para liberar ${dir}: ela contém a sua HOME (~/.bashrc e companhia rodariam o que o agente gravasse).`;
     if (!atuais.includes(dir)) saveConfig({ pastasGravaveis: [...atuais, dir] });
     return `Pasta liberada: ${dir} — o agente grava ali sem perguntar (write_file e a sandbox do run_shell).`;

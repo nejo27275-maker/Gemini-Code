@@ -3,7 +3,6 @@
 
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
 const crypto = require('crypto');
 const { HOME_DIR } = require('./config');
 
@@ -18,7 +17,11 @@ function idNow() { return `cp_${new Date().toISOString().replace(/[:.]/g, '-')}_
 function normalizeRoot(root) {
   const resolved = fs.realpathSync(path.resolve(root || process.cwd()));
   if (!fs.statSync(resolved).isDirectory()) throw new Error('O workspace precisa ser uma pasta.');
-  if (resolved === path.parse(resolved).root || resolved === fs.realpathSync(os.homedir())) {
+  // v0.49.3: pastaDoUsuario(). Com HOME vazio, o realpathSync('') dava a PASTA ATUAL: o checkpoint do projeto (o padrão)
+  // era recusado como "pasta pessoal inteira", e o da pasta do usuário de verdade passava.
+  let casa = require('./config').pastaDoUsuario();
+  try { casa = fs.realpathSync(casa); } catch { /* a pasta pode não existir */ }
+  if (resolved === path.parse(resolved).root || resolved === casa) {
     throw new Error('Checkpoint de raiz do sistema ou da pasta pessoal inteira não é permitido. Informe a pasta específica do projeto.');
   }
   return resolved;

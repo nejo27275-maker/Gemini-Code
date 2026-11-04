@@ -76,6 +76,9 @@ documento é sobre como o código por trás disso está organizado.
 - **v0.49.2** — `pastaDoUsuario()` (src/config.js): a pasta do usuário é sempre um caminho absoluto. Com `HOME` vazio, a
   config ia para a pasta atual e a sandbox escondia as credenciais erradas. Também usada no `localServer.js` e nos
   padrões da sandbox. No chat: Ctrl+C com texto só apaga a linha, e Ctrl+D sai pelo `encerrarComLimpeza`.
+- **v0.49.3** — o resto do código também usa `pastaDoUsuario()`: `config add-pasta-gravavel`, `foraDaAreaDeTrabalho`
+  (src/tools/protectedPaths.js), os checkpoints, o `computador`, o navegador, o `doctor` e o `sandbox status`. Não há
+  mais `os.homedir()` fora de src/config.js.
 - **`src/routineRunner.js`** — executor das rotinas: `http-check` e, desde a v0.44.0,
   `agente` (o agente roda sozinho; `src/ui/prompt.js` responde "não" a toda confirmação).
 - Os provedores `llamacpp`, `ollama` e `openai` pedem **sempre** em streaming; o
@@ -230,7 +233,8 @@ extra). Cobertura atual:
 | modo site: segurança do servidor (chave, Origin, Host/DNS rebinding, CORS, CSP, tamanhos), conversa em eventos, uma por vez, confirmações na página (expiram em "não"), aliado, e a página num Chromium de verdade (v0.48.0); "Parar" pela página, página fechada e o botão clicado no Chromium (v0.48.1) | `site.test.js` |
 | chat do terminal num pseudo-terminal de verdade (`script`): Ctrl+C para a resposta e corta a conexão, numa confirmação vale "não", interrompe o comando rodando, duas vezes sai sem órfão; no `você>`, sai (v0.49.1) | `chatTerminal.test.js` |
 | comandos em andamento: SIGINT como um terminal, SIGKILL em 2 s para quem ignora (com os filhos), nada órfão ao sair; `run_shell` (direto e na sandbox) e `run_checks` interrompidos (v0.49.1) | `emAndamento.test.js` |
-| versão chat (v0.49.0): páginas e CSP, histórico para a página (`paraExibicao`, `/api/historico`), Markdown seguro (blocos, links só http/https, HTML vira texto, texto hostil/enorme não trava) e o chat de ponta a ponta num Chromium de verdade | `site.test.js` |
+| versão chat (v0.49.0): páginas e CSP, histórico para a página (`paraExibicao`, `/api/historico`), Markdown seguro (blocos, links só http/https, HTML vira texto, texto hostil/enorme não trava) e o chat de ponta a ponta num Chromium de verdade; contraste WCAG AA de todos os pares de cor, nos temas claro e escuro (v0.49.3) | `site.test.js` |
+| `HOME` vazio (v0.49.3): a trava do `add-pasta-gravavel`, a pergunta antes de gravar `~/.bashrc` com o projeto na pasta do usuário e os checkpoints usam a pasta do usuário de verdade, não a pasta atual | `pastaDoUsuario.test.js` |
 | "Parar": `runOnce` com signal (antes do modelo, durante a resposta, entre ferramentas; histórico consistente); provedores sem repetir, sem trocar de lado, sem reserva e sem ligar o llama.cpp depois do "Parar"; conexão cortada de verdade (v0.48.1) | `parar.test.js` |
 | hooks `UserPromptSubmit`, `SessionStart`, `Stop` | `hooksEventos.test.js` |
 | subagentes do usuário (`.md`) | `subagentesDoUsuario.test.js` |

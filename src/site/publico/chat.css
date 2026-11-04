@@ -6,7 +6,7 @@
   --borda: #e2e5ea;
   --texto: #1c2026;
   --texto-2: #5d6673;
-  --acento: #2f6feb;
+  --acento: #2563eb; /* v0.49.3: #2f6feb ficava em 4,26:1 sobre o fundo (link na resposta); este passa no AA (4,5:1) */
   --acento-forte: #1f58cc;
   --acento-texto: #ffffff;
   --voce: #e8efff;

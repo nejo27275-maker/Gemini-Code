@@ -9,7 +9,6 @@
 'use strict';
 
 const fs = require('fs');
-const os = require('os');
 const path = require('path');
 const { execFile } = require('child_process');
 
@@ -318,7 +317,7 @@ async function abrir(alvo, { amb, execFileFn, cwd }) {
     if (u.username || u.password) return { ok: false, texto: 'Erro: não ponha usuário/senha no endereço.' };
     return (await viaPadrao(u.href)) ? { ok: true, texto: `Abrindo ${u.href}` } : { ok: false, texto: 'Erro: não consegui abrir o navegador.' };
   }
-  const caminho = path.resolve(cwd, bruto.replace(/^~(?=$|[\\/])/, os.homedir()));
+  const caminho = path.resolve(cwd, bruto.replace(/^~(?=$|[\\/])/, require('./config').pastaDoUsuario()));
   if (fs.existsSync(caminho)) {
     const { isSecret } = require('./tools/protectedPaths');
     if (isSecret(caminho)) return { ok: false, texto: 'Erro: esse arquivo é protegido do gemini-code.' };
@@ -332,7 +331,7 @@ async function abrir(alvo, { amb, execFileFn, cwd }) {
   }
   if (amb.sessao === 'x11' || amb.sessao === 'wayland') {
     const id = semAcento(bruto).replace(/\s+/g, '-');
-    const pastas = ['/usr/share/applications', '/usr/local/share/applications', path.join(os.homedir(), '.local/share/applications'), '/var/lib/flatpak/exports/share/applications', '/var/lib/snapd/desktop/applications'];
+    const pastas = ['/usr/share/applications', '/usr/local/share/applications', path.join(require('./config').pastaDoUsuario(), '.local/share/applications'), '/var/lib/flatpak/exports/share/applications', '/var/lib/snapd/desktop/applications'];
     let desktop = null;
     for (const p of pastas) {
       let nomes;

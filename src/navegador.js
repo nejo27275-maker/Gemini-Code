@@ -38,7 +38,7 @@ function ehArquivo(p) { try { return fs.statSync(p).isFile(); } catch { return f
 
 function pastasDoPlaywright(env) {
   // o Chromium que o Playwright baixa (Linux): pasta da variável PLAYWRIGHT_BROWSERS_PATH ou o cache padrão
-  const bases = [env.PLAYWRIGHT_BROWSERS_PATH, path.join(os.homedir(), '.cache', 'ms-playwright')].filter(Boolean);
+  const bases = [env.PLAYWRIGHT_BROWSERS_PATH, path.join(require('./config').pastaDoUsuario(), '.cache', 'ms-playwright')].filter(Boolean);
   const achados = [];
   for (const base of bases) {
     let itens;

@@ -1,27 +1,8 @@
 # gemini-code
 
-## Limite de uso da API Gemini (HTTP 429)
-
-Se a API responder `429 RESOURCE_EXHAUSTED`, a aplicação não troca automaticamente de provedor nem repete a chamada quando você selecionou explicitamente o provedor `gemini`. Se o Google informar um tempo como `Please retry in 52s`, aguarde esse período e envie a mensagem novamente. Quando a resposta não indicar espera, confira a métrica, o limite e o projeto em [AI Studio](https://aistudio.google.com/) e a [documentação de limites](https://ai.google.dev/gemini-api/docs/rate-limits). Um limite `0` significa que a métrica daquela operação não permite chamadas no projeto atual; trocar para o mesmo modelo não resolve. Para usar apenas a API Gemini, confirme com `gemini-code config set-provider gemini`. **Opcional (v0.30.0):** `gemini-code config set-wait-quota 60` faz o programa esperar sozinho (até 60 s) quando o Google pedir um tempo curto e repetir uma vez; vem desligado.
-
 Um agente de terminal no espírito do **Claude Code** / **Codex**, só que usando a
 **API do Gemini** do Google — feito para rodar no **Termux** (Android) ou em
 qualquer PC/Linux com Node.js.
-
-## MinhaIA Android integrada (primeira versão)
-
-O projeto agora inclui o aplicativo nativo **MinhaIA** em `mobile/MinhaIA/`, com Kotlin, Jetpack Compose, histórico e memórias locais e um motor Android baseado em `llama.cpp`. É um subprojeto Android separado do agente de terminal: ele não exige API Gemini para o chat local.
-
-Para configurar o Gemini Code para usar o mesmo modelo Qwen3-1.7B Q4_K_M, com download validado por SHA-256 e compartilhado em Downloads com o app Android, rode no Termux:
-
-```bash
-bash android/install-minhaia-model.sh
-node bin/gemini-code.js chat
-```
-
-O script pede que `termux-setup-storage` já tenha sido executado e usa o armazenamento compartilhado `Download`. Para usar o arquivo no app Android, compile/instale `mobile/MinhaIA` e escolha **Modelo → Importar outro GGUF**; por segurança, o app copia o modelo para o armazenamento privado, então é necessário espaço adicional.
-
-O modelo GGUF é o mesmo, mas os históricos e as memórias do CLI e do app ainda são independentes. A integração não compila o APK automaticamente nem afirma funcionamento no Galaxy A55 sem build e teste no aparelho. Veja `docs/MINHAIA_INTEGRACAO.md`.
 
 ## O que tem aqui
 
@@ -58,14 +39,30 @@ O modelo GGUF é o mesmo, mas os históricos e as memórias do CLI e do app aind
   formulários e tira print.
 - **Rotinas com agente** (`gemini-code routines create --prompt ...`): o agente
   faz uma tarefa sozinho no horário marcado e avisa por notificação.
+- **Modo site** (v0.48.0; a versão chat é da v0.49.0): converse pelo navegador, só neste aparelho.
+  `gemini-code site --chat --abrir` abre um chat comum, com respostas formatadas, permissões no meio da conversa, Parar e
+  a conversa de volta ao recarregar. `gemini-code site --abrir` abre a conversa por voz com a esfera animada. Veja
+  `docs/MODO_SITE.md`.
 - **Saúde, compras, imagem, vídeo, câmera, TV e criar site/app** (v0.46.0): veja abaixo.
 - **Redes sociais, controle do celular/computador/sites e desafios** (v0.47.0): veja abaixo, `docs/REDES_SOCIAIS.md` e `docs/CONTROLE.md`.
-- **Modo site com voz** (v0.48.0): `gemini-code site --abrir` — converse falando, com a esfera animada (`docs/MODO_SITE.md`).
 - **Ctrl+C no chat do terminal** (v0.49.1): para só a resposta (e o comando que ela estiver rodando). O chat continua.
   No `você>`, Ctrl+C apaga o que você digitou e, com a linha vazia, sai. Ctrl+D também sai. Nenhum comando fica rodando
   sozinho depois de sair.
-- **Versão chat** (v0.49.0): `gemini-code site --chat --abrir` — um chat comum no navegador, com respostas formatadas,
-  permissões no meio da conversa, Parar e a conversa de volta ao recarregar.
+
+## MinhaIA Android integrada (primeira versão)
+
+O projeto agora inclui o aplicativo nativo **MinhaIA** em `mobile/MinhaIA/`, com Kotlin, Jetpack Compose, histórico e memórias locais e um motor Android baseado em `llama.cpp`. É um subprojeto Android separado do agente de terminal: ele não exige API Gemini para o chat local.
+
+Para configurar o Gemini Code para usar o mesmo modelo Qwen3-1.7B Q4_K_M, com download validado por SHA-256 e compartilhado em Downloads com o app Android, rode no Termux:
+
+```bash
+bash android/install-minhaia-model.sh
+node bin/gemini-code.js chat
+```
+
+O script pede que `termux-setup-storage` já tenha sido executado e usa o armazenamento compartilhado `Download`. Para usar o arquivo no app Android, compile/instale `mobile/MinhaIA` e escolha **Modelo → Importar outro GGUF**; por segurança, o app copia o modelo para o armazenamento privado, então é necessário espaço adicional.
+
+O modelo GGUF é o mesmo, mas os históricos e as memórias do CLI e do app ainda são independentes. A integração não compila o APK automaticamente nem afirma funcionamento no Galaxy A55 sem build e teste no aparelho. Veja `docs/MINHAIA_INTEGRACAO.md`.
 
 ## Modo site: conversa por voz com a esfera — v0.48.0 (e a versão chat, v0.49.0)
 
@@ -604,6 +601,10 @@ gemini-code/
   mcp.example.json          exemplo de servidores MCP
   install.sh                instalador para Termux
 ```
+
+## Limite de uso da API Gemini (HTTP 429)
+
+Se a API responder `429 RESOURCE_EXHAUSTED`, a aplicação não troca automaticamente de provedor nem repete a chamada quando você selecionou explicitamente o provedor `gemini`. Se o Google informar um tempo como `Please retry in 52s`, aguarde esse período e envie a mensagem novamente. Quando a resposta não indicar espera, confira a métrica, o limite e o projeto em [AI Studio](https://aistudio.google.com/) e a [documentação de limites](https://ai.google.dev/gemini-api/docs/rate-limits). Um limite `0` significa que a métrica daquela operação não permite chamadas no projeto atual; trocar para o mesmo modelo não resolve. Para usar apenas a API Gemini, confirme com `gemini-code config set-provider gemini`. **Opcional (v0.30.0):** `gemini-code config set-wait-quota 60` faz o programa esperar sozinho (até 60 s) quando o Google pedir um tempo curto e repetir uma vez; vem desligado.
 
 ## Observações importantes
 
