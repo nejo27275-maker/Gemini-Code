@@ -189,6 +189,7 @@ No modo "chat", digite /help para ver os comandos de sessão (/clear, /model, /s
   gemini-code config set-sandbox auto|sempre|off   auto: o que roda sem você aprovar vai para a sandbox (Linux + bubblewrap)
   gemini-code config set-sandbox-rede on|off   Internet dentro da sandbox (padrão: off)
   gemini-code config add-pasta-gravavel DIR    O agente grava ali sem perguntar (fora do projeto ele pergunta)
+  gemini-code config set-conferir-sintaxe on|off   Depois de editar .js/.json/.py/.sh, avisa se a sintaxe quebrou (padrão: on)
 
   gemini-code ciencia "pergunta"               Modo ciência: explica em formato fixo (números, comparação, dá pra escapar?)
 
@@ -1187,7 +1188,12 @@ async function main() {
       const im = require('../src/imagem');
       // v0.46.1: "uso" por falta de argumento sai com código 1 (scripts sabem que não rodou); sem subcomando, 0
       const uso = () => { if (sub && !['ajuda', 'help', '--help'].includes(sub)) process.exitCode = 1; console.log([
-        'Uso: gemini-code imagem gerar "descrição"                      (com IA; usa a cota da sua chave)',
+        'Uso: gemini-code imagem ajustar FOTO [FOTO2 ...] [opções]       Edição profissional SEM IA (ImageMagick, no aparelho):',
+        '       --formato feed|quadrado|stories|youtube   --enquadrar fundo-desfocado|preencher|barras   --melhorar',
+        '       --cor natural|vivo|quente|frio|cinema|pb|vintage|dramatico   --brilho -1..1 --contraste 0..3 --saturacao 0..3 --nitidez 0..3',
+        '       --texto "Oferta" (pode repetir) [--posicao-texto topo|centro|baixo] [--fundo]   --marca logo.png [--posicao-marca ...]',
+        '       --qualidade alta|normal|leve   --manter-localizacao (por padrão a localização/EXIF sai)',
+        '     gemini-code imagem gerar "descrição"                      (com IA; usa a cota da sua chave)',
         '     gemini-code imagem editar FOTO "o que mudar"              (com IA)',
         '     gemini-code imagem melhorar FOTO [--modo local|ia] [--ampliar 2]   (local = ImageMagick, grátis e offline)',
         '     gemini-code imagem descrever FOTO ["pergunta"]',
@@ -1195,6 +1201,34 @@ async function main() {
       ].join('\n')); };
       try {
         let r;
+        if (sub === 'ajustar') {
+          // v0.50.0: edição profissional sem IA (src/imagemEdicao.js); opção desconhecida é recusada, não ignorada
+          const BOOL = new Set(['melhorar', 'fundo', 'manter-localizacao']);
+          const VALOR = new Set(['saida', 'formato', 'enquadrar', 'cor', 'brilho', 'contraste', 'saturacao', 'nitidez', 'texto',
+            'posicao-texto', 'marca', 'posicao-marca', 'qualidade']);
+          const o = { fotos: [], textos: [] };
+          for (let i = 0; i < resto.length; i++) {
+            const arg = resto[i];
+            if (!arg.startsWith('--')) { o.fotos.push(arg); continue; }
+            const nome = arg.slice(2);
+            if (BOOL.has(nome)) o[nome] = true;
+            else if (!VALOR.has(nome)) throw new Error(`opção desconhecida: ${arg}. Veja: gemini-code imagem ajuda`);
+            else if (i + 1 >= resto.length) throw new Error(`falta o valor de ${arg}`);
+            else if (nome === 'texto') o.textos.push(resto[++i]);
+            else o[nome] = resto[++i];
+          }
+          if (!o.fotos.length) return uso();
+          const receita = {
+            formato: o.formato, enquadrar: o.enquadrar, cor: o.cor, brilho: o.brilho, contraste: o.contraste, saturacao: o.saturacao,
+            nitidez: o.nitidez, melhorar: o.melhorar === true, marca_dagua: o.marca, posicao_marca: o['posicao-marca'],
+            qualidade: o.qualidade, manter_localizacao: o['manter-localizacao'] === true,
+            textos: o.textos.map((texto) => ({ texto, posicao: o['posicao-texto'] || 'baixo', fundo: o.fundo === true })),
+          };
+          const feito = await require('../src/imagemEdicao').ajustar(o.fotos, receita, { saida: o.saida });
+          for (const f of feito.arquivos) console.log(chalk.green(`Foto editada (sem IA): ${f.arquivo}`) + chalk.dim(` (${f.largura}x${f.altura})`));
+          if (feito.passos.length) console.log(chalk.dim(feito.passos.join(', ')));
+          return;
+        }
         if (sub === 'gerar') {
           if (bloquearSeConvidado('geração de imagem (custa cota da API do dono).')) return;
           if (!flags._.length) return uso();
@@ -1406,16 +1440,64 @@ async function main() {
     case 'video':
     case 'vídeo': {
       // v0.46.0: melhorar vídeo, slideshow de fotos (ffmpeg, local) e vídeo com IA (Veo) — src/video.js
+      // v0.50.0: editar como um editor profissional, juntar, capa, áudio e info — src/videoEdicao.js
       const [sub, ...resto] = rest;
-      const flags = { _: [] };
+      const BOOLEANOS = new Set(['estabilizar', 'melhorar', 'sem-normalizar', 'fundo']);
+      const COM_VALOR = new Set(['saida', 'segundos', 'musica', 'cortar', 'formato', 'enquadrar', 'cor', 'texto', 'posicao-texto',
+        'legenda', 'volume-musica', 'marca', 'posicao-marca', 'velocidade', 'fade', 'qualidade', 'brilho', 'contraste', 'saturacao',
+        'transicao', 'tempo']);
+      const flags = { _: [], textos: [] };
+      let erroFlag = null;
       for (let i = 0; i < resto.length; i++) {
-        if (resto[i] === '--estabilizar') flags.estabilizar = true;
-        else if (resto[i].startsWith('--') && i + 1 < resto.length) flags[resto[i].slice(2)] = resto[++i];
-        else flags._.push(resto[i]);
+        const arg = resto[i];
+        if (!arg.startsWith('--')) { flags._.push(arg); continue; }
+        const nome = arg.slice(2);
+        if (BOOLEANOS.has(nome)) flags[nome] = true;
+        else if (!COM_VALOR.has(nome)) { erroFlag = `opção desconhecida: ${arg}`; break; } else if (i + 1 >= resto.length) { erroFlag = `falta o valor de ${arg}`; break; } else if (nome === 'texto') flags.textos.push(resto[++i]);
+        else flags[nome] = resto[++i];
       }
+      if (erroFlag) { console.error(chalk.red(`Erro: ${erroFlag}. Veja: gemini-code video ajuda`)); process.exitCode = 1; return; }
       const v = require('../src/video');
+      const ve = require('../src/videoEdicao');
       try {
         let r;
+        if (sub === 'editar' && flags._[0]) {
+          const receita = {
+            cortar: flags.cortar, formato: flags.formato, enquadrar: flags.enquadrar, cor: flags.cor, velocidade: flags.velocidade,
+            fade: flags.fade, legenda: flags.legenda, musica: flags.musica, volume_musica: flags['volume-musica'],
+            marca_dagua: flags.marca, posicao_marca: flags['posicao-marca'], qualidade: flags.qualidade, brilho: flags.brilho,
+            contraste: flags.contraste, saturacao: flags.saturacao, estabilizar: flags.estabilizar === true,
+            melhorar: flags.melhorar === true, normalizar: flags['sem-normalizar'] !== true,
+            textos: flags.textos.map((texto) => ({ texto, posicao: flags['posicao-texto'] || 'baixo', fundo: flags.fundo === true })),
+          };
+          r = await ve.editar(flags._[0], receita, { saida: flags.saida });
+          console.log(chalk.green(`Vídeo editado: ${r.arquivo}`));
+          console.log(chalk.dim(ve.descreverResultado(r)));
+          return;
+        }
+        if (sub === 'juntar' && flags._.length) {
+          r = await ve.juntar(flags._, { transicao: flags.transicao || 'nenhuma', formato: flags.formato, enquadrar: flags.enquadrar || 'barras', normalizar: flags['sem-normalizar'] !== true, qualidade: flags.qualidade || 'normal', saida: flags.saida });
+          console.log(chalk.green(`Vídeos juntados: ${r.arquivo}`));
+          console.log(chalk.dim(`${r.clipes} clipes, ${ve.descreverResultado(r)}`));
+          return;
+        }
+        if (sub === 'capa' && flags._[0]) {
+          r = await ve.capa(flags._[0], { tempo: flags.tempo, saida: flags.saida });
+          console.log(chalk.green(`Capa salva: ${r.arquivo}`));
+          return;
+        }
+        if (sub === 'audio' && flags._[0]) {
+          r = await ve.extrairAudio(flags._[0], { saida: flags.saida });
+          console.log(chalk.green(`Áudio salvo: ${r.arquivo}`));
+          return;
+        }
+        if (sub === 'info' && flags._[0]) {
+          const i = await ve.info(flags._[0]);
+          if (!i.largura) throw new Error('não achei imagem nesse arquivo (é só áudio?).');
+          const dur = i.duracao ? `${Math.floor(i.duracao / 60)}:${String(Math.round(i.duracao % 60)).padStart(2, '0')}` : '?';
+          console.log(`${i.arquivo}\n  duração ${dur} · ${i.largura}x${i.altura}${i.fps ? ` · ${i.fps} fps` : ''} · ${i.temAudio ? 'com áudio' : 'sem áudio'}${i.rotacao ? ` · gravado girado ${i.rotacao}°` : ''}`);
+          return;
+        }
         if (sub === 'melhorar' && flags._[0]) r = await v.melhorar(flags._[0], { saida: flags.saida, estabilizar: flags.estabilizar });
         else if (sub === 'slideshow' && flags._.length) r = await v.slideshow(flags._, { segundos: flags.segundos, musica: flags.musica, saida: flags.saida });
         else if (sub === 'gerar' && flags._.length) {
@@ -1424,10 +1506,20 @@ async function main() {
         } else {
           if (sub && !['ajuda', 'help', '--help'].includes(sub)) process.exitCode = 1;
           console.log([
-            'Uso: gemini-code video melhorar VIDEO.mp4 [--estabilizar] [--saida novo.mp4]   (menos ruído, mais nitidez)',
-            '     gemini-code video slideshow foto1.jpg foto2.jpg ... [--segundos 3] [--musica musica.mp3] [--saida album.mp4]',
-            '     gemini-code video gerar "descrição"                                          (com IA, Veo)',
-            '     (melhorar e slideshow usam o ffmpeg no aparelho: Termux: pkg install ffmpeg)',
+            'Uso: gemini-code video editar VIDEO.mp4 [opções]       Edição profissional numa passada só (ffmpeg, no aparelho):',
+            '       --cortar 0:05-0:35   --formato reels|feed|quadrado|youtube   --enquadrar fundo-desfocado|preencher|barras',
+            '       --cor natural|vivo|quente|frio|cinema|pb|vintage|dramatico   --brilho -1..1 --contraste 0..3 --saturacao 0..3',
+            '       --texto "Oferta de hoje" (pode repetir) [--posicao-texto topo|centro|baixo] [--fundo]',
+            '       --legenda falas.srt   --musica fundo.mp3 [--volume-musica 0.25]   --marca logo.png [--posicao-marca canto-inferior-direito]',
+            '       --velocidade 1.25   --fade 0.5   --estabilizar   --melhorar   --sem-normalizar   --qualidade alta|normal|leve',
+            '     gemini-code video juntar a.mp4 b.mp4 ... [--transicao suave] [--formato reels]   Junta clipes num vídeo só',
+            '     gemini-code video capa VIDEO.mp4 [--tempo 0:12]       A imagem para a capa do post (.jpg)',
+            '     gemini-code video audio VIDEO.mp4 [--saida a.mp3]     Só o áudio (.mp3 ou .m4a)',
+            '     gemini-code video info VIDEO.mp4                      Duração, tamanho, áudio',
+            '     gemini-code video melhorar VIDEO.mp4 [--estabilizar]  Menos ruído, mais nitidez',
+            '     gemini-code video slideshow foto1.jpg foto2.jpg ... [--segundos 3] [--musica musica.mp3]',
+            '     gemini-code video gerar "descrição"                   Com IA (Veo)',
+            '     Sempre cria um arquivo novo (--saida escolhe o nome). Termux: pkg install ffmpeg',
           ].join('\n'));
           return;
         }

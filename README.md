@@ -48,6 +48,13 @@ qualquer PC/Linux com Node.js.
 - **Ctrl+C no chat do terminal** (v0.49.1): para só a resposta (e o comando que ela estiver rodando). O chat continua.
   No `você>`, Ctrl+C apaga o que você digitou e, com a linha vazia, sai. Ctrl+D também sai. Nenhum comando fica rodando
   sozinho depois de sair.
+- **Editar como um profissional** (v0.50.0):
+  - **código:** o agente lê antes de sobrescrever, mostra o diff de cada edição e confere a sintaxe;
+  - **vídeo** (`gemini-code video editar`): cortar, formato do Reels/feed/YouTube, cor, textos, legenda, música e
+    marca d'água;
+  - **foto** (`gemini-code imagem ajustar`).
+  
+  Tudo no aparelho, sem IA. Veja `docs/EDICAO.md`.
 
 ## MinhaIA Android integrada (primeira versão)
 
@@ -63,6 +70,29 @@ node bin/gemini-code.js chat
 O script pede que `termux-setup-storage` já tenha sido executado e usa o armazenamento compartilhado `Download`. Para usar o arquivo no app Android, compile/instale `mobile/MinhaIA` e escolha **Modelo → Importar outro GGUF**; por segurança, o app copia o modelo para o armazenamento privado, então é necessário espaço adicional.
 
 O modelo GGUF é o mesmo, mas os históricos e as memórias do CLI e do app ainda são independentes. A integração não compila o APK automaticamente nem afirma funcionamento no Galaxy A55 sem build e teste no aparelho. Veja `docs/MINHAIA_INTEGRACAO.md`.
+
+## Editar como um profissional: código, vídeo e foto — v0.50.0
+
+```bash
+# vídeo: a receita inteira numa passada só (ffmpeg, no aparelho)
+gemini-code video editar viagem.mp4 --cortar 0:05-0:35 --formato reels --cor quente \
+  --texto "Fim de semana na praia" --legenda falas.srt --musica fundo.mp3 --marca logo.png
+gemini-code video juntar a.mp4 b.mp4 c.mp4 --transicao suave
+gemini-code video capa viagem.mp4
+
+# foto: formato de cada rede, cor, texto, marca d'água; tira a localização (EXIF)
+gemini-code imagem ajustar loja.jpg --formato feed --cor vivo --texto "50% OFF só hoje" --fundo
+```
+
+- **Código:**
+  - o `write_file` não sobrescreve o que o agente não leu (nem o que mudou depois da leitura);
+  - cada edição volta com o diff e os números de linha;
+  - a sintaxe de `.js`, `.json`, `.py` e `.sh` é conferida depois de editar;
+  - o fim de linha (CRLF) e o BOM do arquivo são mantidos.
+- **No chat:** é só pedir ("corta do 0:05 ao 0:35 e deixa no formato do Reels"). O `video` é uma ferramenta sob
+  demanda; liga com `gemini-code config ferramentas-extras video`.
+
+Tudo explicado em `docs/EDICAO.md`.
 
 ## Modo site: conversa por voz com a esfera — v0.48.0 (e a versão chat, v0.49.0)
 

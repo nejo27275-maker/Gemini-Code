@@ -39,12 +39,13 @@ function conferirEntrada(arquivo, tipos, rotulo) {
   return abs;
 }
 
-function destinoVideo({ saida, base, sufixo, cwd = process.cwd() }) {
+/** Caminho NOVO para a saída (nunca sobrescreve: -2, -3...), fora das áreas protegidas. v0.50.0: `ext` (.mp3, .m4a). */
+function destinoVideo({ saida, base, sufixo, cwd = process.cwd(), ext = '.mp4' }) {
   const { isProtected, isSecret } = require('./tools/protectedPaths');
-  let alvo = saida ? path.resolve(cwd, String(saida)) : `${base.replace(/\.[^./]+$/, '')}${sufixo}.mp4`;
-  if (path.extname(alvo).toLowerCase() !== '.mp4') alvo += '.mp4';
-  const raiz = alvo.slice(0, -4);
-  for (let i = 2; fs.existsSync(alvo); i++) alvo = `${raiz}-${i}.mp4`;
+  let alvo = saida ? path.resolve(cwd, String(saida)) : `${base.replace(/\.[^./]+$/, '')}${sufixo}${ext}`;
+  if (path.extname(alvo).toLowerCase() !== ext) alvo += ext;
+  const raiz = alvo.slice(0, -ext.length);
+  for (let i = 2; fs.existsSync(alvo); i++) alvo = `${raiz}-${i}${ext}`;
   if (isProtected(alvo) || isSecret(alvo) || isProtected(path.dirname(alvo))) throw new Error('esse caminho é protegido do gemini-code; escolha outro lugar.');
   return alvo;
 }
@@ -118,4 +119,7 @@ async function gerar(prompt, { pasta = 'videos', cwd = process.cwd(), makeVideo 
   return { arquivo: r.outPath };
 }
 
-module.exports = { VIDEOS, FOTOS, AUDIOS, acharFfmpeg, filtrosMelhorar, listaConcat, melhorar, slideshow, gerar, destinoVideo };
+module.exports = {
+  VIDEOS, FOTOS, AUDIOS, SEM_FFMPEG, acharFfmpeg, filtrosMelhorar, listaConcat, melhorar, slideshow, gerar, destinoVideo,
+  conferirEntrada, rodar, entrada,
+};

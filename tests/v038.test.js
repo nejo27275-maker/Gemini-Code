@@ -57,12 +57,13 @@ test('mensagem de truncamento aponta para search_files (grep_files não existe)'
   assert.doesNotMatch(r, /grep_files/);
 });
 
-test('edit_file explica o problema quando o arquivo é CRLF e o old_text multilinha usa \\n', async () => {
+test('edit_file num arquivo CRLF com old_text multilinha em \\n: edita e mantém o CRLF (v0.50.0; antes recusava)', async () => {
   const p = path.join(temp(), 'crlf.txt');
   fs.writeFileSync(p, 'linha1\r\nlinha2\r\n');
-  const r = await fileTools.execute('edit_file', { path: p, old_text: 'linha1\nlinha2', new_text: 'x' });
-  assert.match(r, /CRLF/);
-  assert.equal(fs.readFileSync(p, 'utf8'), 'linha1\r\nlinha2\r\n');
+  const r = await fileTools.execute('edit_file', { path: p, old_text: 'linha1\nlinha2', new_text: 'x\ny' });
+  assert.match(r, /^Editado:/);
+  assert.match(r, /CRLF/, 'avisa que manteve o fim de linha do arquivo');
+  assert.equal(fs.readFileSync(p, 'utf8'), 'x\r\ny\r\n');
 });
 
 test('list_dir: pastas primeiro, ordenado, e com teto de itens', async () => {

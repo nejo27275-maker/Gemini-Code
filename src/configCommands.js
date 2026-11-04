@@ -49,6 +49,12 @@ function aplicar(sub, args, saveConfig) {
     saveConfig({ navegadorVisivel: a[0] === 'on' });
     return a[0] === 'on' ? 'O navegador do agente agora abre com janela (precisa de tela; as mesmas regras de sites aprovados e de rede valem).' : 'O navegador do agente voltou a rodar sem janela.';
   }
+  // v0.50.0: conferir a sintaxe depois de cada edição (src/tools/sintaxe.js; só analisa, nunca roda o código)
+  if (sub === 'set-conferir-sintaxe') {
+    if (!['on', 'off'].includes(a[0])) return 'Uso: gemini-code config set-conferir-sintaxe on|off   (on: depois de editar .js/.json/.py/.sh, avisa o agente se a edição quebrou a sintaxe)';
+    saveConfig({ conferirSintaxe: a[0] === 'on' });
+    return a[0] === 'on' ? 'Depois de cada edição, a sintaxe de .js, .json, .py e .sh é conferida (só análise, o código não roda).' : 'A conferência de sintaxe depois das edições foi desligada.';
+  }
   // v0.45.0: sandbox do run_shell (src/sandbox.js) e pastas onde o agente grava sem perguntar.
   if (sub === 'set-sandbox') {
     if (!['auto', 'sempre', 'off'].includes(a[0])) {

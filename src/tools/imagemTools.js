@@ -10,23 +10,56 @@ let deps = {
   ask: (q) => require('../ui/prompt').ask(q),
   loadConfig: () => require('../config').loadConfig(),
   imagem: () => require('../imagem'),
+  imagemEdicao: () => require('../imagemEdicao'),
 };
+
+const ACOES = ['ajustar', 'gerar', 'editar', 'melhorar', 'descrever'];
 
 const declarations = [
   {
     name: 'imagem',
     description:
-      'Imagens: "gerar" (descrição -> imagem nova, com IA), "editar" (foto + instrução -> foto nova, com IA), ' +
-      '"melhorar" (foto mais nítida/clara: sem IA pelo ImageMagick quando houver, ou com IA) e "descrever" ' +
-      '(responde uma pergunta sobre uma imagem do disco, ex.: um print de erro). Formatos: png, jpg, webp, gif. ' +
-      'Nunca sobrescreve: cria um arquivo novo e diz o caminho.',
+      'Imagens: "ajustar" (edição profissional SEM IA, no aparelho, pelo ImageMagick: formato de cada rede — feed 4:5, ' +
+      'quadrado, stories 9:16, capa do YouTube — com fundo desfocado; cor pronta; brilho, contraste, saturação, ' +
+      'nitidez; textos; marca d\'água; tamanho leve para WhatsApp; tira a localização (EXIF) por padrão; uma foto ou ' +
+      'várias de uma vez), "gerar" (descrição -> imagem nova, com IA), "editar" (foto + instrução livre -> foto nova, ' +
+      'com IA, ex.: "tire o fundo"), "melhorar" (mais nítida/clara: sem IA quando houver ImageMagick, ou com IA) e ' +
+      '"descrever" (responde uma pergunta sobre uma imagem do disco). Formatos: png, jpg, webp, gif. Nunca ' +
+      'sobrescreve: cria um arquivo novo e diz o caminho.',
     parameters: {
       type: 'object',
       properties: {
-        acao: { type: 'string', enum: ['gerar', 'editar', 'melhorar', 'descrever'] },
+        acao: { type: 'string', enum: ACOES },
         prompt: { type: 'string', description: 'gerar: o que desenhar; editar: o que mudar; descrever: a pergunta' },
-        arquivo: { type: 'string', description: 'editar/melhorar/descrever: caminho da imagem' },
-        saida: { type: 'string', description: 'caminho do arquivo novo (opcional)' },
+        arquivo: { type: 'string', description: 'ajustar/editar/melhorar/descrever: caminho da imagem' },
+        fotos: { type: 'array', items: { type: 'string' }, description: 'ajustar: várias fotos com a mesma receita (lote)' },
+        formato: { type: 'string', enum: ['feed', 'quadrado', 'stories', 'youtube', 'original'], description: 'ajustar: feed = Instagram 4:5; stories = 9:16; youtube = capa 16:9' },
+        enquadrar: { type: 'string', enum: ['fundo-desfocado', 'preencher', 'barras'], description: 'ajustar: como caber no formato (padrão: fundo-desfocado)' },
+        cor: { type: 'string', enum: ['natural', 'vivo', 'quente', 'frio', 'cinema', 'pb', 'vintage', 'dramatico', 'nenhuma'] },
+        brilho: { type: 'number', description: 'ajustar: -1 a 1 (0 = igual)' },
+        contraste: { type: 'number', description: 'ajustar: 0 a 3 (1 = igual)' },
+        saturacao: { type: 'number', description: 'ajustar: 0 a 3 (1 = igual; 0 = preto e branco)' },
+        nitidez: { type: 'number', description: 'ajustar: 0 a 3' },
+        melhorar: { type: 'boolean', description: 'ajustar: corrige luz, cor e nitidez automaticamente' },
+        textos: {
+          type: 'array',
+          description: 'ajustar: textos na foto',
+          items: {
+            type: 'object',
+            properties: {
+              texto: { type: 'string' },
+              posicao: { type: 'string', enum: ['topo', 'centro', 'baixo'] },
+              tamanho: { type: 'string', enum: ['pequeno', 'medio', 'grande'] },
+              fundo: { type: 'boolean', description: 'faixa escura atrás do texto' },
+            },
+            required: ['texto'],
+          },
+        },
+        marca_dagua: { type: 'string', description: 'ajustar: logo (.png)' },
+        posicao_marca: { type: 'string', enum: ['canto-inferior-direito', 'canto-inferior-esquerdo', 'canto-superior-direito', 'canto-superior-esquerdo', 'centro'] },
+        qualidade: { type: 'string', enum: ['alta', 'normal', 'leve'], description: 'ajustar: leve = menor, para WhatsApp' },
+        manter_localizacao: { type: 'boolean', description: 'ajustar: true mantém o EXIF (local da foto, câmera); padrão: tira' },
+        saida: { type: 'string', description: 'caminho do arquivo novo (opcional; não vale com várias fotos)' },
         modo: { type: 'string', enum: ['auto', 'local', 'ia'], description: 'melhorar: local (ImageMagick, grátis), ia (Gemini) ou auto' },
         ampliar: { type: 'integer', description: 'melhorar local: aumenta a resolução 2, 3 ou 4 vezes' },
       },
@@ -50,7 +83,29 @@ async function execute(name, args = {}) {
   const { paraExibir } = require('../ui/textoSeguro');
   const { foraDoProjetoParaConvidado, confirmarForaDaArea } = require('./protectedPaths');
   const im = deps.imagem();
-  if (!['gerar', 'editar', 'melhorar', 'descrever'].includes(acao)) return 'Erro: imagem precisa de "acao": gerar, editar, melhorar ou descrever.';
+  if (!ACOES.includes(acao)) return `Erro: imagem precisa de "acao": ${ACOES.join(', ')}.`;
+  if (acao === 'ajustar') {
+    // v0.50.0: edição profissional sem IA (src/imagemEdicao.js) — não gasta cota, então não pergunta; fora do projeto, sim
+    const fotos = Array.isArray(a.fotos) && a.fotos.length ? a.fotos : [a.arquivo];
+    if (!fotos.every((f) => typeof f === 'string' && f.trim())) return 'Erro: "ajustar" precisa de "arquivo" (ou "fotos", para várias).';
+    for (const f of [...fotos, a.marca_dagua].filter((e) => typeof e === 'string' && e)) {
+      const fora = foraDoProjetoParaConvidado(f);
+      if (fora) return fora;
+    }
+    try {
+      const recusa = await confirmarForaDaArea([path.resolve(a.saida || fotos[0])]);
+      if (recusa) return recusa;
+      const r = await deps.imagemEdicao().ajustar(fotos, a, { saida: a.saida });
+      const rel = (f) => path.relative(process.cwd(), f) || f;
+      const tam = `${r.arquivos[0].largura}x${r.arquivos[0].altura}`;
+      const feito = r.passos.length ? `; ${r.passos.join(', ')}` : '';
+      return r.arquivos.length === 1
+        ? `Foto editada (sem IA): ${rel(r.arquivos[0].arquivo)} (${tam}${feito})`
+        : `${r.arquivos.length} fotos editadas (sem IA): ${r.arquivos.map((x) => rel(x.arquivo)).join(', ')} (${tam}${feito})`;
+    } catch (e) {
+      return `Erro: ${e.message}`;
+    }
+  }
   if (acao !== 'gerar') {
     if (typeof a.arquivo !== 'string' || !a.arquivo.trim()) return `Erro: "${acao}" precisa de "arquivo" (caminho da imagem).`;
     const fora = foraDoProjetoParaConvidado(a.arquivo);

@@ -66,6 +66,10 @@ function buildSystemInstruction(extra, { cwd = process.cwd() } = {}) {
     'conectadas e consultar skills para seguir boas práticas em tarefas específicas. ' +
     'Seja direto, explique o que vai fazer antes de rodar comandos que alteram o ' +
     'sistema, e prefira soluções simples e corretas.\n\n' +
+    'Edite como um profissional: leia o arquivo antes de mudá-lo; para mudar um trecho use edit_file (ou ' +
+    'edit_files, várias edições de uma vez) em vez de reescrever o arquivo inteiro; siga o estilo do arquivo ' +
+    '(indentação, aspas, nomes). Cada edição volta com o diff e os números de linha: confira se ficou como você ' +
+    'queria. Se a ferramenta avisar erro de sintaxe, corrija na hora.\n\n' +
     'Depois de editar ou criar código (write_file/edit_file em arquivos de código, não em ' +
     'documentos soltos), chame run_checks para rodar os testes/lint do projeto que está sendo ' +
     'editado. Se algo falhar, leia a saída, corrija e rode run_checks de novo antes de dizer que a ' +

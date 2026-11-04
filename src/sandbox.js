@@ -121,10 +121,14 @@ function areasDoModelo({ cwd = process.cwd(), home = homeUsuario(), extras = [] 
   return lista;
 }
 
-/** Acha o bwrap: pastas do sistema primeiro; do PATH só caminho absoluto fora das áreas do modelo e sem gravação por outros. */
-function acharBwrap(env = process.env, { proibidas = [] } = {}) {
-  const doPath = String(env.PATH || '').split(path.delimiter).filter((d) => path.isAbsolute(d)).map((d) => path.join(d, 'bwrap'));
-  for (const p of [...LOCAIS_BWRAP, ...doPath]) {
+/**
+ * Acha um programa que o gemini-code roda SEM ninguém aprovar na hora (o bwrap; desde a v0.50.0, o python3 e o bash
+ * que conferem a sintaxe depois de uma edição): pastas do sistema primeiro; do PATH, só caminho absoluto fora das
+ * áreas do modelo (um programa plantado ali rodaria sem aprovação) e que o grupo/outros não podem trocar.
+ */
+function acharProgramaConfiavel(nome, { locais = [], env = process.env, proibidas = [] } = {}) {
+  const doPath = String(env.PATH || '').split(path.delimiter).filter((d) => path.isAbsolute(d)).map((d) => path.join(d, nome));
+  for (const p of [...locais, ...doPath]) {
     let r;
     let st;
     try { fs.accessSync(p, fs.constants.X_OK); r = fs.realpathSync(p); st = fs.statSync(r); } catch { continue; }
@@ -133,6 +137,11 @@ function acharBwrap(env = process.env, { proibidas = [] } = {}) {
     return r;
   }
   return null;
+}
+
+/** Acha o bwrap (as mesmas regras de acharProgramaConfiavel). */
+function acharBwrap(env = process.env, { proibidas = [] } = {}) {
+  return acharProgramaConfiavel('bwrap', { locais: LOCAIS_BWRAP, env, proibidas });
 }
 
 /** Flags de isolamento comuns (fora os mounts). */
@@ -442,6 +451,6 @@ function descrever({ gravaveis = [], rede = false } = {}) {
 }
 
 module.exports = {
-  MODOS, CREDENCIAIS_HOME, LOCAIS_BWRAP, modoDe, filtroSeccomp, acharBwrap, areasDoModelo, verificar, limparCache, flagsIsolamento,
+  MODOS, CREDENCIAIS_HOME, LOCAIS_BWRAP, modoDe, filtroSeccomp, acharBwrap, acharProgramaConfiavel, areasDoModelo, verificar, limparCache, flagsIsolamento,
   areasGravaveis, caminhosEscondidos, ambiente, resumo, montar, rodar, descrever, matarDescendentes, matarSandbox,
 };

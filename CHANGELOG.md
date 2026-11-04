@@ -1,3 +1,89 @@
+## 0.50.0 — editar como um profissional: código, vídeo e foto
+
+Base: a 0.49.3 (no PR [#7](https://github.com/nejo27275-maker/Gemini-Code/pull/7)). Pedido: "faça ele editar feito um
+profissional" — código e também vídeo e foto (a pessoa escolheu "os dois"). Guia: `docs/EDICAO.md`.
+
+**Código** (as ferramentas de arquivo do agente):
+- **Não sobrescreve o que não leu.** O `write_file` recusa sobrescrever um arquivo que o agente não leu nesta sessão, ou
+  que mudou no disco depois da leitura (você mexeu no editor, um comando mexeu). Antes, apagava sem ver. Conteúdo igual
+  vira "Sem mudança", sem gravar.
+- **Mostra o que mudou.** `edit_file`, `edit_files` e `write_file` devolvem o diff com os números de linha, para o agente
+  conferir sem ler o arquivo de novo.
+- **Confere a sintaxe** de `.js`/`.mjs`/`.cjs`, `.json`, `.py` e `.sh` depois da edição, e avisa quando a edição quebrou
+  um arquivo que estava certo.
+  - Só analisa, o código não roda: `node --check`, `ast.parse` do Python e `bash -n`, tudo pela entrada padrão.
+  - O `python3` e o `bash` só vêm das pastas do sistema: um plantado no projeto não roda.
+  - Arquivo que já tinha erro não vira alarme.
+  - JSON com comentários (tsconfig) também não vira alarme; um package.json continua estrito.
+  - Desliga com `config set-conferir-sintaxe off`.
+- **Mantém o estilo do arquivo:**
+  - arquivo CRLF (Windows) com o trecho em LF agora edita, mantendo o CRLF (antes recusava);
+  - o `write_file` mantém o CRLF e o BOM de quem sobrescreve.
+- **Acha o trecho mesmo com espaço sobrando no fim da linha** (se for um lugar só). Quando não acha, mostra o trecho
+  mais parecido com os números de linha.
+- **O `edit_file` usa o mesmo núcleo do `edit_files`.** Com isso, ganhou o `replace_all` e passou a recusar arquivo
+  binário e Latin-1 (antes corrompia os acentos).
+- **As instruções do agente** pedem para editar como um profissional.
+
+**Vídeo** (`gemini-code video editar`, ffmpeg, sem IA):
+- **Uma receita numa passada só:**
+  - cortar e velocidade (o áudio fica no tom);
+  - estabilizar e melhorar;
+  - 8 cores prontas, mais brilho, contraste e saturação;
+  - o formato de cada rede (Reels/TikTok/Shorts em 9:16, feed em 4:5, quadrado, YouTube), com fundo desfocado,
+    preenchendo ou com barras;
+  - legenda `.srt`/`.vtt`/`.ass` queimada, com os tempos ajustados ao corte;
+  - textos na tela, quebrados em linhas, centralizados e empilhados quando aparecem juntos;
+  - fade;
+  - marca d'água;
+  - música de fundo que abaixa quando alguém fala;
+  - o áudio no volume das redes (-14 LUFS).
+- **Também:**
+  - `juntar` (tamanhos diferentes, clipe sem som e transição suave);
+  - `capa` (a melhor imagem do começo, ou a de um instante);
+  - `audio` (.mp3/.m4a);
+  - `info` (duração, tamanho, áudio, rotação do celular).
+- **No chat**, pela ferramenta `video` (sob demanda: `config ferramentas-extras video`).
+- **Segurança:** o texto vai por arquivo (`textfile`, `expansion=none`), nunca dentro do filtro, e os valores do filtro
+  passam pelos dois níveis de escape do ffmpeg. As travas de sempre continuam: entradas `file:` com
+  `-protocol_whitelist file`, saída sempre num arquivo novo (`-n`).
+- **O que a primeira versão mostrou:** olhei os quadros gerados antes de considerar pronto. Na primeira versão, o texto
+  "grande" ocupava a tela inteira, as linhas ficavam alinhadas à esquerda e o texto de baixo ficava em cima da legenda.
+  - Agora o tamanho é proporcional ao menor lado do vídeo, cada linha é centralizada e o texto de baixo sobe quando há
+    legenda.
+  - Dois textos na mesma posição ficavam um em cima do outro; agora empilham.
+
+**Foto** (`gemini-code imagem ajustar`, ImageMagick, sem IA):
+- **A receita:**
+  - formato de cada rede (feed 4:5, quadrado, stories 9:16, capa do YouTube), com fundo desfocado;
+  - melhorar automático e as mesmas cores do vídeo;
+  - brilho, contraste, saturação e nitidez;
+  - textos com contorno ou faixa;
+  - marca d'água (o texto daquele lado sobe para não ficar em cima dela);
+  - `leve` para o WhatsApp;
+  - lote (várias fotos de uma vez).
+- **Por padrão tira a localização e os dados da câmera (EXIF),** depois de endireitar a foto girada.
+- **No chat**, pela ferramenta `imagem` (ação "ajustar"), que não pergunta nada porque não gasta cota.
+- **Segurança:** o texto é escapado para o ImageMagick. Um `@` no começo leria um arquivo, e `%w`/`%[fx:...]` seriam
+  interpretados; isso foi conferido com o `-print` do próprio ImageMagick.
+
+**Medições:**
+- **Volume do vídeo editado:** -14,4 LUFS, medido com o `ebur128` do ffmpeg (o teste aceita -14 ± 2).
+- **Tempo da edição completa:** 9 s para um Reels de 3 s com todas as opções; 0,75 s para uma foto.
+
+**Testes:**
+- `edicaoProfissional.test.js` (novo, 18): 13 deles falham no código anterior (conferido). Os outros 5 testam os
+  módulos novos diretamente.
+- `videoEdicao.test.js` (novo, 15) e `imagemEdicao.test.js` (novo, 8): com ffmpeg e ImageMagick de verdade, que não
+  podem ser pulados no CI.
+  - Os quadros e a foto foram conferidos olhando a imagem gerada.
+  - A foto girada usa um EXIF de verdade, montado no teste: o `-orient` do ImageMagick 6 não grava isso num JPEG.
+- **Testes antigos atualizados para o comportamento novo:**
+  - o CRLF agora edita, em vez de recusar;
+  - os testes do `rewind` leem o arquivo antes de sobrescrever;
+  - as contagens de linha do `edit_files` agora ignoram o diff.
+- Suíte inteira: 1049 testes (1048 passando, 1 pulado como root) no Node 22. ESLint 0 problemas.
+
 ## 0.49.3 — caça aos bugs: a pasta do usuário em todo lugar e o contraste do chat
 
 Base: a 0.49.2 (no PR [#7](https://github.com/nejo27275-maker/Gemini-Code/pull/7)). Nesta rodada, procurei bugs de

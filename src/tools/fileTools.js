@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { backupBeforeWrite } = require('./backup');
 const rewind = require('../rewind');
+const leituras = require('./leituras');
 const { isProtected, isSecret, foraDoProjetoParaConvidado, arquivoQueRodaNoGit, confirmarForaDaArea, MSG_SEGREDO, MSG_GIT } = require('./protectedPaths');
 
 // Achado num teste (set/2026): o agente reescreveu sozinho o config.json
@@ -80,7 +81,10 @@ const declarations = [
   },
   {
     name: 'write_file',
-    description: 'Cria ou sobrescreve um arquivo de texto no disco.',
+    description:
+      'Cria um arquivo de texto, ou sobrescreve um inteiro. Para sobrescrever um arquivo que já existe, leia-o antes ' +
+      'com read_file (senão a gravação é recusada); para mudar só um trecho, prefira edit_file. Mantém o fim de ' +
+      'linha (CRLF) e o BOM do arquivo; o resultado mostra o que mudou e avisa se a sintaxe quebrou.',
     parameters: {
       type: 'object',
       properties: {
@@ -95,13 +99,15 @@ const declarations = [
     description:
       'Substitui um trecho exato (old_text) por new_text num arquivo existente, sem reescrever ' +
       'o arquivo inteiro. old_text precisa ocorrer exatamente uma vez no arquivo — inclua contexto ' +
-      'suficiente (linhas ao redor) para garantir isso.',
+      'suficiente (linhas ao redor) para garantir isso — ou use replace_all: true para trocar todas. ' +
+      'O resultado mostra o trecho alterado com números de linha e avisa se a edição quebrou a sintaxe.',
     parameters: {
       type: 'object',
       properties: {
         path: { type: 'string' },
         old_text: { type: 'string', description: 'Trecho exato a ser substituído (deve ser único no arquivo)' },
         new_text: { type: 'string', description: 'Texto que entra no lugar' },
+        replace_all: { type: 'boolean', description: 'Se true, troca todas as ocorrências (ex.: renomear). Padrão: false.' },
       },
       required: ['path', 'old_text', 'new_text'],
     },
@@ -147,9 +153,11 @@ async function execute(name, args) {
       const buf = fs.readFileSync(p);
       // Heurística simples de binário: byte nulo nos primeiros 8000 bytes.
       if (buf.subarray(0, 8000).includes(0)) {
+        leituras.registrar(p, buf); // o agente viu o que há ali (um binário): sobrescrever vira decisão consciente
         return `Erro: "${args.path}" parece ser um arquivo binário (${stat.size} bytes) — não lido como texto.`;
       }
       const text = buf.toString('utf8');
+      leituras.registrar(p, buf); // v0.50.0: o write_file só sobrescreve o que o agente já leu (src/tools/leituras.js)
       if (args.start_line != null || args.end_line != null) {
         return lerIntervalo(text, args);
       }
@@ -177,54 +185,82 @@ async function execute(name, args) {
         );
       }
       if (arquivoQueRodaNoGit(args.path)) return MSG_GIT;
+      // v0.50.0: como um editor profissional — não sobrescreve o que não leu (nem o que mudou depois da leitura),
+      // mantém o fim de linha e o BOM do arquivo, e mostra o que mudou.
+      const p = path.resolve(args.path);
+      let atual = null;
+      let stW = null;
+      try { stW = fs.statSync(p); } catch { /* arquivo novo */ }
+      if (stW && stW.isFile()) {
+        // o mesmo limite do read_file: um arquivo que o agente não consegue ler, ele também não sobrescreve inteiro
+        if (stW.size > MAX_READ_BYTES) return `Erro: ${args.path} tem ${stW.size} bytes; o write_file não sobrescreve um arquivo desse tamanho (o limite é ${MAX_READ_BYTES}). Nada foi gravado.`;
+        try { atual = fs.readFileSync(p); } catch (err) { return erroDeGravacao(args.path, err); }
+      }
+      let conteudo = args.content;
+      const ajustes = [];
+      if (atual && atual.length) {
+        const textoAtual = atual.toString('utf8');
+        const { fimDeLinha, paraCRLF, contarLinhas } = require('./edicao');
+        if (fimDeLinha(textoAtual) === '\r\n' && /(^|[^\r])\n/.test(conteudo)) {
+          conteudo = paraCRLF(conteudo);
+          ajustes.push('o fim de linha CRLF (Windows) do arquivo foi mantido');
+        }
+        if (textoAtual.startsWith('\uFEFF') && !conteudo.startsWith('\uFEFF')) {
+          conteudo = `\uFEFF${conteudo}`;
+          ajustes.push('o BOM do início do arquivo foi mantido');
+        }
+        if (Buffer.from(conteudo, 'utf8').equals(atual)) {
+          leituras.registrar(p, atual);
+          return `Sem mudança: ${args.path} (o conteúdo é igual ao que já está no arquivo; nada gravado)`;
+        }
+        const visto = leituras.situacao(p, atual);
+        if (visto === 'nunca') {
+          const n = contarLinhas(textoAtual);
+          return `Erro: ${args.path} já existe (${n} ${n === 1 ? 'linha' : 'linhas'}) e você não leu este arquivo nesta sessão. ` +
+            'Leia com read_file antes de sobrescrever (para não apagar o que está nele), ou use edit_file/edit_files para mudar só um trecho. Nada foi gravado.';
+        }
+        if (visto === 'mudou') {
+          return `Erro: ${args.path} mudou no disco depois da última vez que você o leu (outra pessoa, um comando ou um programa mexeu). ` +
+            'Leia de novo com read_file antes de sobrescrever, para não apagar essas mudanças. Nada foi gravado.';
+        }
+      }
       // v0.45.0: fora da pasta do projeto (ex.: ~/.bashrc), pergunta antes — src/tools/protectedPaths.js
       const recusaW = await confirmarForaDaArea([args.path]);
       if (recusaW) return recusaW;
       let backupW;
       try {
-        fs.mkdirSync(path.dirname(path.resolve(args.path)), { recursive: true });
+        fs.mkdirSync(path.dirname(p), { recursive: true });
         rewind.registrar(args.path);
         backupW = backupBeforeWrite(args.path);
-        fs.writeFileSync(args.path, args.content, 'utf8');
+        fs.writeFileSync(args.path, conteudo, 'utf8');
       } catch (err) {
         return erroDeGravacao(args.path, err);
       }
-      return backupW
-        ? `Arquivo salvo: ${args.path} (backup do conteúdo anterior em ${backupW})`
-        : `Arquivo salvo: ${args.path}`;
+      leituras.registrar(p, conteudo);
+      const linhasNovas = require('./edicao').contarLinhas(conteudo);
+      const partes = [];
+      let diffTexto = '';
+      if (atual && atual.length) {
+        const diff = require('./edicao').resumoDiff(atual.toString('utf8'), conteudo, { maxLinhas: 40 });
+        diffTexto = diff.texto;
+        partes.push(`Arquivo salvo: ${args.path} (substituiu o conteúdo anterior: +${diff.mais} -${diff.menos} linhas` +
+          `${backupW ? `; backup do conteúdo anterior em ${backupW}` : ''})`);
+      } else {
+        partes.push(`Arquivo salvo: ${args.path} (arquivo novo, ${linhasNovas} ${linhasNovas === 1 ? 'linha' : 'linhas'})`);
+      }
+      for (const a of ajustes) partes.push(`Nota: ${a}.`);
+      if (diffTexto) partes.push(diffTexto);
+      const sintaxe = await require('./sintaxe').conferirDepoisDeEditar(args.path, atual && atual.length ? atual.toString('utf8') : null, conteudo);
+      if (sintaxe) partes.push(sintaxe);
+      return partes.join('\n');
     }
     case 'edit_file': {
       if (typeof args.path !== 'string' || !args.path) return 'Erro: edit_file precisa de "path".';
-      if (isProtected(args.path)) {
-        return 'Bloqueado: este arquivo (ou o destino deste link) é configuração protegida do próprio gemini-code (config, MCP, hooks, token ou agente pessoal) e não pode ser editado diretamente.';
-      }
-      if (typeof args.old_text !== 'string' || args.old_text === '') {
-        return 'Erro: old_text não pode ser vazio — informe o trecho exato a substituir.';
-      }
-      if (typeof args.new_text !== 'string') return 'Erro: edit_file precisa de "new_text" (pode ser string vazia para apagar o trecho).';
-      const p = path.resolve(args.path);
-      if (!fs.existsSync(p)) return `Erro: arquivo não existe: ${args.path} (use write_file para criar um novo).`;
-      if (arquivoQueRodaNoGit(p)) return MSG_GIT;
-      const src = fs.readFileSync(p, 'utf8');
-      const n = src.split(args.old_text).length - 1;
-      if (n === 0) {
-        // v0.3.8: arquivo com CRLF nunca casa com um old_text multilinha escrito com \n.
-        if (src.includes('\r\n') && args.old_text.includes('\n') && !args.old_text.includes('\r\n')) {
-          return 'Erro: old_text não encontrado — o arquivo usa quebras de linha CRLF (\\r\\n). Inclua \\r\\n no old_text ou edite uma linha só por vez.';
-        }
-        return 'Erro: old_text não encontrado no arquivo (confira espaços, indentação e quebras de linha).';
-      }
-      if (n > 1) return `Erro: old_text aparece ${n} vezes no arquivo — inclua mais contexto ao redor para ficar único.`;
-      const idx = src.indexOf(args.old_text);
-      const novo = src.slice(0, idx) + args.new_text + src.slice(idx + args.old_text.length);
-      const recusaE = await confirmarForaDaArea([p]);
-      if (recusaE) return recusaE;
-      rewind.registrar(p);
-      const backupE = backupBeforeWrite(p);
-      try { fs.writeFileSync(p, novo, 'utf8'); } catch (err) { return erroDeGravacao(args.path, err); }
-      return backupE
-        ? `Editado: ${args.path} (backup do conteúdo anterior em ${backupE})`
-        : `Editado: ${args.path}`;
+      // v0.50.0: o mesmo núcleo do edit_files (src/tools/multiEditTools.js): fim de linha mantido, espaços no fim
+      // das linhas tolerados, trecho mais parecido quando não acha, diff com números de linha e sintaxe conferida.
+      const edicao = { path: args.path, old_text: args.old_text, new_text: args.new_text };
+      if (args.replace_all !== undefined) edicao.replace_all = args.replace_all;
+      return require('./multiEditTools').editar([edicao], { unica: true });
     }
     case 'list_dir': {
       const dir = args.path || '.';

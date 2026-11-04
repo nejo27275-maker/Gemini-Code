@@ -21,6 +21,7 @@ test('desfaz criação, sobrescrita e edição de um turno', async () => {
   const novo = path.join(proj, 'sub', 'novo.txt');
   fs.writeFileSync(a, 'original');
   rewind.iniciarTurno('mexe nos arquivos', { cwd: proj });
+  await fileTools.execute('read_file', { path: a }); // v0.50.0: só sobrescreve o que leu
   await fileTools.execute('write_file', { path: a, content: 'trocado' });
   await fileTools.execute('edit_file', { path: a, old_text: 'trocado', new_text: 'editado' });
   await fileTools.execute('write_file', { path: novo, content: 'criado' });
@@ -37,6 +38,7 @@ test('não sobrescreve o que mudou depois do agente, a menos que --force', async
   const a = path.join(proj, 'a.txt');
   fs.writeFileSync(a, 'v0');
   rewind.iniciarTurno('x', { cwd: proj });
+  await fileTools.execute('read_file', { path: a });
   await fileTools.execute('write_file', { path: a, content: 'v1' });
   rewind.finalizarTurno();
   fs.writeFileSync(a, 'v2 (eu mexi)');
@@ -87,6 +89,7 @@ test('arquivo grande demais é avisado, não apagado em silêncio', async () => 
   const g = path.join(proj, 'grande.bin');
   fs.writeFileSync(g, Buffer.alloc(rewind.MAX_BYTES_ARQUIVO + 1, 1));
   rewind.iniciarTurno('g', { cwd: proj });
+  await fileTools.execute('read_file', { path: g });
   await fileTools.execute('write_file', { path: g, content: 'pequeno' });
   rewind.finalizarTurno();
   const r = rewind.desfazer({ cwd: proj });
