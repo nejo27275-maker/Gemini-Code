@@ -1,0 +1,1394 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#070a14">
+<title>Estudo Gamer • AV2 Dezembro • 5º Ano</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Nunito:wght@500;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#070a14; --bg2:#0e1324; --card:#121a33; --card2:#18213f; --line:#26305a;
+  --txt:#e8ecff; --mut:#8e98c8; --cyan:#00e5ff; --pur:#a855f7; --pink:#ff2d95;
+  --ok:#22ff88; --bad:#ff3b5c; --gold:#ffd23f; --acc:var(--cyan);
+  --r:20px; --sh:0 10px 40px rgba(0,0,0,.45);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{font-family:Nunito,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--txt);overflow-x:hidden;min-height:100vh}
+body::before{content:"";position:fixed;inset:0;z-index:-2;
+  background:radial-gradient(60vw 60vw at 10% -10%,rgba(168,85,247,.22),transparent 60%),
+             radial-gradient(50vw 50vw at 110% 20%,rgba(0,229,255,.16),transparent 60%),
+             radial-gradient(60vw 50vw at 50% 120%,rgba(255,45,149,.14),transparent 60%),var(--bg)}
+body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.25;
+  background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);
+  background-size:38px 38px;mask-image:linear-gradient(to bottom,#000,transparent 85%)}
+button{font-family:inherit;cursor:pointer;border:0;color:inherit}
+.hide{display:none!important}
+.orb{font-family:Orbitron,Nunito,sans-serif;letter-spacing:.04em}
+
+/* ===== HUD ===== */
+.hud{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:12px;padding:calc(10px + env(safe-area-inset-top)) calc(14px + env(safe-area-inset-right)) 10px calc(14px + env(safe-area-inset-left));
+  background:rgba(7,10,20,.78);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+.avatar{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;font-size:22px;
+  background:linear-gradient(135deg,var(--pur),var(--cyan));box-shadow:0 0 18px rgba(0,229,255,.45);flex:none}
+.hud .who{flex:1;min-width:0}
+.hud .nm{font-weight:900;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hud .lv{font-size:11px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.xpbar{height:9px;border-radius:9px;background:#1b2347;overflow:hidden;margin-top:4px;position:relative}
+.xpbar i{display:block;height:100%;width:0;border-radius:9px;background:linear-gradient(90deg,var(--cyan),var(--pur),var(--pink));
+  box-shadow:0 0 12px var(--cyan);transition:width .8s cubic-bezier(.2,.9,.2,1)}
+.chip{display:flex;align-items:center;gap:6px;padding:7px 11px;border-radius:999px;background:var(--card);border:1px solid var(--line);font-weight:900;font-size:14px;flex:none}
+.chip.xp{color:var(--gold)}
+.chip.fire{color:#ff8a3d}
+.iconbtn{width:38px;height:38px;border-radius:12px;background:var(--card);border:1px solid var(--line);font-size:18px;flex:none}
+
+/* ===== Layout ===== */
+main{max-width:860px;margin:0 auto;padding:18px 14px 120px}
+.view{animation:viewIn .45s cubic-bezier(.2,.9,.2,1)}
+@keyframes viewIn{from{opacity:0;transform:translateY(18px) scale(.98)}to{opacity:1;transform:none}}
+.hero{border-radius:var(--r);padding:22px;margin-bottom:18px;position:relative;overflow:hidden;
+  background:linear-gradient(135deg,rgba(168,85,247,.35),rgba(0,229,255,.18));border:1px solid rgba(168,85,247,.5);box-shadow:var(--sh)}
+.hero h1{font-size:clamp(22px,5vw,32px);line-height:1.1}
+.hero p{color:#cdd3ff;margin-top:8px;font-size:15px}
+.hero .big{position:absolute;right:-6px;bottom:-16px;font-size:96px;opacity:.25;transform:rotate(-12deg)}
+.sec-t{font-size:13px;color:var(--mut);text-transform:uppercase;letter-spacing:.14em;margin:22px 4px 10px;font-weight:900}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+.mcard{position:relative;text-align:left;border-radius:var(--r);padding:18px;background:var(--card);border:1px solid var(--line);
+  overflow:hidden;transition:transform .2s,box-shadow .2s,border-color .2s}
+.mcard:hover,.mcard:focus-visible{transform:translateY(-4px);border-color:var(--c);box-shadow:0 0 0 1px var(--c),0 12px 30px -6px var(--c)}
+.mcard:active{transform:scale(.97)}
+.mcard::before{content:"";position:absolute;inset:0 0 auto 0;height:4px;background:var(--c)}
+.mcard .em{font-size:38px;filter:drop-shadow(0 0 10px var(--c))}
+.mcard h3{font-size:19px;margin:8px 0 2px}
+.mcard .dt{font-size:13px;color:var(--mut)}
+.mcard .cd{position:absolute;top:14px;right:14px;font-size:12px;font-weight:900;padding:5px 9px;border-radius:999px;background:rgba(255,255,255,.07);color:var(--c)}
+.prog{height:8px;border-radius:8px;background:#1b2347;margin-top:12px;overflow:hidden}
+.prog i{display:block;height:100%;background:var(--c);box-shadow:0 0 10px var(--c);transition:width .6s}
+.mcard .pt{font-size:12px;color:var(--mut);margin-top:6px;display:flex;justify-content:space-between}
+.tag{display:inline-block;font-size:11px;font-weight:900;padding:3px 8px;border-radius:999px;margin-top:8px}
+.tag.livro{background:rgba(34,255,136,.12);color:var(--ok)}
+.tag.geral{background:rgba(255,210,63,.12);color:var(--gold)}
+
+/* lista de tópicos */
+.back{display:inline-flex;align-items:center;gap:6px;padding:9px 14px;border-radius:12px;background:var(--card);border:1px solid var(--line);font-weight:800;margin-bottom:14px}
+.topic{display:flex;align-items:center;gap:14px;width:100%;text-align:left;padding:15px;border-radius:16px;background:var(--card);border:1px solid var(--line);margin-bottom:10px;transition:.2s}
+.topic:hover{border-color:var(--c);transform:translateX(4px)}
+.topic .n{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;font-weight:900;font-size:20px;background:rgba(255,255,255,.06);flex:none}
+.topic.done .n{background:var(--c);color:#06101c;box-shadow:0 0 16px var(--c)}
+.topic .tt{flex:1}
+.topic .tt b{display:block;font-size:16px}
+.topic .tt small{color:var(--mut)}
+.stars{font-size:14px;letter-spacing:2px}
+.gabbtn{width:100%;padding:16px;border-radius:16px;font-weight:900;font-size:16px;margin-top:8px;
+  background:linear-gradient(135deg,rgba(255,210,63,.18),rgba(255,45,149,.15));border:1px dashed var(--gold);color:var(--gold)}
+
+/* ===== Deck de cards ===== */
+.deckhead{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.deckhead .back{margin:0}
+.dots{flex:1;display:flex;gap:4px}
+.dots i{flex:1;height:6px;border-radius:6px;background:#1f2852;transition:.3s}
+.dots i.on{background:var(--c);box-shadow:0 0 8px var(--c)}
+.dots i.q{background:#3a2550}
+.dots i.q.on{background:var(--pink);box-shadow:0 0 8px var(--pink)}
+.stage{position:relative;min-height:440px;perspective:1200px}
+.slide{position:relative;border-radius:24px;padding:26px 22px 24px;min-height:420px;background:linear-gradient(160deg,var(--card2),var(--card));
+  border:1px solid var(--line);box-shadow:var(--sh);overflow:hidden}
+.slide::after{content:"";position:absolute;width:260px;height:260px;border-radius:50%;right:-90px;top:-90px;background:var(--c);opacity:.12;filter:blur(30px)}
+.slide .kick{font-size:12px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;color:var(--c)}
+.slide .emo{font-size:58px;margin:10px 0 4px;display:inline-block;animation:bob 3s ease-in-out infinite}
+@keyframes bob{50%{transform:translateY(-8px) rotate(4deg)}}
+.slide h2{font-size:clamp(21px,4.6vw,28px);line-height:1.15;margin:6px 0 12px}
+.slide .tx{font-size:17px;line-height:1.55;color:#d9defc}
+.slide .tx b,.slide .tx strong{color:#fff}
+.slide .tx em{color:var(--c);font-style:normal;font-weight:800}
+.slide .tx ul{margin:8px 0 0 0;list-style:none}
+.slide .tx li{padding:7px 0 7px 28px;position:relative}
+.slide .tx li::before{content:"▸";position:absolute;left:6px;color:var(--c);font-weight:900}
+.slide .tx table{width:100%;border-collapse:collapse;margin-top:8px;font-size:15px}
+.slide .tx td,.slide .tx th{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left}
+.slide .tx th{color:var(--c);font-size:13px;text-transform:uppercase}
+.box{margin-top:14px;padding:12px 14px;border-radius:14px;background:rgba(0,229,255,.07);border-left:4px solid var(--c);font-size:15px}
+.box.dica{background:rgba(255,210,63,.08);border-color:var(--gold)}
+.pg{position:absolute;bottom:14px;right:18px;font-size:12px;color:var(--mut)}
+
+.anim-in-right{animation:inR .5s cubic-bezier(.2,.9,.25,1.15) both}
+.anim-in-left{animation:inL .5s cubic-bezier(.2,.9,.25,1.15) both}
+.anim-out-left{animation:outL .32s ease-in both}
+.anim-out-right{animation:outR .32s ease-in both}
+@keyframes inR{from{opacity:0;transform:translateX(110%) rotate(8deg) scale(.9)}to{opacity:1;transform:none}}
+@keyframes inL{from{opacity:0;transform:translateX(-110%) rotate(-8deg) scale(.9)}to{opacity:1;transform:none}}
+@keyframes outL{to{opacity:0;transform:translateX(-120%) rotate(-10deg) scale(.85)}}
+@keyframes outR{to{opacity:0;transform:translateX(120%) rotate(10deg) scale(.85)}}
+
+.navbar{position:fixed;left:0;right:0;bottom:0;z-index:40;padding:12px 14px calc(12px + env(safe-area-inset-bottom));
+  background:linear-gradient(to top,rgba(7,10,20,.98),rgba(7,10,20,.75));backdrop-filter:blur(10px);border-top:1px solid var(--line)}
+.navbar .in{max-width:860px;margin:0 auto;display:flex;gap:10px}
+.btn{padding:15px 18px;border-radius:16px;font-weight:900;font-size:16px;background:var(--card);border:1px solid var(--line);transition:transform .12s,opacity .2s}
+.btn:active{transform:scale(.95)}
+.btn.go{flex:1;background:linear-gradient(135deg,var(--c),var(--pur));color:#05080f;box-shadow:0 0 22px -4px var(--c);font-family:Orbitron,Nunito,sans-serif;letter-spacing:.06em}
+.btn[disabled]{opacity:.35;pointer-events:none}
+.btn.go.pulse{animation:pulse 1.2s infinite}
+@keyframes pulse{50%{box-shadow:0 0 34px 2px var(--c)}}
+
+/* ===== Quiz ===== */
+.qbadge{display:inline-flex;gap:6px;align-items:center;padding:6px 12px;border-radius:999px;background:rgba(255,45,149,.15);color:var(--pink);font-weight:900;font-size:12px;letter-spacing:.12em}
+.qtx{font-size:clamp(19px,4.2vw,23px);font-weight:900;line-height:1.3;margin:14px 0 16px}
+.opts{display:grid;gap:10px}
+.opt{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:14px;border-radius:16px;background:#0f1630;border:2px solid var(--line);font-size:16px;font-weight:700;transition:border-color .2s,background .2s,transform .12s}
+.opt:hover{border-color:var(--c)}
+.opt .L{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;background:rgba(255,255,255,.07);font-weight:900;flex:none}
+.opt.wrong{border-color:var(--bad);background:rgba(255,59,92,.16);animation:shake .5s;color:#ffd0d8}
+.opt.wrong .L{background:var(--bad);color:#fff}
+.opt.right{border-color:var(--ok);background:rgba(34,255,136,.14);animation:glow 1.1s ease-out;color:#d9ffe9}
+.opt.right .L{background:var(--ok);color:#03140b}
+.opt.dim{opacity:.4}
+.opts.lock .opt{pointer-events:none}
+@keyframes shake{10%,90%{transform:translateX(-2px)}20%,80%{transform:translateX(5px)}30%,50%,70%{transform:translateX(-9px)}40%,60%{transform:translateX(9px)}}
+@keyframes glow{0%{box-shadow:0 0 0 0 rgba(34,255,136,.9)}60%{box-shadow:0 0 0 14px rgba(34,255,136,0)}100%{box-shadow:0 0 22px rgba(34,255,136,.35)}}
+.fb{margin-top:14px;padding:14px;border-radius:14px;font-size:15px;line-height:1.45;animation:viewIn .35s}
+.fb.ok{background:rgba(34,255,136,.1);border:1px solid rgba(34,255,136,.45)}
+.fb.no{background:rgba(255,59,92,.1);border:1px solid rgba(255,59,92,.45)}
+.fb b{font-size:17px}
+.slide.flash-bad{animation:flashBad .5s}
+@keyframes flashBad{30%{box-shadow:0 0 0 3px var(--bad),0 0 40px rgba(255,59,92,.5)}}
+
+/* resultado */
+.result{text-align:center;padding-top:10px}
+.result .trophy{font-size:84px;animation:pop .7s cubic-bezier(.2,1.6,.4,1) both}
+@keyframes pop{from{transform:scale(0) rotate(-30deg)}to{transform:none}}
+.result .st{font-size:40px;letter-spacing:6px;margin:6px 0}
+.result .st span{display:inline-block;animation:pop .5s both}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:16px 0}
+.kpi{padding:12px;border-radius:14px;background:rgba(255,255,255,.05)}
+.kpi b{display:block;font-size:22px;font-family:Orbitron,sans-serif;color:var(--c)}
+.kpi small{color:var(--mut);font-size:12px}
+
+/* ===== Gabarito ===== */
+.gq{border-radius:16px;background:var(--card);border:1px solid var(--line);margin-bottom:10px;overflow:hidden}
+.gq summary{list-style:none;cursor:pointer;padding:15px 16px;font-weight:800;display:flex;gap:10px;align-items:flex-start}
+.gq summary::-webkit-details-marker{display:none}
+.gq summary::before{content:"🔒";flex:none}
+.gq[open] summary::before{content:"🔓"}
+.gq summary small{display:block;color:var(--mut);font-weight:600;margin-top:2px}
+.gq .ans{padding:0 16px 16px 44px;color:#d5ffe6;line-height:1.55;animation:viewIn .3s}
+.gq .ans ul{margin-left:18px}
+.gq .ans table{border-collapse:collapse;margin-top:6px;font-size:14px;width:100%}
+.gq .ans td,.gq .ans th{border:1px solid var(--line);padding:6px;text-align:left;vertical-align:top}
+.gq .ans th{color:var(--gold)}
+.pghead{font-size:12px;color:var(--gold);font-weight:900;letter-spacing:.12em;margin:18px 4px 8px}
+
+/* ===== Overlays ===== */
+.ov{position:fixed;inset:0;z-index:100;display:grid;place-items:center;padding:20px;background:rgba(3,5,12,.82);backdrop-filter:blur(8px);animation:viewIn .3s}
+.modal{width:100%;max-width:420px;border-radius:24px;padding:26px;background:linear-gradient(160deg,#1a2350,#101633);border:1px solid var(--pur);box-shadow:0 0 60px rgba(168,85,247,.4);text-align:center}
+.modal h2{font-size:24px;margin:8px 0}
+.modal p{color:#cbd1ff}
+.modal input{width:100%;margin:16px 0 10px;padding:14px;border-radius:14px;border:2px solid var(--line);background:#0b1026;color:#fff;font:inherit;font-size:17px;font-weight:800;text-align:center;outline:none}
+.modal input:focus{border-color:var(--cyan)}
+.avs{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:6px 0 14px}
+.avs button{width:46px;height:46px;border-radius:14px;font-size:24px;background:#0b1026;border:2px solid var(--line)}
+.avs button.sel{border-color:var(--cyan);box-shadow:0 0 14px var(--cyan)}
+.plist{display:grid;gap:8px;margin:12px 0}
+.plist button{display:flex;align-items:center;gap:10px;padding:12px;border-radius:14px;background:#0b1026;border:1px solid var(--line);font-weight:800;text-align:left}
+.plist button small{margin-left:auto;color:var(--gold)}
+.lvup .big{font-size:90px;animation:pop .8s cubic-bezier(.2,1.6,.4,1) both}
+.lvup h2{font-size:30px;background:linear-gradient(90deg,var(--gold),var(--pink),var(--cyan));-webkit-background-clip:text;background-clip:text;color:transparent}
+.toast{position:fixed;left:50%;top:76px;z-index:120;transform:translateX(-50%);padding:10px 18px;border-radius:999px;font-weight:900;
+  background:linear-gradient(135deg,var(--gold),#ff9d00);color:#1a1000;box-shadow:0 0 30px rgba(255,210,63,.6);animation:toast 1.6s ease forwards;pointer-events:none;white-space:nowrap}
+@keyframes toast{0%{opacity:0;transform:translate(-50%,-20px) scale(.6)}15%{opacity:1;transform:translate(-50%,0) scale(1.08)}25%{transform:translate(-50%,0) scale(1)}80%{opacity:1}100%{opacity:0;transform:translate(-50%,-30px)}}
+.confetti{position:fixed;inset:0;pointer-events:none;z-index:110}
+.foot{color:var(--mut);font-size:12px;text-align:center;margin-top:28px;line-height:1.6}
+@media (max-width:480px){.hud .chip.fire{display:none}.slide{padding:22px 18px}.slide .tx{font-size:16px}}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+</style>
+</head>
+<body>
+<header class="hud">
+  <div class="avatar" id="hudAv">🎮</div>
+  <div class="who">
+    <div class="nm" id="hudNm">Jogador</div>
+    <div class="lv"><span id="hudLv">Nível 1</span> · <span id="hudTitle">Novato</span> · <span id="hudXpTxt">0/100</span></div>
+    <div class="xpbar"><i id="hudBar"></i></div>
+  </div>
+  <div class="chip fire" title="Sequência de acertos">🔥 <span id="hudCombo">0</span></div>
+  <div class="chip xp" title="XP total">⚡ <span id="hudXp">0</span></div>
+  <button class="iconbtn" id="btnSom" title="Som" aria-label="Ligar ou desligar som">🔊</button>
+  <button class="iconbtn" id="btnPerfil" title="Trocar jogador" aria-label="Trocar jogador">👥</button>
+</header>
+<main id="app"></main>
+<nav class="navbar hide" id="navbar"><div class="in">
+  <button class="btn" id="btnPrev" aria-label="Voltar card">◀</button>
+  <button class="btn go" id="btnNext">AVANÇAR ▶</button>
+</div></nav>
+<canvas class="confetti" id="confetti"></canvas>
+<script>
+/* =====================================================================
+   CONTEÚDO — AV2 (Dezembro) • 5º Ano • 4º Bimestre
+   Card: {e: emoji, k: chamada, t: título, h: texto (HTML), b: caixa, d: dica}
+   Quiz: {q: pergunta, o: [opções], a: índice da certa, x: explicação}
+   ===================================================================== */
+const MATERIAS = [];
+
+MATERIAS.push({
+  id:'cie', nome:'Ciências', em:'🔬', cor:'#22ff88', data:'04/12', dia:'sexta', fonte:'livro',
+  topicos:[
+  {id:'cie1', titulo:'Terra – Planeta “Água”', pg:'pp. 123 a 131', em:'🌍',
+   cards:[
+    {e:'🌍', k:'Começando', t:'Por que “Planeta Água”?',
+     h:'Olhando um globo, dá pra ver: <b>a maior parte da superfície da Terra é coberta por água</b> (cerca de 3/4). Por isso, o nome “Água” também combinaria com o nosso planeta!',
+     b:'A água aparece: <b>salgada</b> (oceanos e mares), <b>doce</b> (rios e lagos), nas <b>nuvens</b>, <b>sólida</b> (gelo e neve), <b>subterrânea</b> (lençóis-d’água) e até <b>dentro dos seres vivos</b>.'},
+    {e:'🧍', k:'Você é água!', t:'A água no corpo humano',
+     h:'<table><tr><th>Parte</th><th>Água</th></tr><tr><td>🫁 Pulmões</td><td><b>90%</b></td></tr><tr><td>🫀 Fígado</td><td>85%</td></tr><tr><td>🩸 Sangue, pele e rins</td><td>80%</td></tr><tr><td>🧠 Cérebro e músculos</td><td>75%</td></tr><tr><td>🧍 Corpo inteiro</td><td><b>70%</b></td></tr><tr><td>🦴 Ossos</td><td>25%</td></tr></table>',
+     d:'Campeão: <b>pulmões (90%)</b>. Lanterna: <b>ossos (25%)</b>.'},
+    {e:'📊', k:'Pouca pra beber', t:'Quanta água dá pra usar?',
+     h:'<ul><li><b>97%</b> é água <b>salgada</b> (mares e oceanos) – não serve para beber.</li><li><b>2%</b> é água <b>congelada</b> (polos e topo das montanhas).</li><li><b>1%</b> é água <b>potável</b> disponível.</li></ul>',
+     b:'<b>Potável</b> = água limpa, <em>própria para o consumo</em>.'},
+    {e:'🏭', k:'ETA • parte 1', t:'Estação de Tratamento de Água',
+     h:'A água de rios, lagos ou represas pode ter sujeira e <b>microrganismos</b>. Por isso ela é tratada:<ul><li><b>1. Captação:</b> é bombeada para a ETA por tubulações de aço.</li><li><b>2. Flocos:</b> recebe <b>cloro, cal e sulfato de alumínio</b> e é agitada – a sujeira se junta em <em>flocos</em>.</li><li><b>3. Decantação e filtração:</b> os flocos pesados vão pro fundo e a água passa por filtros de <b>carvão, areia e cascalho</b>.</li></ul>'},
+    {e:'🚰', k:'ETA • parte 2', t:'Até chegar na torneira',
+     h:'<ul><li><b>4.</b> Recebe <b>mais cloro</b> (mata microrganismos) e <b>flúor</b> (diminui as <em>cáries</em>).</li><li><b>5.</b> Fica guardada em <b>reservatórios</b>.</li><li><b>6.</b> Vai pelas <b>adutoras</b> (canos grandes) → redes de distribuição → <b>casas</b> (caixa-d’água).</li></ul>',
+     d:'Decorar: <b>capta → flocos → filtra → cloro + flúor → reservatório → casa</b>.'},
+    {e:'🔬', k:'Cientistas em ação', t:'Água suja no laser',
+     h:'Uma gota de água suja na ponta de uma seringa, iluminada por um laser, projeta na parede <b>sujeiras e microrganismos</b>. Conclusão: essa água <b>não deve ser usada</b> sem tratamento (filtrar, ferver, clorar).',
+     b:'⚠️ Nunca aponte o laser para os olhos!'},
+    {e:'🥛', k:'Propriedades', t:'Água pura é…',
+     h:'<ul><li><b>Incolor</b> → sem cor</li><li><b>Inodora</b> → sem cheiro</li><li><b>Insípida</b> → sem sabor</li></ul>',
+     d:'Truque: <b>in</b> = sem. In-<b>color</b> (cor), in-<b>odora</b> (odor = cheiro), in-<b>sípida</b> (sabor).'},
+    {e:'🔄', k:'Ciclo da água', t:'A água vive se renovando',
+     h:'<ul><li><b>1. Evaporação:</b> o Sol aquece rios, lagos e oceanos (e os seres vivos transpiram).</li><li><b>2. Condensação:</b> o vapor esfria e forma as <b>nuvens</b>.</li><li><b>3. Precipitação:</b> nuvens pesadas = <b>chuva</b> (se muito frio: granizo ou neve).</li><li><b>4. Infiltração:</b> a chuva entra no solo (lençóis subterrâneos) ou escoa para rios, lagos e oceanos.</li></ul>',
+     b:'O ciclo é essencial para o <b>clima</b>, para as <b>plantas</b> e para <b>abastecer</b> rios, lagos e oceanos.'},
+    {e:'🌳', k:'Investigue', t:'Florestas e chuva',
+     h:'As plantas <b>transpiram</b> e soltam vapor d’água, que ajuda a formar nuvens e chuva. As raízes seguram o solo e ajudam a água a <b>infiltrar</b>, abastecendo nascentes e lençóis.',
+     d:'Chuva ajuda: <b>agricultura</b> (rega), <b>clima</b> (umidade), <b>energia</b> (enche as represas das hidrelétricas), <b>água potável</b> e <b>ecossistemas</b>.'},
+    {e:'🗑️', k:'Alerta', t:'Lixo + chuva = alagamento',
+     h:'Lixo jogado na rua vai parar nos bueiros e impede a água da chuva de escoar.',
+     b:'Código decifrado (p. 129): <b>“NÃO JOGUE LIXO NAS RUAS, POIS ELE ENTOPE OS BUEIROS.”</b>'},
+    {e:'🌡️', k:'Experimento', t:'Água x Areia no Sol',
+     h:'Na geladeira e no Sol, a <b>areia</b> esfria e esquenta <b>rápido</b>. A <b>água</b> muda de temperatura <b>mais devagar</b>.',
+     b:'Conclusão: a grande quantidade de água <b>equilibra a temperatura da Terra</b>. Sem ela, o calor seria insuportável!'},
+    {e:'🚽', k:'Você sabia?', t:'ETE: Tratamento de Esgoto',
+     h:'<ul><li><b>1.</b> A água usada em casa vai pelo <b>esgoto</b> (encanamentos) até a ETE.</li><li><b>2. Grade:</b> tira a sujeira maior (papel, plástico, madeira, metal).</li><li><b>3. Caixa de areia:</b> a água passa devagar e a areia segura impurezas.</li><li><b>4. Decantador primário:</b> partículas pesadas ficam no fundo.</li><li><b>5. Tanque de aeração:</b> recebe ar; microrganismos “comem” a matéria orgânica e formam <b>lodo</b>.</li><li><b>6. Decantador secundário:</b> o lodo fica no fundo; a água limpa volta ao rio ou é reaproveitada (lavar ruas, regar jardins).</li></ul>',
+     d:'O lodo pode ir para aterro sanitário, ser queimado ou virar <b>adubo</b>.'}
+   ],
+   quiz:[
+    {q:'Quanto da água do planeta é SALGADA?', o:['1%','50%','97%','70%'], a:2, x:'97% é salgada, 2% congelada e só 1% potável.'},
+    {q:'Água potável é aquela que…', o:['vem do mar','está congelada nos polos','é própria para o consumo','tem cor e cheiro'], a:2, x:'Potável = própria para beber e usar.'},
+    {q:'A água pura é incolor, inodora e…', o:['insípida','salgada','turva','gelada'], a:0, x:'Insípida = sem sabor.'},
+    {q:'Qual parte do corpo tem MAIS água?', o:['Ossos','Pulmões','Músculos','Cérebro'], a:1, x:'Pulmões: 90%! Ossos têm só 25%.'},
+    {q:'Qual é a ordem certa do ciclo da água?', o:['Chuva → nuvem → evaporação → infiltração','Evaporação → condensação → precipitação → infiltração','Condensação → evaporação → infiltração → chuva','Infiltração → chuva → nuvem → evaporação'], a:1, x:'Sobe (evapora), vira nuvem (condensa), cai (precipita) e entra no solo (infiltra).'},
+    {q:'Na ETA, para que se coloca FLÚOR na água?', o:['Deixar azul','Diminuir as cáries','Formar flocos','Deixar salgada'], a:1, x:'O flúor ajuda a prevenir cáries dentárias.'},
+    {q:'Os filtros da ETA são feitos de…', o:['carvão, areia e cascalho','plástico e vidro','sal e açúcar','algodão e papel'], a:0, x:'Camadas de carvão, areia e cascalho seguram os flocos menores.'},
+    {q:'No experimento, quem esquentou mais rápido no Sol?', o:['A água','A areia','Os dois igualzinho','Nenhum'], a:1, x:'A areia esquenta e esfria rápido; a água demora mais e equilibra a temperatura.'},
+    {q:'Na ETE (esgoto), para que serve a GRADE?', o:['Colocar flúor','Retirar a sujeira maior, como papel e plástico','Esquentar a água','Formar nuvens'], a:1, x:'A grade é a primeira barreira: segura o lixo grande.'},
+    {q:'Por que o lixo na rua causa alagamentos?', o:['Porque ele evapora','Porque entope os bueiros','Porque atrai raios','Porque deixa a água potável'], a:1, x:'“Não jogue lixo nas ruas, pois ele entope os bueiros.”'}
+   ]},
+  {id:'cie2', titulo:'Fontes de Energia', pg:'pp. 134 a 142', em:'⚡',
+   cards:[
+    {e:'🌞', k:'Começando', t:'De onde vem a energia?',
+     h:'A natureza tem várias <b>fontes de energia</b>:<ul><li>☀️ luz solar</li><li>💨 vento</li><li>💧 água</li><li>🌋 calor de dentro da Terra</li><li>🌊 marés</li><li>🌽 matérias orgânicas</li></ul>',
+     b:'Nós também precisamos de energia para brincar, respirar, estudar… e ela vem dos <b>alimentos</b>!'},
+    {e:'🛢️', k:'Cuidado', t:'Combustíveis fósseis',
+     h:'<b>Carvão mineral, gás natural e petróleo</b> produzem muita energia, MAS:<ul><li>❌ <b>não se renovam</b> na natureza (um dia acabam);</li><li>❌ liberam muitas substâncias <b>poluentes</b>.</li></ul>',
+     d:'Para fazer durar mais: economizar energia, usar transporte coletivo, bicicleta, e trocar por energias limpas.'},
+    {e:'🌱', k:'Alternativas', t:'Biocombustíveis e energia limpa',
+     h:'<ul><li><b>Biocombustíveis</b> vêm de vegetais: <b>cana-de-açúcar → etanol</b> e <b>mamona → biodiesel</b>.</li><li><b>Energia limpa</b> (pouca poluição): <b>hidráulica</b> (água) e <b>eólica</b> (vento).</li></ul>',
+     b:'Na tirinha do “Homem linha”, ele trocou o símbolo de energia nuclear por <b>energia eólica e solar</b>: incentivou energias <b>renováveis</b> que não agridem o ambiente.'},
+    {e:'🖐️', k:'Tipos de energia', t:'Os 5 tipos que caem na prova',
+     h:'<ul><li>💡 <b>Luminosa</b></li><li>🔥 <b>Térmica</b></li><li>🏃 <b>Do movimento</b></li><li>🔊 <b>Sonora</b></li><li>🍎 <b>Química</b></li></ul>',
+     d:'Um por dedo da mão! ✋'},
+    {e:'💡', k:'Energia luminosa', t:'Vem da luz',
+     h:'Pode ser <b>natural</b> (luz do Sol) ou <b>artificial</b> (lâmpadas e leds).'},
+    {e:'🌈', k:'Você sabia?', t:'Qual é a cor da luz?',
+     h:'A luz branca do Sol é a mistura de <b>7 cores</b>: vermelho, laranja, amarelo, verde, azul, anil e violeta. No <b>arco-íris</b>, as gotas de chuva funcionam como prismas e separam essas cores.',
+     b:'<b>Isaac Newton</b> (1643-1727) separou a luz com um <b>prisma</b> e juntou de novo com o <b>disco de Newton</b>: girando rápido, o disco colorido fica <b>branco</b>!'},
+    {e:'🔥', k:'Energia térmica', t:'Energia em forma de calor',
+     h:'O calor passa de um corpo para outro. O <b>Sol</b> é uma fonte natural de calor que pode aquecer a água de casa:',
+     b:'☀️ <b>Placas coletoras solares</b> → 🛢️ <b>boiler</b> (reservatório) → 🚿 <b>tubulação de cobre</b> leva a água quente pela casa.'},
+    {e:'☀️', k:'Você sabia?', t:'O Sol é essencial',
+     h:'Graças à energia do Sol:<ul><li>🌿 as plantas fazem <b>fotossíntese</b>;</li><li>💨 os <b>ventos</b> se formam (o ar aquecido se desloca);</li><li>🔄 o <b>ciclo da água</b> se completa.</li></ul>',
+     d:'Sem luz solar: escuridão, muito frio, plantas sem fotossíntese, sem alimento… sem vida!'},
+    {e:'🏃', k:'Energia do movimento', t:'Tudo que se mexe tem energia',
+     h:'Vento (ar em movimento), um rio que corre para o mar, a força da água girando um <b>moinho</b> e até nós quando fazemos atividades.',
+     b:'<b>Eólica (vento):</b> no século XV empurrava as <b>caravelas</b> – assim os portugueses chegaram ao Brasil (“Ilha de Vera Cruz”). Moinhos moíam grãos e bombeavam água; hoje grandes moinhos geram <b>eletricidade sem poluir</b>.'},
+    {e:'🔊', k:'Energia sonora', t:'Percebida pela audição',
+     h:'O som <b>agita o ar</b>, chega à orelha e faz vibrar o <b>tímpano</b> (membrana bem fina), que manda a mensagem para o <b>cérebro</b>.',
+     b:'Experimento: arroz sobre papel-celofane num tubo em cima do celular tocando → os grãos <b>pulam</b>, e pulam mais com volume alto. O som é vibração!',
+     d:'Proteja a audição: evite som muito alto e fones por muito tempo.'},
+    {e:'🍎', k:'Energia química', t:'Nos alimentos e combustíveis',
+     h:'A energia química está <b>nos alimentos</b> que comemos e <b>nos combustíveis</b> (como a gasolina do carro).',
+     b:'🍌 <b>Pilha de banana:</b> plaquinhas de cobre e zinco espetadas na banana, ligadas por fios, fazem funcionar um relógio ou calculadora. Energia química → elétrica!'},
+    {e:'♻️', k:'Regra de ouro', t:'Energia se transforma',
+     h:'A energia <b>não surge do nada</b> e <b>não desaparece</b>: ela se <b>transforma</b>. A energia elétrica, por exemplo, vira:<table><tr><td>🌀 Ventilador</td><td>movimento</td></tr><tr><td>🛋️ Abajur</td><td>luminosa</td></tr><tr><td>🚿 Chuveiro</td><td>térmica</td></tr><tr><td>📻 Aparelho de som</td><td>sonora</td></tr><tr><td>🖥️ Computador</td><td>luminosa, sonora e térmica</td></tr></table>'}
+   ],
+   quiz:[
+    {q:'Qual destes NÃO é combustível fóssil?', o:['Petróleo','Carvão mineral','Etanol','Gás natural'], a:2, x:'O etanol é biocombustível, feito da cana-de-açúcar.'},
+    {q:'O biodiesel é fabricado a partir da…', o:['mamona','areia','água do mar','pedra'], a:0, x:'Cana → etanol; mamona → biodiesel.'},
+    {q:'Por que os combustíveis fósseis preocupam?', o:['São renováveis e limpos','Não se renovam e poluem','São feitos de vento','Não produzem energia'], a:1, x:'Acabam um dia e liberam muitos poluentes.'},
+    {q:'Energia eólica vem do…', o:['Sol','vento','petróleo','alimento'], a:1, x:'Eólica = força dos ventos.'},
+    {q:'O disco de Newton, girando bem rápido, fica…', o:['preto','vermelho','branco','invisível'], a:2, x:'As 7 cores juntas formam a luz branca.'},
+    {q:'O chuveiro elétrico transforma energia elétrica em energia…', o:['sonora','térmica','química','magnética'], a:1, x:'Chuveiro esquenta → térmica (calor).'},
+    {q:'A energia que existe nos ALIMENTOS é a…', o:['química','sonora','luminosa','eólica'], a:0, x:'Alimentos e combustíveis guardam energia química.'},
+    {q:'Qual membrana da orelha vibra com o som?', o:['Retina','Tímpano','Pele','Língua'], a:1, x:'O tímpano vibra e envia a mensagem ao cérebro.'},
+    {q:'No aquecedor solar, onde a água quente fica guardada?', o:['No boiler','Na tomada','No telhado de barro','No ventilador'], a:0, x:'Placas solares → boiler → tubulação de cobre.'},
+    {q:'Complete: a energia não surge do nada nem desaparece, ela…', o:['acaba','se transforma','explode','fica parada'], a:1, x:'Essa é a propriedade da transformação da energia.'}
+   ]},
+  {id:'cie3', titulo:'Eletricidade e Magnetismo', pg:'pp. 144 a 160', em:'🧲',
+   cards:[
+    {e:'🏠', k:'Eletricidade no dia a dia', t:'Conforto ligado na tomada',
+     h:'A eletricidade traz conforto: chuveiro, computador, micro-ondas, TV… E também move <b>indústrias, ônibus elétricos, teleféricos</b> e ilumina <b>estádios e avenidas</b>.',
+     d:'Sem eletricidade dá pra: dormir, jogar dominó, lavar louça na pia. Com eletricidade: banho no chuveiro elétrico, computador, micro-ondas, TV.'},
+    {e:'🏞️', k:'De onde vem?', t:'Usinas de energia',
+     h:'A maior parte da nossa eletricidade (o livro diz <b>cerca de 95%</b>) vem de <b>usinas hidrelétricas</b>: a água da represa gira a turbina, que move o <b>gerador</b>. A energia viaja por torres, fios e transformadores até as casas.',
+     b:'Onde é difícil chegar: <b>termelétricas</b> (queimam combustíveis) e <b>eólicas</b> (força do vento).'},
+    {e:'🇧🇷', k:'Você sabia?', t:'Itaipu Binacional',
+     h:'Fica no <b>Rio Paraná</b>, na fronteira entre <b>Brasil e Paraguai</b> (pertence aos dois países). É a maior geradora de energia <b>limpa e renovável</b> do planeta: produz a maior parte da energia do Paraguai e cerca de <b>20%</b> da energia do Brasil.'},
+    {e:'✨', k:'Cientistas em ação', t:'Eletricidade estática',
+     h:'Toda matéria tem cargas elétricas <b>positivas (+)</b> e <b>negativas (–)</b>. Atritando um corpo no outro surge a <b>eletricidade estática</b>.',
+     b:'Esfregue uma régua de plástico no cabelo e aproxime de papel picado: a régua <b>atrai os papéis</b>! (Também acontece com o cabelo arrepiado ao pentear e o choquinho na maçaneta.)',
+     d:'Esfregar uma mão na outra: o atrito produz <b>calor</b>.'},
+    {e:'🔌', k:'Corrente elétrica', t:'Cargas em movimento',
+     h:'<b>Corrente elétrica</b> é o <em>fluxo ordenado das cargas elétricas</em>.<ul><li>✅ <b>Condutores</b> (deixam passar): <b>metais</b> (cobre, alumínio, ferro).</li><li>🚫 <b>Isolantes</b> (não deixam): <b>madeira, vidro, plástico, louça</b>, borracha.</li></ul>',
+     b:'⚠️ O <b>corpo humano conduz</b> eletricidade – por isso levamos choque!'},
+    {e:'🦺', k:'Segurança', t:'Fugindo do choque',
+     h:'<ul><li>👷 O eletricista usa <b>luvas e botas de borracha</b>, capacete e ferramentas com cabo isolante.</li><li>🚿 Não mexa no chuveiro ligado ou com o corpo molhado.</li><li>🔌 Não ligue vários aparelhos em uma tomada só (benjamim/“T”).</li><li>✂️ Nunca coloque dedos ou objetos de metal na tomada.</li></ul>'},
+    {e:'⛈️', k:'Você sabia?', t:'Raios e trovões',
+     h:'Raios e relâmpagos são <b>descargas elétricas</b> causadas pela troca de cargas na atmosfera. O <b>trovão</b> é o <b>barulho</b> dessas descargas. Podem acontecer dentro da nuvem, entre nuvens, entre nuvem e ar, do solo para a nuvem e, o mais conhecido, <b>da nuvem para o solo</b>.',
+     b:'<b>Para-raios:</b> barras metálicas pontudas no alto dos prédios, ligadas à terra por um fio condutor. Inventado por <b>Benjamin Franklin</b> (1706-1790), no século XVIII.'},
+    {e:'🔁', k:'Circuito elétrico', t:'O caminho da corrente',
+     h:'<b>Circuito elétrico</b> é o caminho percorrido pela corrente.<ul><li>🟢 <b>Fechado</b> → a corrente passa → o aparelho <b>funciona</b>.</li><li>🔴 <b>Aberto</b> (interrompido) → <b>não funciona</b>.</li></ul>Precisa de uma <b>fonte de energia</b> (gerador, pilha). <b>Interruptores</b> e chaves abrem e fecham o circuito.',
+     b:'Lâmpada incandescente: tem um <b>filamento</b> (fio fininho) que esquenta e brilha com a corrente. Filamento quebrado = circuito aberto = lâmpada não acende.'},
+    {e:'🔦', k:'Cientistas em ação', t:'Lanterna caseira',
+     h:'Com 2 pilhas (negativo encostado no positivo), fios, lâmpada com soquete, papel-alumínio (refletor), algodão e uma embalagem de detergente. Ao <b>encostar um fio no outro</b>, o circuito <b>fecha</b> e a lâmpada acende!',
+     d:'A energia vem das <b>pilhas</b> (química → elétrica). Condutores: fios, alumínio, pilhas. Isolantes: plástico da embalagem, fita, algodão.'},
+    {e:'💡', k:'Você sabia?', t:'O homem da lâmpada',
+     h:'<b>Thomas Alva Edison</b> (1847-1931), dos Estados Unidos, registrou <b>mais de 1.000 invenções</b>: a <b>lâmpada elétrica incandescente</b>, o ditafone (gravava mensagens), o cinetoscópio (tipo filmadora) e o microfone de grânulos de carvão.',
+     b:'<b>Horário de verão:</b> adiantar o relógio 1 hora para aproveitar a luz do dia e <b>economizar energia</b>. Só estados longe da linha do Equador participavam (lá os dias de verão são bem mais longos). Obs.: está suspenso no Brasil desde 2019.'},
+    {e:'🧲', k:'Magnetismo', t:'Atrair ou repelir',
+     h:'<b>Magnetismo</b> é a capacidade de <b>atrair ou repelir</b> outros ímãs ou metais, como o <b>ferro</b> e o <b>níquel</b>.<ul><li>Ímã <b>natural</b>: minério <b>magnetita</b>.</li><li>Ímãs <b>artificiais</b>: alto-falantes, motores, secadores, liquidificadores, computadores…</li></ul>',
+     b:'O ímã forma um <b>campo magnético</b> ao redor: ele age mesmo <b>sem encostar</b>!'},
+    {e:'🧭', k:'Polos magnéticos', t:'Norte e Sul',
+     h:'Todo ímã tem 2 polos: <b>norte</b> e <b>sul</b>.<ul><li>💞 Polos <b>diferentes</b> se <b>atraem</b>.</li><li>💥 Polos <b>iguais</b> se <b>repelem</b>.</li></ul>Para descobrir os polos: amarre o ímã pelo meio, espere parar e compare com a bússola – o polo norte do ímã aponta para o <b>norte geográfico</b>.'},
+    {e:'🌐', k:'Você sabia?', t:'A Terra é um grande ímã',
+     h:'Por isso a <b>bússola</b> (agulha magnetizada) sempre aponta para o norte. Foi fundamental nas <b>grandes navegações</b> (séculos XV e XVI). Os <b>pombos-correio</b> têm magnetita no bico e se orientam pelo campo magnético da Terra!'},
+    {e:'🚲', k:'Você sabia?', t:'Dínamo',
+     h:'O dínamo tem um <b>ímã preso a um eixo</b> e uma <b>bobina</b> (fio enrolado) bem pertinho. Girando a roda da bicicleta, o <b>movimento vira energia elétrica</b> e acende o farol. As usinas também usam essa ideia!'},
+    {e:'🏗️', k:'Eletroímãs', t:'Eletricidade + magnetismo',
+     h:'A <b>corrente elétrica forma um campo magnético</b> parecido com o de um ímã. É o <b>eletroímã</b>, usado no telefone e nos guindastes dos ferros-velhos.',
+     b:'Miniguindaste: enrole fio de cobre num <b>prego</b> e ligue nos polos de uma <b>pilha</b>. O prego vira ímã e atrai <b>clipes de metal</b> (os de plástico, não!).'}
+   ],
+   quiz:[
+    {q:'O fluxo ordenado das cargas elétricas se chama…', o:['circuito aberto','corrente elétrica','campo magnético','trovão'], a:1, x:'Corrente elétrica = cargas andando de forma ordenada.'},
+    {q:'Qual material é um bom CONDUTOR de eletricidade?', o:['Madeira','Plástico','Cobre','Vidro'], a:2, x:'Metais como o cobre conduzem bem.'},
+    {q:'Se o circuito está ABERTO, a lâmpada…', o:['acende mais forte','fica apagada','vira ímã','pisca sem parar'], a:1, x:'Circuito aberto: a corrente não passa.'},
+    {q:'Quem inventou o para-raios?', o:['Thomas Edison','Isaac Newton','Benjamin Franklin','Santos Dumont'], a:2, x:'Benjamin Franklin, no século XVIII.'},
+    {q:'O trovão é…', o:['a luz do raio','o barulho das descargas elétricas','uma nuvem gelada','um tipo de ímã'], a:1, x:'Raio = descarga; trovão = barulho dela.'},
+    {q:'Itaipu fica na fronteira entre o Brasil e o…', o:['Paraguai','Chile','Uruguai','Peru'], a:0, x:'Itaipu Binacional: Brasil + Paraguai, no Rio Paraná.'},
+    {q:'Dois ímãs com polos IGUAIS frente a frente vão…', o:['se atrair','se repelir','derreter','virar pilha'], a:1, x:'Iguais se repelem; diferentes se atraem.'},
+    {q:'Um parafuso será atraído pelo ímã se for de…', o:['plástico ou vidro','ferro ou níquel','madeira','alumínio'], a:1, x:'O ímã atrai ferro e níquel.'},
+    {q:'Ferro e alumínio perto de um ímã. O que acontece?', o:['O alumínio não é atraído','Os dois são atraídos','O ferro não é atraído','O alumínio é atraído'], a:0, x:'Alumínio não sofre magnetismo; o ferro é atraído.'},
+    {q:'O dínamo da bicicleta transforma energia do movimento em energia…', o:['sonora','química','elétrica','térmica'], a:2, x:'Ímã girando perto da bobina gera eletricidade.'},
+    {q:'O ímã natural se chama…', o:['magnetita','grafite','granito','cobre'], a:0, x:'A magnetita é um minério magnético.'},
+    {q:'Thomas Edison é famoso por inventar a…', o:['bússola','lâmpada incandescente','pilha de banana','caravela'], a:1, x:'Mais de 1.000 invenções, entre elas a lâmpada elétrica incandescente.'}
+   ]}
+  ]
+});
+MATERIAS.push({
+  id:'por', nome:'Língua Portuguesa', em:'📚', cor:'#ff2d95', data:'07/12', dia:'segunda', fonte:'livro',
+  topicos:[
+  {id:'por1', titulo:'Sílaba tônica e Acentuação', pg:'pp. 40, 49, 50, 57 a 59', em:'🎯',
+   cards:[
+    {e:'🎯', k:'Sílaba tônica', t:'A sílaba mais forte',
+     h:'Em toda palavra, uma sílaba é falada com <b>mais intensidade</b>: é a <b>sílaba tônica</b>.<ul><li>ca-<b>fé</b></li><li><b>ca</b>-sa</li><li><b>pás</b>-sa-ro</li></ul>',
+     d:'Fale a palavra chamando alguém de longe: a sílaba que “estica” é a tônica!'},
+    {e:'🔢', k:'Classificação', t:'Oxítona, paroxítona, proparoxítona',
+     h:'Conte as sílabas <b>de trás pra frente</b>:<table><tr><th>Tônica</th><th>Nome</th><th>Exemplo</th></tr><tr><td>última</td><td><b>Oxítona</b></td><td>tam-<b>bém</b>, ka-ya-<b>pó</b></td></tr><tr><td>penúltima</td><td><b>Paroxítona</b></td><td><b>lí</b>-der, pri-vi-<b>lé</b>-gio</td></tr><tr><td>antepenúltima</td><td><b>Proparoxítona</b></td><td><b>pás</b>-sa-ro, in-<b>dí</b>-ge-na</td></tr></table>'},
+    {e:'✍️', k:'Acento gráfico', t:'Para que serve o acento?',
+     h:'O acento gráfico (´ ou ^) marca a sílaba que deve ser pronunciada <b>com mais intensidade</b>. O agudo (´) também indica <b>som aberto</b> (á, é, ó); o circunflexo (^) indica <b>som fechado</b> (ê, ô).'},
+    {e:'📏', k:'Regras', t:'Quando acentuar?',
+     h:'<ul><li><b>Proparoxítonas:</b> TODAS são acentuadas! (pássaro, indígena, história, lâmpada)</li><li><b>Paroxítonas</b> terminadas em <b>L, R, X, PS, I(S), US, UM, ÃO(S), Ã(S)</b> e <b>ditongo</b>: lí<b>der</b>, fá<b>cil</b>, privilé<b>gio</b>, memó<b>ria</b>.</li><li><b>Oxítonas</b> terminadas em <b>A(S), E(S), O(S), EM, ENS</b>: so<b>fá</b>, ca<b>fé</b>, kaya<b>pó</b>, tam<b>bém</b>.</li></ul>',
+     b:'“Por que não aparecem proparoxítonas sem acento?” → Porque <b>todas as proparoxítonas são acentuadas</b>!'},
+    {e:'🌀', k:'Ditongo', t:'Duas vogais na mesma sílaba',
+     h:'<b>Ditongo</b> é o encontro de duas vogais na mesma sílaba: pri-vi-lé-<b>gio</b>, me-mó-<b>ria</b>, his-tó-<b>ria</b>, pró-<b>prio</b>.',
+     d:'“História” e “memória” são acentuadas porque são <b>paroxítonas terminadas em ditongo</b>.'}
+   ],
+   quiz:[
+    {q:'Na palavra “pássaro”, qual é a sílaba tônica?', o:['pás','sa','ro','nenhuma'], a:0, x:'PÁS-sa-ro: antepenúltima → proparoxítona.'},
+    {q:'“Também” e “kayapó” são palavras…', o:['oxítonas','paroxítonas','proparoxítonas','átonas'], a:0, x:'A tônica é a última sílaba: tam-BÉM, ka-ya-PÓ.'},
+    {q:'“Líder” é paroxítona acentuada porque termina em…', o:['ditongo','R','M','ÃO'], a:1, x:'Paroxítonas terminadas em R levam acento: lí-der, açúcar.'},
+    {q:'“Privilégio” é acentuada porque é paroxítona terminada em…', o:['ditongo','L','R','X'], a:0, x:'pri-vi-LÉ-gio → termina em ditongo (io).'},
+    {q:'Qual palavra é PROPAROXÍTONA?', o:['Café','Indígena','Líder','Também'], a:1, x:'in-DÍ-ge-na: tônica na antepenúltima.'},
+    {q:'Por que não existem proparoxítonas sem acento?', o:['Porque são raras','Porque todas as proparoxítonas são acentuadas','Porque terminam em R','Porque são oxítonas'], a:1, x:'Regra: toda proparoxítona leva acento.'},
+    {q:'O acento gráfico serve para marcar a sílaba pronunciada…', o:['com menos intensidade','com mais intensidade','mais baixinho','no plural'], a:1, x:'Ele marca a sílaba tônica, a mais forte.'}
+   ]},
+  {id:'por2', titulo:'Discurso direto e indireto', pg:'pp. 49 e 50', em:'💬',
+   cards:[
+    {e:'💬', k:'Discurso direto', t:'O personagem fala com a própria voz',
+     h:'A fala aparece <b>do jeitinho que o personagem disse</b>, geralmente com <b>travessão (–)</b> ou aspas.',
+     b:'<b>– Anita!</b> – a professora diz meu nome em voz alta.<br><b>– Achei!</b> – dou um salto.<br><b>– Anita com Anita, e fim de papo.</b>'},
+    {e:'🗣️', k:'Discurso indireto', t:'O narrador conta o que foi dito',
+     h:'O <b>narrador</b> conta com as palavras dele o que o personagem falou. <b>Sem travessão</b>, e geralmente com “que”.',
+     b:'A professora <b>dizia</b> o meu nome, Anita, em voz alta.<br>Tudo por causa do meu sobrenome, é o que ela e meu pai <b>dizem</b>.'},
+    {e:'➖', k:'O travessão', t:'Um sinal, duas funções',
+     h:'<ul><li>Antes da fala: indica que o <b>personagem começa a falar</b>.</li><li>Depois da fala: separa o <b>comentário do narrador</b> (“– Achei! <b>– dou um salto</b>”).</li></ul>',
+     d:'Em “– Anita! – a professora diz…”, sabemos que quem fala é a professora pelo travessão e pelo verbo <b>diz</b>.'},
+    {e:'🎙️', k:'Verbos de dizer', t:'Como os personagens se expressam',
+     h:'Aparecem antes ou depois da fala: <b>dizer, falar, gritar, perguntar, responder, avisar, decretar, exclamar, pedir, explicar</b>.'},
+    {e:'🔁', k:'Transformando', t:'Indireto → Direto',
+     h:'<b>Indireto:</b> Anita olhava para a exposição de sua xará e dizia que estava encantada.',
+     b:'<b>Direto:</b> Anita olhava para a exposição de sua xará e dizia:<br><b>– Estou encantada!</b>',
+     d:'O direto chama mais a atenção do leitor: mostra a fala exata, com emoção, como se a gente estivesse ouvindo.'},
+    {e:'👧', k:'Narradora-personagem', t:'Quem conta também participa',
+     h:'No texto “O skatista amarelo”, <b>Anita é narradora e personagem</b> ao mesmo tempo: ela participa da própria história (usa “eu”, “meu”, “dou”).'}
+   ],
+   quiz:[
+    {q:'“– Achei! – dou um salto.” Esse trecho é discurso…', o:['direto','indireto','poético','nenhum'], a:0, x:'Tem travessão e a fala exata: discurso direto.'},
+    {q:'Qual sinal costuma indicar a fala do personagem?', o:['Vírgula','Travessão','Ponto final','Parênteses'], a:1, x:'O travessão (–) marca o início da fala.'},
+    {q:'“A professora dizia o meu nome, Anita, em voz alta.” É discurso…', o:['direto','indireto','em versos','interrogativo'], a:1, x:'O narrador conta o que foi dito, sem travessão.'},
+    {q:'Transforme em direto: “Pedro disse que estava com fome.”', o:['Pedro disse: – Estou com fome!','Pedro disse que está com fome.','Pedro estava com fome.','– Pedro disse fome.'], a:0, x:'No direto, a fala vem exata e com travessão.'},
+    {q:'Qual destes é um VERBO DE DIZER?', o:['Correr','Perguntar','Comer','Dormir'], a:1, x:'Perguntar, responder, gritar, falar, dizer, avisar…'},
+    {q:'Qual discurso chama mais a atenção do leitor para a fala dos personagens?', o:['O indireto','O direto','Os dois iguais','Nenhum'], a:1, x:'O direto mostra a fala exata, com emoção.'}
+   ]},
+  {id:'por3', titulo:'Artigo', pg:'pp. 57 a 59', em:'🅰️',
+   cards:[
+    {e:'🅰️', k:'Click', t:'O que é artigo?',
+     h:'São as palavras que vêm <b>antes dos substantivos</b>, combinando com eles no <b>gênero</b> (masculino/feminino) e no <b>número</b> (singular/plural).',
+     b:'<table><tr><td><b>O</b> tempo</td><td><b>Os</b> tempos</td></tr><tr><td><b>A</b> hora</td><td><b>As</b> horas</td></tr><tr><td><b>Um</b> relógio</td><td><b>Uns</b> relógios</td></tr><tr><td><b>Uma</b> ampulheta</td><td><b>Umas</b> ampulhetas</td></tr></table>'},
+    {e:'🎯', k:'Tipos', t:'Definido x Indefinido',
+     h:'<ul><li><b>Definidos: o, a, os, as</b> → algo <b>específico</b>, já conhecido. (“<b>a</b> memória”)</li><li><b>Indefinidos: um, uma, uns, umas</b> → algo <b>qualquer</b>, não determinado. (“<b>uma</b> paisagem nova”)</li></ul>',
+     d:'Trocar “uma” por “a” muda o sentido: “uma paisagem” é qualquer uma; “a paisagem” é uma certa, já conhecida.'},
+    {e:'⚖️', k:'Concordância', t:'O artigo combina com o substantivo',
+     h:'Em “E <b>o</b> palácio da memória é <b>a</b> cabeça”, não dá pra trocar os artigos: <b>palácio</b> é masculino (o) e <b>cabeça</b> é feminino (a).',
+     b:'“<b>O bebê</b>, quando nasce, chora de alegria.”<br>Feminino → “<b>A bebê</b>, quando nasce, chora de alegria.”<br>Plural → “<b>Os bebês</b>, quando nascem, choram de alegria.”'},
+    {e:'🧩', k:'Palavrinhas importantes', t:'Sem elas a frase fica estranha',
+     h:'<ul><li>“Envelhecer é o mesmo que viajar <b>de</b> trem.”</li><li>“O bebê, quando nasce, chora <b>de</b> alegria.”</li><li>“A criança mais velha <b>do</b> mundo” → sem “do” fica “A criança mais velha mundo” (sem sentido!).</li></ul>',
+     d:'“Do” = de + o (preposição + artigo).'}
+   ],
+   quiz:[
+    {q:'Qual destas palavras é um artigo INDEFINIDO?', o:['o','as','uma','os'], a:2, x:'Indefinidos: um, uma, uns, umas.'},
+    {q:'Complete: “Não vejo ___ hora de começar ___ festa.”', o:['o / o','a / a','um / os','as / um'], a:1, x:'“a hora”, “a festa” – femininos no singular.'},
+    {q:'Complete: “Minha mãe preparou ___ pastéis deliciosos.”', o:['uma','um','uns','a'], a:2, x:'Pastéis = masculino plural → uns.'},
+    {q:'“A lembrança é muito útil.” / “O tempo não para.” As palavras A lembrança e O tempo são…', o:['femininas e plural nas duas','1ª feminina singular; 2ª masculina singular','as duas masculinas','1ª plural; 2ª singular'], a:1, x:'A lembrança (fem. sing.) e O tempo (masc. sing.).'},
+    {q:'Plural de “O bebê, quando nasce, chora de alegria.”', o:['Os bebês, quando nascem, choram de alegria.','O bebês, quando nasce, chora de alegria.','Os bebê, quando nasce, choram de alegria.','As bebê nascem.'], a:0, x:'Artigo, substantivo e verbos vão para o plural.'},
+    {q:'Por que não dá pra dizer “a palácio” e “o cabeça”?', o:['Porque o artigo combina em gênero com o substantivo','Porque palácio é verbo','Porque cabeça é plural','Pode sim, tanto faz'], a:0, x:'Palácio é masculino (o) e cabeça é feminino (a).'}
+   ]},
+  {id:'por4', titulo:'Interpretação textual', pg:'p. 40', em:'🔎',
+   cards:[
+    {e:'🔎', k:'Estratégia', t:'Como gabaritar interpretação',
+     h:'<ul><li>1️⃣ Leia o <b>título</b> e imagine do que o texto fala.</li><li>2️⃣ Leia o texto <b>inteiro</b> uma vez, sem pressa.</li><li>3️⃣ Leia a <b>pergunta</b> e volte ao texto para achar a resposta.</li><li>4️⃣ Sublinhe as <b>palavras-chave</b>.</li><li>5️⃣ Elimine as alternativas absurdas.</li></ul>'},
+    {e:'🧑‍🏫', k:'Elementos', t:'Quem? O quê? Onde? Quando?',
+     h:'Em textos narrativos procure: <b>narrador</b> (quem conta), <b>personagens</b>, <b>lugar</b>, <b>tempo</b>, <b>conflito</b> (problema) e <b>desfecho</b> (final).',
+     b:'Narrador-<b>personagem</b> usa “eu”; narrador-<b>observador</b> usa “ele/ela”.'},
+    {e:'🗂️', k:'Gêneros', t:'Que texto é esse?',
+     h:'<ul><li><b>Crônica:</b> fato do dia a dia, curtinha, com humor ou reflexão (ex.: “O skatista amarelo”).</li><li><b>Poema:</b> versos e estrofes, rimas e sentimentos (ex.: “A criança mais velha do mundo”).</li><li><b>Notícia:</b> informa um fato real e recente (o quê, quem, quando, onde, como, por quê).</li><li><b>Relato:</b> conta uma experiência vivida.</li></ul>'}
+   ],
+   quiz:[
+    {q:'Um texto em versos e estrofes, com sentimentos, é um…', o:['poema','notícia','receita','bilhete'], a:0, x:'Poema = versos + estrofes.'},
+    {q:'Se o narrador usa “eu” e participa da história, ele é…', o:['narrador-observador','narrador-personagem','autor do livro','leitor'], a:1, x:'Narrador-personagem conta e participa.'},
+    {q:'Qual é a MELHOR estratégia para responder uma pergunta de interpretação?', o:['Chutar a primeira','Voltar ao texto e achar a resposta','Ler só o título','Escolher a maior alternativa'], a:1, x:'A resposta está no texto: volte e confira!'},
+    {q:'Um texto curto sobre um fato do dia a dia, com humor ou reflexão, é uma…', o:['crônica','bula','lista','placa'], a:0, x:'Crônica, como “O skatista amarelo”.'}
+   ]}
+  ]
+});
+MATERIAS.push({
+  id:'geo', nome:'Geografia', em:'🗺️', cor:'#00e5ff', data:'01/12', dia:'terça', fonte:'livro',
+  topicos:[
+  {id:'geo1', titulo:'O ambiente ideal para viver + Bioarquitetura', pg:'pp. 92 a 99', em:'🏡',
+   cards:[
+    {e:'🏡', k:'Qualidade de vida', t:'Todo mundo quer viver bem',
+     h:'Ter <b>qualidade de vida</b> depende de um bom <b>espaço físico</b>, chamado de <b>meio</b> ou <b>ambiente</b> (elementos da natureza + coisas construídas pelo ser humano).',
+     b:'O conjunto de características desse meio determina a <b>qualidade ambiental</b>: ar pouco poluído, água pura, cidade limpa e arborizada, segurança e lazer.'},
+    {e:'🧬', k:'Fatores', t:'O que influencia a qualidade de vida',
+     h:'<b>Fatores biológicos:</b><ul><li>1. Saneamento urbano</li><li>2. Qualidade do ar</li><li>3. Condições de moradia</li><li>4. Condições de trabalho</li><li>5. Sistemas de transporte</li><li>6. Alimentação</li></ul>Também contam os <b>fatores socioculturais</b>: educação, saúde, lazer, segurança, cultura.'},
+    {e:'👀', k:'Percepção ambiental', t:'Perceber e cuidar',
+     h:'<b>Percepção ambiental</b> é a capacidade de <b>perceber o local onde estamos</b>. Existem 2 tipos de comportamento:<ul><li>😒 quem <b>não se preocupa</b> nem se sente responsável;</li><li>😃 quem é <b>consciente</b>: quer conhecer, proteger e cuidar.</li></ul>',
+     d:'Quanto mais a pessoa reconhece sua responsabilidade pelo lugar onde vive, <b>maior</b> é a percepção ambiental.'},
+    {e:'📋', k:'Indicadores', t:'Como avaliar uma cidade?',
+     h:'Dá pra avaliar a qualidade ambiental de 2 jeitos:<ul><li>📰 lendo <b>notícias</b> e vendo <b>reportagens</b>;</li><li>🚶 <b>visitando</b> pessoalmente ruas, praças e parques.</li></ul>',
+     b:'<b>Quem é o responsável pelo ambiente?</b> Eu, você e todos: família, comerciantes, fabricantes, prestadores de serviço e governantes.'},
+    {e:'🌿', k:'Bioarquitetura', t:'Casas que imitam a natureza',
+     h:'A <b>bioarquitetura</b> cria construções parecidas com o ambiente natural onde ficam, para gerar <b>conforto térmico, acústico e visual</b>, usando <b>materiais locais e nativos</b>.'},
+    {e:'🏠', k:'Ecohouse', t:'A casa sustentável',
+     h:'As <b>ecohouses</b> usam materiais que não agridem a natureza e aproveitam o que o meio oferece:<ul><li>☀️ energia solar;</li><li>🌧️ captação da água da chuva;</li><li>♻️ reaproveitamento da água (regar jardins, descarga do banheiro);</li><li>🌳 telhados e paredes com plantas.</li></ul>'}
+   ],
+   quiz:[
+    {q:'O espaço formado por elementos da natureza e coisas construídas pelo ser humano é o…', o:['meio ou ambiente','oceano','planeta','subsolo'], a:0, x:'Meio (ou ambiente) = natureza + construções humanas.'},
+    {q:'Qual destes é um FATOR BIOLÓGICO da qualidade de vida?', o:['Saneamento urbano','Cor do carro','Time de futebol','Marca do celular'], a:0, x:'Saneamento, ar, moradia, trabalho, transporte e alimentação.'},
+    {q:'A capacidade de perceber o lugar onde estamos se chama…', o:['percepção ambiental','erosão','bioarquitetura','maré negra'], a:0, x:'Percepção ambiental: perceber, conhecer e cuidar do meio.'},
+    {q:'Quem é responsável pelo meio ambiente?', o:['Só o governo','Só as fábricas','Eu, você e todos','Ninguém'], a:2, x:'Todos que dividem o mesmo espaço são responsáveis.'},
+    {q:'A bioarquitetura busca construções que…', o:['gastam mais energia','se parecem com o ambiente natural e dão conforto','não têm janelas','usam só plástico'], a:1, x:'Conforto térmico, acústico e visual com materiais locais.'},
+    {q:'Uma ecohouse pode…', o:['captar água da chuva e usar energia solar','jogar esgoto no rio','queimar lixo','desperdiçar água'], a:0, x:'Aproveita sol, chuva e reaproveita a água.'}
+   ]},
+  {id:'geo2', titulo:'Contaminação das águas', pg:'pp. 100 a 105', em:'🌊',
+   cards:[
+    {e:'🧫', k:'Tipos de poluição', t:'Quem suja a água? (parte 1)',
+     h:'<table><tr><th>Tipo</th><th>Causa</th><th>Consequência</th></tr><tr><td><b>Biológica</b></td><td>bactérias, vírus, protozoários do esgoto</td><td>transmite <b>doenças</b></td></tr><tr><td><b>Química</b></td><td>detergentes, remédios, tintas, inseticidas</td><td>pode <b>intoxicar</b> os animais</td></tr><tr><td><b>Sedimentar</b></td><td>solo e lixo sólido</td><td>impede a <b>luz</b>, atrapalha a fotossíntese</td></tr></table>'},
+    {e:'☢️', k:'Tipos de poluição', t:'Quem suja a água? (parte 2)',
+     h:'<table><tr><th>Tipo</th><th>Causa</th><th>Consequência</th></tr><tr><td><b>Térmica</b></td><td>água aquecida por indústrias e termelétricas</td><td><b>reduz o oxigênio</b>, mata seres aquáticos e acelera outros poluentes</td></tr><tr><td><b>Radioativa (nuclear)</b></td><td>resíduos de hospitais e usinas nucleares</td><td><b>mutações</b> nos peixes e <b>câncer</b> em humanos</td></tr></table>',
+     d:'Decore: <b>BIO</b>=doença • <b>QUÍMICA</b>=intoxica • <b>SEDIMENTAR</b>=sem luz • <b>TÉRMICA</b>=sem oxigênio • <b>RADIOATIVA</b>=mutação.'},
+    {e:'🥤', k:'Lixo nos oceanos', t:'Um desafio do mundo todo',
+     h:'O lixo jogado no lugar errado é levado pela <b>chuva</b> até rios e, depois, até o <b>mar</b>. No 8º Fórum Mundial da Água (Brasília, 2018) estimou-se que pelo menos <b>25 milhões de toneladas</b> de resíduos chegam aos oceanos por ano – a maior parte é <b>plástico</b>.',
+     b:'Mesmo quem não mora no litoral é responsável: os rios levam o lixo até o mar!'},
+    {e:'🛢️', k:'Maré negra', t:'Petróleo no mar',
+     h:'<b>Maré negra</b> é o derrame de petróleo nos mares e oceanos, por <b>vazamento em tubulações</b> (na extração) ou <b>acidentes com navios</b>.<ul><li>🐟 Peixes: o óleo forma uma película, bloqueia a luz e o oxigênio → morrem por <b>asfixia</b>.</li><li>🐦 Aves e mamíferos: o óleo gruda nas penas e pelos → morrem de <b>hipotermia</b> (frio) ou <b>intoxicados</b>.</li><li>🏖️ Praias: vento e ondas espalham a mancha → praias <b>impróprias</b>.</li></ul>'},
+    {e:'🐢', k:'Nossa parte', t:'Como ajudar?',
+     h:'Uma tartaruga ficou com o casco deformado por ter crescido presa numa embalagem plástica. Nossa responsabilidade: <b>descartar o lixo corretamente</b>, reduzir o plástico, reciclar e não jogar nada em rios e mares.'}
+   ],
+   quiz:[
+    {q:'Esgoto com bactérias e vírus causa poluição…', o:['térmica','biológica','radioativa','sedimentar'], a:1, x:'Biológica: transmite doenças.'},
+    {q:'Qual poluição IMPEDE a passagem da luz e atrapalha a fotossíntese?', o:['Sedimentar','Térmica','Química','Biológica'], a:0, x:'Solo e lixo sólido deixam a água turva.'},
+    {q:'Água aquecida por indústrias causa poluição térmica, que…', o:['reduz o oxigênio da água','deixa a água doce','aumenta os peixes','limpa os rios'], a:0, x:'Menos oxigênio = morte de seres aquáticos.'},
+    {q:'Mutações em peixes e câncer em humanos são causados pela poluição…', o:['química','sedimentar','radioativa','biológica'], a:2, x:'Resíduos radioativos de hospitais e usinas nucleares.'},
+    {q:'O que é maré negra?', o:['Uma onda gigante','Derrame de petróleo no mar','Água muito fria','Areia escura'], a:1, x:'Vazamento de petróleo por tubulações ou navios.'},
+    {q:'Na maré negra, aves e mamíferos podem morrer de…', o:['hipotermia (frio)','calor do sol','fome de plástico','barulho'], a:0, x:'O óleo impermeabiliza penas e pelos.'},
+    {q:'Por que quem mora longe do mar também é responsável pelo lixo nos oceanos?', o:['Porque os rios levam o lixo até o mar','Porque o vento leva tudo','Não é responsável','Porque o mar sobe'], a:0, x:'A chuva leva o lixo aos rios, e os rios ao mar.'}
+   ]},
+  {id:'geo3', titulo:'Contaminação do ar', pg:'pp. 106 a 111', em:'🏭',
+   cards:[
+    {e:'🌐', k:'Geossistema', t:'Tudo está ligado',
+     h:'Os ambientes da Terra são formados por:<ul><li>💧 <b>Hidrosfera</b> – águas</li><li>🌬️ <b>Atmosfera</b> – ar</li><li>🪨 <b>Litosfera</b> – solo e rochas</li><li>🐾 <b>Biosfera</b> – seres vivos</li></ul>Juntos formam o <b>geossistema</b>: se um é contaminado, os outros também sofrem.',
+     b:'<b>Constituição, art. 225:</b> todos têm direito a um meio ambiente <b>ecologicamente equilibrado</b>; o <b>Poder Público e a coletividade</b> devem defendê-lo e preservá-lo para as <b>presentes e futuras gerações</b>.'},
+    {e:'☁️', k:'Atmosfera', t:'O ar que respiramos',
+     h:'A atmosfera natural tem <b>nitrogênio, oxigênio</b> e outros gases. Vivemos na <b>troposfera</b>, a <b>primeira camada</b>, onde acontecem chuva, vento e nuvens – e onde ficam os poluentes.'},
+    {e:'🌋', k:'Poluentes', t:'De onde vem a poluição do ar',
+     h:'<b>Poluente atmosférico</b> é qualquer substância que deixe o ar impróprio ou prejudicial à saúde.<ul><li>🌋 <b>Naturais:</b> erupções vulcânicas, tempestades de areia, incêndios florestais não criminosos.</li><li>🚗 <b>Humanos:</b> indústrias, carros, aviões, queima de lixo, de pastagens e de palha de cana.</li></ul>',
+     d:'A maioria dos gases poluentes é <b>invisível</b> – parece que está tudo bem, mas não está!'},
+    {e:'😷', k:'Consequências', t:'O que a poluição faz',
+     h:'<ul><li>🫁 Problemas respiratórios: <b>asma e bronquite</b>;</li><li>🧠 problemas no sistema nervoso (pouco oxigênio no sangue);</li><li>🌫️ menos <b>visibilidade</b> na cidade;</li><li>🌥️ menos <b>luz do Sol</b> chegando.</li></ul>As <b>grandes cidades</b> sofrem mais.'},
+    {e:'🚚', k:'Notícia', t:'Greve dos caminhoneiros (2018)',
+     h:'Em maio de 2018, nos 10 dias de paralisação dos caminhoneiros, São Paulo e Espírito Santo tiveram <b>78% menos poluentes</b> no ar! São Paulo tem <b>29 estações</b> que monitoram a qualidade do ar.',
+     b:'Para poluir menos: andar a <b>pé</b> ou de <b>bicicleta</b> (na ciclovia!), dar <b>carona</b> e usar <b>transporte coletivo</b>.'}
+   ],
+   quiz:[
+    {q:'A camada da atmosfera onde vivemos e onde ficam os poluentes é a…', o:['troposfera','litosfera','hidrosfera','estratosfera'], a:0, x:'Troposfera: a primeira camada acima da superfície.'},
+    {q:'A parte da Terra formada por solo e rochas é a…', o:['biosfera','litosfera','atmosfera','hidrosfera'], a:1, x:'Lito = pedra. Hidro = água. Bio = vida. Atmo = ar.'},
+    {q:'Qual é um poluente NATURAL do ar?', o:['Fumaça dos carros','Erupção vulcânica','Fábricas','Queima de lixo'], a:1, x:'Vulcões, tempestades de areia e incêndios naturais.'},
+    {q:'A poluição do ar pode causar…', o:['asma e bronquite','mais visibilidade','ar mais puro','mais luz solar'], a:0, x:'Problemas respiratórios são a principal consequência.'},
+    {q:'Na paralisação dos caminhoneiros (2018), os poluentes em SP diminuíram cerca de…', o:['10%','78%','5%','100%'], a:1, x:'Menos caminhões = 78% menos poluentes.'},
+    {q:'Segundo o art. 225 da Constituição, quem deve defender o meio ambiente?', o:['Só os cientistas','O Poder Público e a coletividade','Só as crianças','Ninguém'], a:1, x:'Governo + todos nós, para as gerações presentes e futuras.'}
+   ]},
+  {id:'geo4', titulo:'Características do solo', pg:'pp. 112 a 119', em:'🪱',
+   cards:[
+    {e:'🌱', k:'Solo', t:'Por que o solo é tão importante?',
+     h:'<ul><li>💧 A chuva <b>infiltra</b> nele e abastece os <b>lençóis freáticos</b>, que formam as <b>nascentes</b>.</li><li>🌳 Nele ficam fixadas as plantas (alimento e abrigo).</li><li>🏙️ Sobre ele construímos cidades, plantamos e criamos animais.</li></ul>O solo é a camada mais externa da <b>crosta terrestre</b>, organizada em camadas chamadas <b>horizontes</b> (O, A, B, C e a rocha R).'},
+    {e:'🤒', k:'Atenção', t:'Um solo doente…',
+     h:'<ul><li>perdeu a <b>matéria orgânica</b> (húmus, restos de folhas);</li><li>está <b>compactado</b> (a água e as raízes não entram);</li><li>tem as camadas <b>expostas</b> à chuva e ao sol;</li><li>está <b>contaminado</b> por lixo e produtos químicos.</li></ul>',
+     d:'Minhocas e húmus são sinais de solo saudável!'},
+    {e:'🏜️', k:'Erosão', t:'O solo saindo do lugar',
+     h:'<b>Erosão</b> é a ação provocada pelo <b>ser humano</b> ou pela <b>própria natureza</b> de <b>remover ou deslocar o solo</b>, superficial ou profundo.'},
+    {e:'🌬️', k:'Agentes naturais', t:'Quem causa a erosão',
+     h:'<ul><li>🏞️ <b>Rios</b> (erosão fluvial): escavam o leito e mudam o curso. Evita-se preservando a <b>vegetação das margens</b> (mata ciliar).</li><li>🌊 <b>Mar</b>: ondas quebram rochas e formam falésias.</li><li>💨 <b>Vento</b>: desgasta rochas e forma <b>dunas</b>.</li><li>🧊 <b>Geleiras</b>: arrastam solo e rochas quando derretem.</li><li>⛰️ <b>Gravidade</b>: morros sem vegetação deslizam.</li><li>🌧️ <b>Chuva</b>: abre buracos e sulcos no solo.</li></ul>'},
+    {e:'🚜', k:'Ação humana', t:'Nós aceleramos a erosão',
+     h:'<ul><li>🏗️ construção de cidades e estradas;</li><li>🌾 agricultura intensa sem técnicas de conservação;</li><li>⛏️ garimpo e mineração;</li><li>🪓 <b>desmatamento</b> – sem plantas, chuva, vento e gravidade levam o solo rapidinho.</li></ul>',
+     b:'<b>Salvador (BA):</b> deslizamentos acontecem por causa do relevo de <b>morros e ladeiras</b> e da <b>ocupação desordenada das encostas</b>, sem infraestrutura.'},
+    {e:'🌳', k:'Restauração', t:'Como recuperar o solo',
+     h:'Plantar <b>espécies nativas</b> de crescimento rápido, aproveitar a <b>época de chuvas</b> para o plantio, usar <b>adubo orgânico</b>, cobrir o solo exposto e fazer plantio em <b>curvas de nível</b>.'}
+   ],
+   quiz:[
+    {q:'Qual é a definição correta de EROSÃO?', o:['Retirada de minerais apenas','Ação do homem ou da natureza de remover ou deslocar o solo','Construção de prédios','Acúmulo de água no solo'], a:1, x:'Alternativa “d” do livro.'},
+    {q:'Como evitar a erosão causada pelos rios?', o:['Preservando a vegetação das margens','Jogando lixo','Desmatando','Asfaltando o rio'], a:0, x:'A mata ciliar segura o solo das margens.'},
+    {q:'As dunas são formadas principalmente pela ação do…', o:['vento','gelo','fogo','homem'], a:0, x:'O vento transporta a areia e forma dunas.'},
+    {q:'Por que áreas DESMATADAS sofrem mais erosão?', o:['Porque ficam sem proteção contra chuva, vento e gravidade','Porque ficam mais úmidas','Porque têm mais minhocas','Não sofrem'], a:0, x:'As raízes das plantas seguram o solo.'},
+    {q:'A água da chuva que infiltra no solo abastece os…', o:['lençóis freáticos','vulcões','oceanos de petróleo','prédios'], a:0, x:'Lençóis freáticos dão origem às nascentes.'},
+    {q:'Em Salvador, uma das causas dos deslizamentos é…', o:['a ocupação desordenada das encostas','a neve','o deserto','a falta de morros'], a:0, x:'Morros e ladeiras + construções sem cuidado.'}
+   ]}
+  ]
+});
+MATERIAS.push({
+  id:'mat', nome:'Matemática', em:'🧮', cor:'#ffd23f', data:'02/12', dia:'quarta', fonte:'livro',
+  topicos:[
+  {id:'mat1', titulo:'Medidas de temperatura', pg:'pp. 185 a 196', em:'🌡️',
+   cards:[
+    {e:'🌡️', k:'Instrumento', t:'Quem mede a temperatura?',
+     h:'O <b>termômetro</b>! A unidade mais usada no Brasil é o <b>grau Celsius (°C)</b>.',
+     d:'Exemplos: a água <b>congela a 0 °C</b> e <b>ferve a 100 °C</b>. O corpo humano fica em torno de <b>36,5 °C</b>; acima de 37,5 °C já é febre.'},
+    {e:'🔭', k:'História', t:'Quem inventou?',
+     h:'<ul><li>🇮🇹 <b>Galileu Galilei</b>, em <b>1602</b>: o primeiro termômetro, chamado <b>termoscópio</b> (bulbo de vidro + “pescoço” fino dentro de água com corante).</li><li>🇫🇷 <b>Jean Rey</b>, médico francês, em <b>1637</b>: o primeiro termômetro de <b>líquido</b>.</li><li>Os primeiros termômetros médicos eram grandes, tinham muito <b>mercúrio</b> e demoravam 5 minutos!</li></ul>'},
+    {e:'🇸🇪', k:'Escalas', t:'Celsius, Fahrenheit e Kelvin',
+     h:'O sueco <b>Anders Celsius</b> criou a escala que usamos – por isso o nome <b>°C</b>. Outras escalas, menos usadas aqui: <b>Fahrenheit (°F)</b> (EUA) e <b>Kelvin (K)</b> (ciência).'},
+    {e:'🤒', k:'Contas com temperatura', t:'Somar e subtrair decimais',
+     h:'Alexandre estava com febre de <b>38,7 °C</b>. Depois do remédio, a temperatura <b>baixou 2,2 °C</b>.',
+     b:'38,7 − 2,2 = <b>36,5 °C</b> ✅ (temperatura normal!)',
+     d:'Nas contas com vírgula: <b>vírgula embaixo de vírgula</b>.'},
+    {e:'📈', k:'Gráficos', t:'Lendo temperaturas',
+     h:'Em gráficos de temperatura média de duas cidades (ex.: Recife e Macapá), procure:<ul><li>o mês com a <b>maior</b> e a <b>menor diferença</b> entre as linhas;</li><li>o ponto <b>mais alto</b> (mais quente) e o <b>mais baixo</b> (mais frio).</li></ul>',
+     d:'Diferença = maior − menor.'}
+   ],
+   quiz:[
+    {q:'Qual instrumento mede a temperatura?', o:['Régua','Termômetro','Balança','Relógio'], a:1, x:'Termômetro!'},
+    {q:'Quem inventou o primeiro termômetro (termoscópio), em 1602?', o:['Anders Celsius','Galileu Galilei','Isaac Newton','Jean Rey'], a:1, x:'Galileu, 1602. Jean Rey fez o de líquido em 1637.'},
+    {q:'A unidade °C homenageia o cientista…', o:['Celsius','Kelvin','Fahrenheit','Galileu'], a:0, x:'Anders Celsius, sueco.'},
+    {q:'Febre de 38,7 °C que baixou 2,2 °C. Qual a nova temperatura?', o:['36,5 °C','40,9 °C','36,7 °C','35,5 °C'], a:0, x:'38,7 − 2,2 = 36,5 °C.'},
+    {q:'Em qual temperatura a água congela (ao nível do mar)?', o:['100 °C','0 °C','36 °C','10 °C'], a:1, x:'Congela a 0 °C e ferve a 100 °C.'},
+    {q:'Em uma cidade fez 31,2 °C e em outra 27,5 °C. Qual a diferença?', o:['3,7 °C','4,3 °C','58,7 °C','3,3 °C'], a:0, x:'31,2 − 27,5 = 3,7 °C.'}
+   ]},
+  {id:'mat2', titulo:'Medidas de tempo', pg:'pp. 185 a 196', em:'⏰',
+   cards:[
+    {e:'⏱️', k:'Relógio', t:'Horas, minutos e segundos',
+     h:'<ul><li>Ponteiro <b>menor</b> → horas</li><li>Ponteiro <b>maior</b> → minutos</li><li>Ponteiro <b>fininho</b> → segundos</li></ul><table><tr><td>1 minuto</td><td>= 60 segundos</td></tr><tr><td>1 hora</td><td>= 60 minutos = 3.600 s</td></tr><tr><td>1 dia</td><td>= 24 horas</td></tr><tr><td>meia hora</td><td>= 30 min = ½ hora</td></tr></table>',
+     b:'Ex.: 11h10 = 11 × 60 + 10 = <b>670 minutos</b> = 670 × 60 = <b>40.200 segundos</b>.'},
+    {e:'📅', k:'Calendário', t:'Dias, meses e anos',
+     h:'<ul><li>1 semana = 7 dias</li><li>1 ano = 12 meses = <b>365 dias</b> (bissexto: 366) ≈ 52 semanas</li><li>Meses com <b>31 dias</b>: janeiro, março, maio, julho, agosto, outubro e dezembro.</li><li><b>Fevereiro</b> tem 28 dias (29 no ano bissexto).</li></ul>',
+     d:'Truque dos nós dos dedos: cada “montinho” é um mês de 31 dias!'},
+    {e:'🗓️', k:'Períodos', t:'Bimestre, trimestre…',
+     h:'<table><tr><td><b>Bimestre</b></td><td>2 meses</td></tr><tr><td><b>Trimestre</b></td><td>3 meses</td></tr><tr><td><b>Quadrimestre</b></td><td>4 meses</td></tr><tr><td><b>Semestre</b></td><td>6 meses</td></tr><tr><td><b>Década</b></td><td>10 anos</td></tr><tr><td><b>Século</b></td><td>100 anos</td></tr><tr><td><b>Milênio</b></td><td>1.000 anos</td></tr></table>',
+     b:'Os cílios se renovam a cada 120 dias ≈ <b>4 meses = 1 quadrimestre</b>. 180 meses ÷ 12 = <b>15 anos</b>.'},
+    {e:'🌙', k:'Você sabia?', t:'Contando o tempo pela Lua',
+     h:'A Lua não tem luz própria: reflete a luz do Sol. Suas fases – <b>Nova, Crescente, Cheia e Minguante</b> – duram cerca de <b>uma semana</b> cada. Povos indígenas contavam a idade das crianças em “luas cheias”. Os <b>egípcios</b>, em 3000 a.C., já usavam calendários parecidos com o nosso.'},
+    {e:'✈️', k:'Problemas', t:'Somando tempo',
+     h:'O Sr. Benedito pegou um voo às <b>10h</b>. A viagem durou <b>2h45min</b>. Chegou às:',
+     b:'10h + 2h45 = <b>12h45</b> ✅',
+     d:'Cuidado com manhã e noite: “8 horas da noite” = <b>20h</b>; “8 da manhã” = <b>8h</b>. Juan perdeu o voo porque ele era às 8h da manhã!'}
+   ],
+   quiz:[
+    {q:'Quantos segundos tem 1 hora?', o:['60','600','3.600','360'], a:2, x:'60 min × 60 s = 3.600 s.'},
+    {q:'11h10 corresponde a quantos minutos?', o:['670','1.110','610','710'], a:0, x:'11 × 60 = 660; 660 + 10 = 670.'},
+    {q:'Um quadrimestre tem…', o:['2 meses','3 meses','4 meses','6 meses'], a:2, x:'Bi=2, tri=3, quadri=4, semestre=6.'},
+    {q:'180 meses equivalem a…', o:['18 anos','15 anos','12 anos','10 anos'], a:1, x:'180 ÷ 12 = 15 anos.'},
+    {q:'Um voo saiu às 10h e durou 2h45min. Chegou às…', o:['12h45','12h15','13h45','11h45'], a:0, x:'10h + 2h45 = 12h45.'},
+    {q:'Meia hora é que fração da hora?', o:['1/4','1/2','1/3','2/3'], a:1, x:'30 min = 1/2 hora.'},
+    {q:'Qual mês NÃO tem 30 nem 31 dias?', o:['Abril','Fevereiro','Junho','Dezembro'], a:1, x:'Fevereiro: 28 ou 29 dias.'},
+    {q:'Um século tem…', o:['10 anos','100 anos','1.000 anos','50 anos'], a:1, x:'Década 10, século 100, milênio 1.000.'}
+   ]},
+  {id:'mat3', titulo:'Raciocínio combinatório e possibilidades', pg:'pp. 200 a 202', em:'👕',
+   cards:[
+    {e:'👕', k:'Possibilidades', t:'Quantas combinações?',
+     h:'<b>Possibilidades</b> são todas as respostas (combinações) possíveis para resolver uma situação.',
+     b:'Com <b>4 camisas</b> e <b>3 calças</b>: 4 × 3 = <b>12 jeitos</b> de se vestir!',
+     d:'Escolhas em sequência (uma camisa E uma calça) → <b>multiplique</b>!'},
+    {e:'🌳', k:'Árvore de possibilidades', t:'Desenhe pra não esquecer nada',
+     h:'Faça “galhos” para cada escolha:<br>Camisa A → calça 1, calça 2, calça 3<br>Camisa B → calça 1, calça 2, calça 3<br>… e conte todos os finais dos galhos.'},
+    {e:'🎎', k:'Mais escolhas', t:'Três itens? Multiplica tudo!',
+     h:'Uma boneca com <b>3 chapéus</b>, <b>4 vestidos</b> e <b>2 bolsas</b>:',
+     b:'3 × 4 × 2 = <b>24 possibilidades</b> 🎉'},
+    {e:'🎨', k:'Escolher 2 de 4', t:'Quando a ordem não importa',
+     h:'Escolher 2 cores entre <b>branca, creme, azul e verde</b>:<ul><li>branca + creme • branca + azul • branca + verde</li><li>creme + azul • creme + verde</li><li>azul + verde</li></ul>Total: <b>6 combinações</b> (azul+verde é igual a verde+azul!).'},
+    {e:'🔐', k:'Senhas', t:'Cada dígito tem 10 opções',
+     h:'Amauri esqueceu a senha de 3 dígitos do cadeado. Ele sabia que o último era <b>7</b>. Os 2 primeiros podem ser de 0 a 9:',
+     b:'10 × 10 = <b>100 possibilidades</b>',
+     d:'Dois dados: soma 6 → (1,5) (2,4) (3,3) (4,2) (5,1) = <b>5 jeitos</b>.'}
+   ],
+   quiz:[
+    {q:'Quantas combinações com 4 camisas e 3 calças?', o:['7','12','10','43'], a:1, x:'4 × 3 = 12.'},
+    {q:'Boneca com 3 chapéus, 4 vestidos e 2 bolsas. Quantas possibilidades?', o:['9','24','12','18'], a:1, x:'3 × 4 × 2 = 24.'},
+    {q:'Escolhendo 2 cores entre 4 (a ordem não importa), quantas combinações?', o:['4','6','8','12'], a:1, x:'Lista: BC, BA, BV, CA, CV, AV = 6.'},
+    {q:'Senha de 3 dígitos em que o último é 7. Quantas possibilidades?', o:['30','100','1.000','10'], a:1, x:'10 opções × 10 opções = 100.'},
+    {q:'Jogando 1 dado de 6 lados, quantos resultados possíveis?', o:['6','12','1','36'], a:0, x:'1, 2, 3, 4, 5 ou 6.'},
+    {q:'Com 2 sucos e 3 lanches, quantos combos diferentes?', o:['5','6','8','23'], a:1, x:'2 × 3 = 6.'}
+   ]},
+  {id:'mat4', titulo:'Ideia de chance e probabilidade', pg:'pp. 203 a 207', em:'🎲',
+   cards:[
+    {e:'🎲', k:'Chance', t:'Certo, possível ou impossível?',
+     h:'<ul><li>✅ <b>Certo</b>: vai acontecer com certeza (o dado vai dar um número de 1 a 6).</li><li>🤔 <b>Possível</b>: pode ou não acontecer (sair o 4).</li><li>❌ <b>Impossível</b>: não acontece (sair o 7 num dado comum; colher uvas de um espinheiro).</li></ul>'},
+    {e:'➗', k:'Probabilidade', t:'Como calcular',
+     h:'<b>Probabilidade = casos favoráveis ÷ casos possíveis</b>',
+     b:'Chance de sair o 3 no dado: <b>1 em 6</b> = 1/6.<br>Chance de sair número PAR (2, 4, 6): <b>3 em 6</b> = 3/6 = 1/2 = <b>50%</b>.'},
+    {e:'⚖️', k:'Jogo justo', t:'Par x ímpar',
+     h:'Walter ganha se sair <b>par</b>; Anita ganha se sair <b>ímpar</b>. Pares: 2, 4, 6. Ímpares: 1, 3, 5.',
+     b:'3 chances para cada → <b>chances iguais</b>! O jogo é justo.'},
+    {e:'🎡', k:'Roleta', t:'Cor maior = mais chance',
+     h:'Girando um clipe numa roleta, ele tem <b>mais chance</b> de parar na cor que ocupa a <b>maior parte</b> do círculo. Não é sorte: é <b>probabilidade</b>! Mas nunca dá pra ter <b>certeza</b> do resultado.'},
+    {e:'💯', k:'Porcentagem', t:'Fração vira %',
+     h:'<table><tr><td>1/2</td><td>= 50%</td></tr><tr><td>1/4</td><td>= 25%</td></tr><tr><td>1/10</td><td>= 10%</td></tr><tr><td>1/6</td><td>≈ 16,7%</td></tr><tr><td>1/1</td><td>= 100% (certo)</td></tr><tr><td>0</td><td>= 0% (impossível)</td></tr></table>'}
+   ],
+   quiz:[
+    {q:'Num dado comum, sair o número 7 é…', o:['certo','provável','impossível','muito provável'], a:2, x:'O dado só tem de 1 a 6.'},
+    {q:'Qual a chance de sair o número 5 num dado?', o:['1/6','5/6','1/2','1/5'], a:0, x:'1 caso favorável em 6 possíveis.'},
+    {q:'Qual a chance de sair número PAR num dado?', o:['1/6','1/2','2/6','1/3'], a:1, x:'2, 4, 6 → 3/6 = 1/2.'},
+    {q:'Walter (par) x Anita (ímpar) no dado. Quem tem mais chance?', o:['Walter','Anita','Chances iguais','Ninguém'], a:2, x:'3 pares e 3 ímpares.'},
+    {q:'1/2 em porcentagem é…', o:['12%','50%','25%','20%'], a:1, x:'Metade = 50%.'},
+    {q:'Numa caixa com 3 bolas azuis e 1 vermelha, qual cor tem mais chance de sair?', o:['Vermelha','Azul','Iguais','Nenhuma'], a:1, x:'Azul: 3 em 4 (75%).'}
+   ]},
+  {id:'mat5', titulo:'Estatística', pg:'pp. 207 a 210', em:'📊',
+   cards:[
+    {e:'👥', k:'Pesquisa', t:'População x Amostra',
+     h:'<ul><li><b>População</b>: o <b>total</b> de elementos que queremos estudar (todos os 10.000 brinquedos produzidos; todos os alunos da escola).</li><li><b>Amostra</b>: uma <b>parte representativa</b> da população (os 100 brinquedos testados pelo Inmetro; alguns alunos).</li></ul>',
+     d:'A amostra precisa <b>representar bem</b> o grupo: misture meninos e meninas, idades diferentes etc.'},
+    {e:'📝', k:'Etapas', t:'Como fazer uma pesquisa',
+     h:'<ul><li>1️⃣ Definir a pergunta e a população.</li><li>2️⃣ Escolher a amostra.</li><li>3️⃣ <b>Coletar os dados</b> (formulário/questionário).</li><li>4️⃣ Organizar em <b>tabela</b>.</li><li>5️⃣ Mostrar num <b>gráfico</b> e tirar conclusões.</li></ul>'},
+    {e:'📊', k:'Gráficos', t:'Tipos de gráfico',
+     h:'<ul><li>📊 <b>Barras/colunas</b>: comparar quantidades.</li><li>📈 <b>Linhas</b>: mostrar mudanças ao longo do tempo (ex.: o número de analfabetos no Brasil <b>diminuindo</b> com os anos).</li><li>🥧 <b>Setores (pizza)</b>: partes de um todo (%).</li></ul>'},
+    {e:'➗', k:'Média', t:'Média aritmética',
+     h:'<b>Média = soma de todos os valores ÷ quantidade de valores</b>',
+     b:'Notas 6, 8 e 10 → (6 + 8 + 10) ÷ 3 = 24 ÷ 3 = <b>8</b>'},
+    {e:'🧠', k:'Operações', t:'Revisão relâmpago',
+     h:'<ul><li>4.780 L ÷ 20 L por balde = <b>239 baldes</b></li><li>60 copos × 300 mL = 18.000 mL = <b>18 L</b>; de 20 L sobram <b>2 L</b></li><li>1 L = <b>1.000 mL</b></li><li>500.000 células em 30 s → em 1 min: <b>1.000.000</b></li></ul>'}
+   ],
+   quiz:[
+    {q:'O Inmetro testou 100 brinquedos de um lote de 10.000. Os 100 brinquedos são a…', o:['população','amostra','média','tabela'], a:1, x:'Amostra = parte representativa.'},
+    {q:'Todos os alunos de uma escola, numa pesquisa, formam a…', o:['amostra','população','moda','legenda'], a:1, x:'População = o total.'},
+    {q:'Qual gráfico é melhor para mostrar a mudança ao longo dos anos?', o:['Linhas','Pizza','Nenhum','Pictograma de 1 item'], a:0, x:'O gráfico de linhas mostra a evolução no tempo.'},
+    {q:'A média de 6, 8 e 10 é…', o:['8','24','6','10'], a:0, x:'24 ÷ 3 = 8.'},
+    {q:'60 copos de 300 mL somam…', o:['18 L','1,8 L','180 L','3 L'], a:0, x:'60 × 300 = 18.000 mL = 18 L.'},
+    {q:'4.780 litros em baldes de 20 litros. Quantos baldes?', o:['239','240','478','2.390'], a:0, x:'4.780 ÷ 20 = 239.'}
+   ]}
+  ]
+});
+MATERIAS.push({
+  id:'his', nome:'História', em:'🏛️', cor:'#ff8a3d', data:'03/12', dia:'quinta', fonte:'livro',
+  topicos:[
+  {id:'his1', titulo:'Patrimônios da humanidade', pg:'pp. 64 a 73', em:'🌎',
+   cards:[
+    {e:'💎', k:'Conceito', t:'O que é patrimônio?',
+     h:'Tudo a que damos valor vira um <b>bem</b> (algo que queremos guardar). <b>Patrimônio</b> são os bens, lugares e objetos valiosos que representam as <b>paisagens naturais e culturais</b> dos povos do passado e do presente.'},
+    {e:'🇺🇳', k:'Unesco', t:'Quem protege o patrimônio mundial',
+     h:'A <b>Unesco</b> (desde <b>1945</b>) é o órgão da <b>ONU</b> que promove a paz por meio da <b>educação, da ciência e da cultura</b>.',
+     b:'Em <b>1972</b>, numa conferência em <b>Paris</b> (França), a Unesco criou a <b>lista do patrimônio mundial</b>, que continua crescendo.'},
+    {e:'🎈', k:'Exemplo', t:'Göreme (Turquia)',
+     h:'Paisagem de <b>rochas vulcânicas esculpidas pela erosão</b>. Ocupada desde cerca de <b>3000 a.C.</b>, tem casas, igrejas e até <b>cidades subterrâneas</b>, usadas por <b>cristãos</b> como refúgio contra a perseguição do <b>Império Romano</b>. O apóstolo <b>Paulo</b> fez viagens missionárias pela região. Famosa pelos <b>balões</b>!'},
+    {e:'🏯', k:'Cultural material', t:'Coisas que dá pra ver e tocar',
+     h:'Cidades, monumentos, obras de arte, sítios arqueológicos, acervos de museus. Exemplos:<ul><li>🇯🇵 <b>Antiga Kyoto</b> (Japão): capital imperial até o século XIX, arquitetura de <b>madeira</b>.</li><li>🇩🇪 <b>Memórias de Lutero</b> em Eisleben e Wittenberg (Alemanha): a casa onde ele nasceu hoje é museu.</li></ul>'},
+    {e:'🎨', k:'Cultural imaterial', t:'Saberes e tradições',
+     h:'Modos de viver, saberes e tradições passados pelos <b>antepassados</b>:<ul><li>🇺🇬 <b>Uganda</b>: o <b>barkcloth</b>, tecido feito da casca da árvore <b>mutuba</b> – saber <b>artesanal</b>.</li><li>🏝️ <b>Vanuatu</b> (Oceano Pacífico): <b>desenhos na areia</b> que contam histórias; patrimônio imaterial desde <b>2003</b>.</li></ul>'},
+    {e:'🏞️', k:'Patrimônio natural', t:'Maravilhas da natureza',
+     h:'Áreas que <b>não sofreram grandes transformações humanas</b> e representam a biodiversidade:<ul><li>🇺🇸 <b>Grand Canyon</b> (EUA): desfiladeiros por onde passa o <b>Rio Colorado</b>; Unesco em <b>1979</b>.</li><li>🇪🇨 <b>Parque Nacional Sangay</b> (Equador, Andes): vulcão ativo de 5.300 m; Unesco em <b>1983</b>. Esteve “em risco” pelo desmatamento, mas um plano de 2005 o recuperou.</li></ul>'},
+    {e:'🦙', k:'Misto', t:'Machu Picchu (Peru)',
+     h:'Ruínas de uma cidade construída pelos <b>incas</b> no <b>século XV</b>, a 2.430 m de altitude, nos <b>Andes</b>. É patrimônio <b>natural, histórico e cultural</b> ao mesmo tempo!'}
+   ],
+   quiz:[
+    {q:'Qual órgão da ONU cuida do patrimônio mundial?', o:['Unesco','Fifa','Iphan','Inmetro'], a:0, x:'Unesco: educação, ciência e cultura.'},
+    {q:'A lista do patrimônio mundial surgiu em 1972 em…', o:['Paris','Brasília','Roma','Tóquio'], a:0, x:'Conferência Geral da Unesco em Paris.'},
+    {q:'Desenhos na areia de Vanuatu são patrimônio…', o:['natural','material','imaterial','arqueológico'], a:2, x:'É um saber/tradição: imaterial.'},
+    {q:'O Grand Canyon é um patrimônio…', o:['natural','imaterial','industrial','esportivo'], a:0, x:'Maravilha da natureza nos EUA.'},
+    {q:'Em Göreme, as cidades subterrâneas serviram de refúgio para…', o:['cristãos perseguidos pelo Império Romano','piratas','astronautas','incas'], a:0, x:'Cristãos fugindo da perseguição romana.'},
+    {q:'Machu Picchu foi construída por qual povo?', o:['Incas','Maias','Romanos','Egípcios'], a:0, x:'Incas, século XV, no Peru.'},
+    {q:'Qual a diferença entre patrimônio natural e cultural?', o:['Natural é da natureza; cultural é criado pelos seres humanos','Não há diferença','Cultural é só música','Natural é só prédio'], a:0, x:'Natural = natureza preservada; cultural = criação humana.'}
+   ]},
+  {id:'his2', titulo:'Patrimônios culturais brasileiros', pg:'pp. 76 a 90', em:'🇧🇷',
+   cards:[
+    {e:'⛪', k:'Brasil na lista', t:'Patrimônios da humanidade no Brasil',
+     h:'<table><tr><td>1980</td><td>Centro histórico de <b>Ouro Preto</b> (MG)</td></tr><tr><td>1982</td><td>Centro histórico de <b>Olinda</b> (PE)</td></tr><tr><td>1983</td><td>Ruínas de <b>São Miguel das Missões</b> (RS)</td></tr><tr><td>1985</td><td>Centro histórico de <b>Salvador</b> (BA)</td></tr><tr><td>1986</td><td>Parque Nacional do <b>Iguaçu</b> (PR)</td></tr><tr><td>1987</td><td><b>Brasília</b> (DF)</td></tr><tr><td>1991</td><td>Serra da <b>Capivara</b> (PI)</td></tr><tr><td>1997</td><td>Centro histórico de <b>São Luís</b> (MA)</td></tr></table>',
+     d:'O mais antigo da lista é <b>Ouro Preto (1980)</b>. Entre 1980 e 1999, a maioria era patrimônio <b>cultural</b>.'},
+    {e:'🏘️', k:'Pernambuco', t:'Olinda',
+     h:'Fica perto do <b>Recife</b>. Foi criada para ser o centro comercial da <b>capitania de Pernambuco</b> no <b>século XVI</b>, quando a economia do <b>açúcar</b> estava no auge. Tem cerca de <b>1.500 imóveis históricos</b>.'},
+    {e:'⛏️', k:'Mais exemplos', t:'Ouro Preto e Missões',
+     h:'<ul><li><b>Ouro Preto (MG)</b>: cidade da época do ouro (<b>mineração</b>), com prédios e obras do período <b>colonial</b>.</li><li><b>São Miguel das Missões (RS)</b>: ruínas de vilas fundadas por <b>jesuítas</b> com os indígenas <b>guaranis</b> (séculos XVII e XVIII).</li></ul>'},
+    {e:'🏛️', k:'Mais exemplos', t:'Brasília, Capivara e Rio',
+     h:'<ul><li><b>Brasília (DF)</b>: arquitetura moderna de <b>Oscar Niemeyer</b>; conjunto urbano do século XX.</li><li><b>Serra da Capivara (PI)</b>: cerca de <b>400 sítios</b> com <b>pinturas rupestres</b>, os vestígios mais antigos de seres humanos na América do Sul.</li><li><b>Rio de Janeiro</b>: primeira cidade do mundo reconhecida pela paisagem urbana (mar + montanhas + floresta).</li></ul>'},
+    {e:'⚖️', k:'Proteção', t:'Constituição e Iphan',
+     h:'A <b>Constituição (art. 216)</b> reconhece o patrimônio <b>material e imaterial</b> e manda preservá-lo por <b>registro, inventário e tombamento</b>.',
+     b:'O <b>Iphan</b> (Instituto do Patrimônio Histórico e Artístico Nacional) foi criado em <b>1937</b> pelo presidente <b>Getúlio Vargas</b>.'},
+    {e:'🛶', k:'Imaterial brasileiro', t:'Abridores de letras e viola de cocho',
+     h:'<ul><li>🚤 <b>Abridores de letras (Pará)</b>: artistas que pintam os <b>nomes nos barcos</b> dos ribeirinhos.</li><li>🎸 <b>Viola de cocho (MT e MS)</b>: instrumento feito à mão, tocado no <b>cururu</b> e no <b>siriri</b>.</li></ul>',
+     b:'Em comum: aprenderam com os <b>antepassados</b> e mostram a <b>diversidade do patrimônio imaterial</b> brasileiro.'},
+    {e:'🚂', k:'Patrimônio ferroviário', t:'As marias-fumaças',
+     h:'<ul><li>Os primeiros trens a vapor surgiram na <b>Inglaterra</b> (século XIX).</li><li><b>1ª ferrovia do Brasil: 1854</b>, 14,5 km, do Porto de Mauá (RJ) até a serra de Petrópolis. Tombada pelo Iphan em 1954.</li><li><b>2ª ferrovia: 1858</b>, do <b>Recife</b> ao Cabo de Santo Agostinho (PE).</li><li>O Recife foi a 1ª cidade do mundo com locomotivas a vapor urbanas (<b>maxambombas</b>, 1867).</li><li>Desde os anos 1960, trens elétricos e a diesel substituíram as marias-fumaças.</li></ul>'}
+   ],
+   quiz:[
+    {q:'Qual foi o PRIMEIRO patrimônio brasileiro na lista da Unesco (1980)?', o:['Ouro Preto','Brasília','Olinda','Iguaçu'], a:0, x:'Centro histórico de Ouro Preto (MG), 1980.'},
+    {q:'Olinda foi centro comercial da capitania de Pernambuco na época do…', o:['açúcar','café','ouro','petróleo'], a:0, x:'Século XVI, auge do açúcar.'},
+    {q:'O Iphan foi criado em 1937 por…', o:['Getúlio Vargas','Dom Pedro II','Tiradentes','Cabral'], a:0, x:'Presidente Getúlio Vargas.'},
+    {q:'A Serra da Capivara (PI) é famosa pelas…', o:['pinturas rupestres','praias','geleiras','pirâmides'], a:0, x:'Os vestígios humanos mais antigos da América do Sul.'},
+    {q:'Os abridores de letras do Pará pintam…', o:['nomes nos barcos','prédios','placas de trânsito','camisetas'], a:0, x:'Tradição ribeirinha, patrimônio imaterial.'},
+    {q:'A 1ª ferrovia do Brasil foi inaugurada em…', o:['1854','1500','1960','1822'], a:0, x:'1854, no Rio de Janeiro (Porto de Mauá – Petrópolis).'},
+    {q:'A Constituição manda preservar o patrimônio por registro, inventário e…', o:['tombamento','demolição','venda','esquecimento'], a:0, x:'Tombar = proteger por lei.'},
+    {q:'As Ruínas de São Miguel das Missões lembram vilas de…', o:['jesuítas e indígenas guaranis','vikings','astecas','egípcios'], a:0, x:'Missões jesuíticas, séculos XVII e XVIII (RS).'}
+   ]}
+  ]
+});
+MATERIAS.push({
+  id:'ing', nome:'Inglês', em:'🇬🇧', cor:'#a855f7', data:'01/12', dia:'terça', fonte:'livro',
+  topicos:[
+  {id:'ing1', titulo:'Verb To Be – Present Simple', pg:'p. 29', em:'🙋',
+   cards:[
+    {e:'🙋', k:'Present Simple', t:'AM • IS • ARE',
+     h:'Usamos <b>am / is / are</b> para falar de estados e situações no <b>presente</b> (ser/estar).<table><tr><td>I</td><td><b>am</b></td></tr><tr><td>He / She / It</td><td><b>is</b></td></tr><tr><td>You / We / They</td><td><b>are</b></td></tr></table>'},
+    {e:'📝', k:'Examples', t:'No livro',
+     h:'<ul><li>I <b>am</b> ten years old. <em>(Eu tenho 10 anos.)</em></li><li>We <b>are</b> fifth graders. <em>(Somos do 5º ano.)</em></li><li>The baby <b>is</b> very little. <em>(O bebê é bem pequeno.)</em></li><li>She <b>is</b> polite and funny.</li></ul>'},
+    {e:'✂️', k:'Short forms', t:'Contrações e negativas',
+     h:'<ul><li>I am → <b>I’m</b> • I am not → <b>I’m not</b></li><li>She is → <b>she’s</b> • is not → <b>isn’t</b></li><li>They are → <b>they’re</b> • are not → <b>aren’t</b></li></ul>Pergunta: o verbo vem <b>antes</b>: <b>Is</b> she your friend? <b>Are</b> you happy?',
+     d:'Dica do livro: use bastante <b>adjetivos</b> (nice, short, funny…) para deixar o texto mais interessante!'}
+   ],
+   quiz:[
+    {q:'I ___ ten years old.', o:['am','is','are','be'], a:0, x:'I → am.'},
+    {q:'We ___ fifth graders.', o:['is','am','are','was'], a:2, x:'We → are.'},
+    {q:'The baby ___ very little.', o:['are','is','am','were'], a:1, x:'The baby = it → is.'},
+    {q:'She ___ my friend.', o:['are','am','is','be'], a:2, x:'She → is.'},
+    {q:'A forma curta de “they are” é…', o:['they’s','they’re','theyr’m','there'], a:1, x:'They are → they’re.'}
+   ]},
+  {id:'ing2', titulo:'Verb To Be – Past Simple', pg:'p. 30', em:'⏪',
+   cards:[
+    {e:'⏪', k:'Past Simple', t:'WAS • WERE',
+     h:'<b>Was / were</b> são o passado do verbo to be (era/estava/foi).<table><tr><td>I / He / She / It</td><td><b>was</b></td></tr><tr><td>You / We / They</td><td><b>were</b></td></tr></table>',
+     b:'O verbo to be é <b>irregular</b>: tem suas próprias regras (não ganha “-ed”).'},
+    {e:'📝', k:'Examples', t:'No livro',
+     h:'<ul><li>I <b>was</b> in fourth grade last year. <em>(Eu estava no 4º ano ano passado.)</em></li><li>He <b>was</b> playing soccer last Monday.</li><li>They <b>were</b> sleeping last night.</li></ul>',
+     d:'Palavras que indicam passado: <b>yesterday, last year, last night, last Monday, ago</b>.'},
+    {e:'🔁', k:'Present → Past', t:'Trocando o tempo',
+     h:'<ul><li>am / is → <b>was</b></li><li>are → <b>were</b></li></ul>Negativa: <b>wasn’t</b> / <b>weren’t</b>. Pergunta: <b>Was</b> he at school? <b>Were</b> they happy?'}
+   ],
+   quiz:[
+    {q:'I ___ in fourth grade last year.', o:['were','was','am','are'], a:1, x:'I → was.'},
+    {q:'They ___ sleeping last night.', o:['was','were','is','am'], a:1, x:'They → were.'},
+    {q:'He ___ playing soccer last Monday.', o:['were','was','are','be'], a:1, x:'He → was.'},
+    {q:'Qual é o passado de “are”?', o:['was','were','is','be'], a:1, x:'are → were.'},
+    {q:'Qual palavra indica PASSADO?', o:['yesterday','now','today','tomorrow'], a:0, x:'Yesterday = ontem.'}
+   ]},
+  {id:'ing3', titulo:'Silent Letters', pg:'p. 38', em:'🤫',
+   cards:[
+    {e:'🤫', k:'Silent letters', t:'Letras que não falam',
+     h:'Algumas palavras têm letras que <b>escrevemos mas não pronunciamos</b>.<ul><li><b>k</b>nee, <b>k</b>nife, <b>k</b>now (k mudo antes de n)</li><li><b>w</b>rong, <b>w</b>rite, <b>w</b>riter (w mudo antes de r)</li><li>hi<b>gh</b>, ni<b>gh</b>t (gh mudo)</li><li>cres<b>c</b>ent, s<b>c</b>issors (c mudo)</li><li><b>h</b>our, lam<b>b</b>, i<b>s</b>land (h, b e s mudos)</li></ul>',
+     b:'Como no livro: às vezes precisamos de silêncio, como os Reis Magos que procuraram Jesus <b>secretamente</b>.'},
+    {e:'🧩', k:'Riddles', t:'Charadas do livro',
+     h:'<table><tr><td>1. The opposite of right</td><td><b>w</b>rong</td></tr><tr><td>2. The body part that bends your leg</td><td><b>k</b>nee</td></tr><tr><td>3. What you are called</td><td>nam<b>e</b></td></tr><tr><td>4. The opposite of low</td><td>hi<b>gh</b></td></tr><tr><td>5. A tool useful to cut</td><td><b>k</b>nife</td></tr></table>'}
+   ],
+   quiz:[
+    {q:'Qual letra é muda em “knee”?', o:['k','n','e','nenhuma'], a:0, x:'Fala-se “ni”: o K é mudo.'},
+    {q:'Qual letra é muda em “wrong”?', o:['r','w','g','o'], a:1, x:'Fala-se “rong”: o W é mudo.'},
+    {q:'“The opposite of low” é…', o:['high','knife','name','wrong'], a:0, x:'High (alto) – com GH mudo.'},
+    {q:'“A tool useful to cut” é…', o:['knee','knife','night','hour'], a:1, x:'Knife (faca) – K mudo.'},
+    {q:'Em “hour”, qual letra é muda?', o:['h','o','u','r'], a:0, x:'Fala-se “aur”: o H é mudo.'}
+   ]}
+  ]
+});
+/* ===== GABARITO das atividades do livro (respostas sugeridas) =====
+   p: resposta pessoal (damos um exemplo) */
+const GABARITO = {
+ cie:[
+  {pg:'p. 123', q:'1. Pinte os oceanos de azul e os continentes de marrom.', r:'Atividade de pintura: oceanos em azul e continentes em marrom.'},
+  {pg:'p. 124', q:'2. Qual lápis foi mais usado: o marrom ou o azul? Por quê?', r:'O <b>azul</b>, porque a maior parte da superfície da Terra (cerca de 3/4) é coberta por água.'},
+  {pg:'p. 125', q:'3. Quais rios ficam perto do seu município? Qual abastece a cidade?', r:'Resposta pessoal. Pesquise o rio da sua cidade e de qual barragem ou açude vem a água.', p:1},
+  {pg:'p. 125', q:'4. Sua cidade tem estação de tratamento de água? Qual empresa?', r:'Resposta pessoal. Ex.: em Pernambuco, o serviço é da <b>Compesa</b>.', p:1},
+  {pg:'p. 126', q:'Minhas descobertas 1. Ilustre o que observou na projeção.', r:'Desenhar os pontinhos, sujeiras e “bichinhos” (microrganismos) que apareceram na parede.'},
+  {pg:'p. 126', q:'2. Você usaria essa água no dia a dia? Por quê?', r:'<b>Não</b>, porque ela tem sujeira e microrganismos que podem causar doenças.'},
+  {pg:'p. 126', q:'3. Quais procedimentos seriam necessários para purificá-la?', r:'Filtrar, ferver e colocar cloro – ou tratar como na ETA: flocos, decantação, filtração e cloração.'},
+  {pg:'p. 128', q:'Investigue: Qual é a relevância das florestas para o ciclo da água?', r:'As plantas transpiram e soltam vapor d’água, que ajuda a formar nuvens e <b>chuva</b>; as raízes seguram o solo e ajudam a água a infiltrar, abastecendo nascentes e lençóis subterrâneos.'},
+  {pg:'p. 128', q:'5a. Importância da chuva para a agricultura.', r:'A chuva rega as plantações naturalmente, permitindo que os alimentos cresçam.'},
+  {pg:'p. 128', q:'5b. Clima.', r:'A chuva deixa o ar mais úmido e ajuda a equilibrar (refrescar) a temperatura.'},
+  {pg:'p. 128', q:'5c. Produção de energia elétrica.', r:'A chuva enche rios e <b>represas das hidrelétricas</b>; a água em movimento gira as turbinas e gera eletricidade.'},
+  {pg:'p. 128', q:'5d. Fornecimento de água potável.', r:'A chuva abastece rios, represas e lençóis subterrâneos, de onde a água é captada e tratada para chegar às casas.'},
+  {pg:'p. 128', q:'5e. Equilíbrio de ecossistemas.', r:'Mantém rios, lagos e florestas vivos; plantas e animais dependem da água da chuva para sobreviver.'},
+  {pg:'p. 129', q:'6. A chuva causa danos na sua cidade? Que medidas tomar?', r:'Resposta pessoal. Medidas: não jogar lixo na rua, limpar os bueiros, coleta de lixo regular, preservar áreas verdes.', p:1},
+  {pg:'p. 129', q:'7. Decifre o código.', r:'<b>“NÃO JOGUE LIXO NAS RUAS, POIS ELE ENTOPE OS BUEIROS.”</b>'},
+  {pg:'p. 129', q:'8. Proposta para resolver o problema.', r:'Ex.: campanha na escola e no bairro com cartazes, mais lixeiras nas ruas, mutirão de limpeza e coleta seletiva.', p:1},
+  {pg:'p. 130', q:'Minhas descobertas 1. Anote as temperaturas no quadro.', r:'Conforme o experimento. Esperado: a <b>areia</b> fica mais fria na geladeira e mais quente no sol; a <b>água</b> muda menos.'},
+  {pg:'p. 130', q:'2. O que aconteceu com a temperatura da água e da areia?', r:'As duas mudaram, mas a <b>areia</b> esquentou e esfriou <b>mais rápido</b>; a <b>água</b> mudou <b>mais devagar</b>.'},
+  {pg:'p. 130', q:'3. O que é possível concluir?', r:'A água demora mais para esquentar e esfriar; por isso a grande quantidade de água na Terra <b>equilibra a temperatura</b> do planeta.'},
+  {pg:'p. 131', q:'9. Para onde vai a água que você usa em casa?', r:'Vai para o <b>esgoto</b>, pelos encanamentos, até a <b>Estação de Tratamento de Esgoto (ETE)</b>.'},
+  {pg:'p. 131', q:'10. Existe ETE em sua cidade?', r:'Resposta pessoal (no livro foi marcado “Sim”).', p:1},
+  {pg:'p. 131', q:'11. O tratamento do esgoto favorece a natureza? Justifique.', r:'Resposta pessoal. Ex.: Sim, porque o esgoto é limpo antes de voltar aos rios, protegendo peixes, plantas e pessoas.', p:1},
+  {pg:'p. 131', q:'12. Opinião sobre jogar esgoto sem tratamento em rios. Conselho?', r:'É errado: polui a água, mata peixes e espalha doenças. Conselho: ligar a casa à rede de esgoto (ou fazer fossa adequada) e cobrar saneamento das autoridades.'},
+  {pg:'p. 134', q:'1. Como aumentar o tempo de disponibilidade dos combustíveis fósseis?', r:'Economizar energia e combustível, usar transporte coletivo, bicicleta, carona e trocar por biocombustíveis e energias limpas (solar, eólica, hidráulica).'},
+  {pg:'p. 135', q:'2. Por que o “homem linha” alterou as imagens do muro?', r:'Alternativa <b>c)</b>: ele incentivou o uso de energias <b>renováveis</b> que não agridem o ambiente.'},
+  {pg:'p. 137', q:'Disco de Newton 1. Quais cores estão no disco?', r:'Vermelho, laranja, amarelo, verde, azul, anil e violeta.'},
+  {pg:'p. 137', q:'2. Ao ser girado, que cor o disco apresenta?', r:'<b>Branca</b> (esbranquiçada).'},
+  {pg:'p. 137', q:'3. Por que esse fenômeno acontece?', r:'Girando rápido, nossos olhos misturam as 7 cores, e a mistura delas forma a <b>luz branca</b>.'},
+  {pg:'p. 137', q:'4. Já viu a luz branca se decompor em outra situação?', r:'Sim: no <b>arco-íris</b>, num prisma, em bolhas de sabão, num CD ou no jato de uma mangueira no sol.'},
+  {pg:'p. 138', q:'3. Em quais atividades usamos a energia solar?', r:'Secar roupas no varal, aquecer a água (aquecedor solar), gerar eletricidade (placas solares), iluminar os ambientes, secar alimentos; as plantas fazem fotossíntese.'},
+  {pg:'p. 138', q:'4. Se a luz solar não existisse, o que aconteceria?', r:'O planeta ficaria escuro e muito frio, as plantas não fariam fotossíntese, faltaria alimento, o ciclo da água pararia e não haveria vida.'},
+  {pg:'p. 140', q:'Propagação sonora 1. O que aconteceu com os grãos de arroz? Por quê?', r:'Os grãos <b>pularam</b>, porque o som faz o ar e o papel-celofane <b>vibrarem</b>.'},
+  {pg:'p. 140', q:'2. Quando o volume aumentou, o que ocorreu?', r:'Os grãos pularam <b>mais forte</b> (a vibração aumentou).'},
+  {pg:'p. 140', q:'3. Som alto pode prejudicar a audição? Por quê?', r:'Sim. A vibração forte e rápida pode machucar o tímpano e causar perda de audição.'},
+  {pg:'p. 141', q:'5. Quais tipos de energia aparecem na imagem?', r:'Energia do <b>movimento</b> (crianças correndo, bola, carro, carrinho de sorvete), <b>química</b> (alimentos das crianças, combustível do carro), <b>sonora</b> (pássaros cantando, carro), <b>luminosa e térmica</b> (Sol).'},
+  {pg:'p. 142', q:'6. Energia produzida a partir da energia elétrica.', r:'a) Ventilador: <b>movimento</b> • b) Abajur: <b>luminosa</b> • c) Chuveiro: <b>térmica</b> • d) Aparelho de som: <b>sonora</b> • e) Computador: <b>luminosa, sonora e térmica</b>.'},
+  {pg:'p. 144', q:'Levantando hipóteses 1, 2 e 3.', r:'1. Energia <b>elétrica</b>. 2. Energia <b>magnética</b> (magnetismo). 3. Sim: a corrente elétrica cria campo magnético (eletroímã) e ímãs em movimento geram eletricidade (dínamo).'},
+  {pg:'p. 145', q:'1a. Assinale os utensílios que dependem de energia elétrica.', r:'Chuveiro elétrico, computador, micro-ondas, televisão (e lâmpadas).'},
+  {pg:'p. 145', q:'1b. Atividades sem e com eletricidade.', r:'<b>Sem:</b> dormir, jogar dominó, lavar louça na pia. <b>Com:</b> tomar banho no chuveiro elétrico, usar o computador, esquentar comida no micro-ondas, assistir TV.'},
+  {pg:'p. 147', q:'Eletricidade estática 1. Por que a régua atraiu os papéis?', r:'Porque, ao ser esfregada no cabelo, a régua ficou <b>eletrizada</b> (com cargas elétricas) e atraiu os papéis: é a <b>eletricidade estática</b>.'},
+  {pg:'p. 147', q:'2. Já viu esse fenômeno em outra situação?', r:'Ex.: cabelo arrepiado ao pentear, choquinho ao tocar a maçaneta ou outra pessoa, balão que gruda na parede depois de esfregado no cabelo.'},
+  {pg:'p. 147', q:'3. O que acontece quando esfregamos uma mão na outra?', r:'As mãos <b>esquentam</b>: o atrito produz calor (energia térmica).'},
+  {pg:'p. 148', q:'2. Como o eletricista se protege da corrente elétrica?', r:'Usando equipamentos <b>isolantes</b>: luvas e botas de <b>borracha</b>, capacete e escada/ferramentas com cabo isolante.'},
+  {pg:'p. 148', q:'3. O que fazer em cada situação de risco?', r:'🚿 Chuveiro: não mexer nele ligado ou com o corpo molhado; desligar o disjuntor e chamar um eletricista. 🔌 Tomada com benjamim: não ligar vários aparelhos na mesma tomada. ✂️ Criança na tomada: nunca colocar dedos ou objetos de metal; usar protetor de tomada.'},
+  {pg:'p. 150', q:'4a. Como é uma lâmpada incandescente por dentro?', r:'Tem um <b>filamento</b> (fio bem fino) preso a fios condutores, dentro de um bulbo de vidro sem ar. A corrente esquenta o filamento, que brilha.'},
+  {pg:'p. 150', q:'4b. O que possibilita o funcionamento das lâmpadas?', r:'A <b>corrente elétrica</b> passando por um circuito fechado.'},
+  {pg:'p. 150', q:'4c. A terceira lâmpada pode ser acesa? Por quê?', r:'<b>Não</b>, porque está <b>queimada</b> (filamento rompido): o circuito fica aberto e a corrente não passa.'},
+  {pg:'p. 151', q:'5a. Por que em A a lâmpada está apagada e em B acesa?', r:'Em A o interruptor está desligado: <b>circuito aberto</b>, a corrente não passa. Em B está ligado: <b>circuito fechado</b>, a corrente chega à lâmpada.'},
+  {pg:'p. 151', q:'5b. Função do interruptor, da pilha e dos fios.', r:'<b>Interruptor:</b> abre e fecha o circuito (liga/desliga). <b>Pilha:</b> fonte de energia, fornece a corrente. <b>Fios:</b> conduzem a corrente.'},
+  {pg:'p. 153', q:'Lanterna 1. Por que a lâmpada acende quando um fio encosta no outro?', r:'Porque o circuito <b>fecha</b> e a corrente elétrica passa até a lâmpada.'},
+  {pg:'p. 153', q:'2. De onde vem a energia elétrica que acende a lâmpada? Por quê?', r:'Das <b>pilhas</b>, que transformam energia química em energia elétrica.'},
+  {pg:'p. 153', q:'3. Classifique os materiais em condutores e isolantes.', r:'<b>Condutores:</b> fios (metal por dentro), papel-alumínio, pilhas, soquete/lâmpada. <b>Isolantes:</b> embalagem plástica de detergente, fita adesiva, algodão, capa plástica dos fios.'},
+  {pg:'p. 154', q:'6a. Objetivo do horário de verão. Vantagens? Para quem?', r:'Aproveitar mais a luz do dia e <b>economizar energia elétrica</b> (menos lâmpadas acesas no fim da tarde). Vantagem para o país, para o sistema elétrico e para a população.'},
+  {pg:'p. 154', q:'6b. Por que só alguns estados participam?', r:'Porque só os estados mais distantes da linha do Equador (Sul, Sudeste e Centro-Oeste) têm dias bem mais longos no verão; perto do Equador os dias têm quase a mesma duração o ano todo.'},
+  {pg:'p. 154', q:'6c. Seu estado adota o horário de verão?', r:'Resposta pessoal. Os estados do Nordeste normalmente não adotam, e o horário de verão está suspenso no Brasil desde 2019.', p:1},
+  {pg:'p. 155', q:'7. Como Dona Ana pode recolher os alfinetes sem pegar um por um?', r:'Usando um <b>ímã</b>: os alfinetes de metal são atraídos por ele.'},
+  {pg:'p. 157', q:'Polos 1, 2 e 3.', r:'1. Polos diferentes se <b>atraíram</b> (grudaram). 2. Polos iguais se <b>repeliram</b> (se afastaram). 3. Mesmo sem encostar, a força age (campo magnético): quanto mais perto, mais forte a atração ou a repulsão.'},
+  {pg:'p. 159', q:'8a. Um parafuso será atraído por um ímã se for…', r:'<b>(X) de ferro ou de níquel.</b>'},
+  {pg:'p. 159', q:'8b. Ferro e alumínio perto de um ímã:', r:'<b>(X) O pedaço de alumínio não será atraído, pois não sofrerá magnetismo.</b>'},
+  {pg:'p. 160', q:'Miniguindaste 1. O que acontece ao aproximar o eletroímã dos clipes? Por quê?', r:'Os clipes de <b>metal</b> são atraídos, porque a corrente da pilha passando pelo fio enrolado transforma o prego em um <b>eletroímã</b>.'},
+  {pg:'p. 160', q:'2. Teste outros objetos.', r:'Ex.: clipe de metal – atraído • clipe de plástico – não atraído • prego/tachinha – atraído • borracha, papel, lápis – não atraídos.'}
+ ],
+ por:[
+  {pg:'p. 40', q:'38. Organize: pássaro, também, indígena, privilégio, líder, kayapó.', r:'<b>Proparoxítonas:</b> pássaro, indígena • <b>Paroxítonas:</b> privilégio, líder • <b>Oxítonas:</b> também, kayapó.'},
+  {pg:'p. 40', q:'38a. O acento gráfico marca a sílaba pronunciada…', r:'<b>(X) com mais intensidade.</b> (Nessas palavras, o acento agudo também indica som aberto.)'},
+  {pg:'p. 40', q:'38b. As paroxítonas foram acentuadas porque terminam com…', r:'<b>(X) ditongo</b> (privilé-gio) e <b>(X) R</b> (líder).'},
+  {pg:'p. 40', q:'38c. Outras paroxítonas acentuadas no texto.', r:'Ex.: memória, própria, língua, história (confira no texto).'},
+  {pg:'p. 40', q:'“Por que não aparecem proparoxítonas sem acento?”', r:'Porque <b>todas as proparoxítonas são acentuadas</b> na língua portuguesa.'},
+  {pg:'p. 49', q:'10a. Por que sabemos que quem diz “Anita” é a professora?', r:'Por causa do <b>travessão</b> que separa a fala e da explicação do narrador: “a professora <b>diz</b> meu nome em voz alta”.'},
+  {pg:'p. 49', q:'10b. Que sinal aparece antes do nome no trecho A? Por quê?', r:'O <b>travessão (–)</b>, usado para indicar a <b>fala do personagem</b> (discurso direto).'},
+  {pg:'p. 49', q:'10c. A autora só usa esse sinal para a fala direta?', r:'Não. O travessão também separa o <b>comentário do narrador</b> depois da fala, como em “– Achei! <b>– dou um salto</b>.”'},
+  {pg:'p. 49', q:'10d. Em qual trecho a narradora coloca a fala dentro do próprio texto?', r:'No <b>trecho B</b>: não há travessão; a narradora conta com as palavras dela o que a professora disse (discurso <b>indireto</b>).'},
+  {pg:'p. 49', q:'11. Diferenças entre o trecho B e o A.', r:'No B não há travessão nem exclamação; o verbo está no passado (“dizia”); o nome fica entre vírgulas; quem conta é a narradora (discurso indireto).'},
+  {pg:'p. 49', q:'12. Transforme em discurso direto.', r:'Anita olhava para a exposição de sua xará e dizia:<br><b>– Estou encantada!</b>'},
+  {pg:'p. 50', q:'13. Qual discurso chama mais a atenção do leitor? Explique.', r:'O <b>discurso direto</b>, porque mostra a fala exata do personagem, com emoção e travessão, como se o leitor estivesse ouvindo.'},
+  {pg:'p. 50', q:'14. Copie três trechos com discurso direto.', r:'“– Anita! – a professora diz meu nome em voz alta.” • “– Achei! – dou um salto.” • “– Anita com Anita, e fim de papo.”'},
+  {pg:'p. 50', q:'15. Verbos que aparecem antes ou depois da fala.', r:'Ex.: <b>diz, aviso, decreta, dou (um salto)</b>; outros verbos de dizer: falar, gritar, perguntar, responder.'},
+  {pg:'p. 50', q:'16. Continue a crônica com um diálogo entre Anita e Mário.', r:'Produção pessoal. Use travessão em cada fala e verbos de dizer. Ex.: – Oi, Mário! – disse Anita. – Vamos andar de skate? – Bora! – respondeu ele.', p:1},
+  {pg:'p. 57', q:'27. Responda com versos do texto.', r:'a) Na cabeça: “E o palácio da memória é a cabeça.” • b) “O bebê, quando nasce, chora de alegria.” • c) “A lembrança é muito útil.” (confira os versos no poema da p. 54).'},
+  {pg:'p. 57', q:'28. Sentido se trocar “uma” e “a” de lugar.', r:'Ficaria “Cada ano é <b>a</b> paisagem nova…” e “E <b>uma</b> memória é sempre nova”. Muda o sentido: <b>uma</b> (indefinido) fala de algo qualquer; <b>a</b> (definido) fala de algo específico, já conhecido.'},
+  {pg:'p. 57', q:'29. Poderia trocar “o” e “a” em “o palácio da memória é a cabeça”?', r:'<b>Não</b>, porque o artigo combina em gênero com o substantivo: <b>o palácio</b> (masculino), <b>a cabeça</b> (feminino).'},
+  {pg:'p. 58', q:'30a. “soninho” e “memória” são…', r:'<b>(X) substantivos.</b>'},
+  {pg:'p. 58', q:'30b. Quais palavras aparecem antes delas?', r:'<b>o</b> (o soninho) e <b>a</b> (a memória) – são artigos.'},
+  {pg:'p. 58', q:'30c. Poderiam aparecer em outra posição mantendo o sentido?', r:'Não. O artigo vem sempre <b>antes</b> do substantivo.'},
+  {pg:'p. 58', q:'30d. O autor combinou essas palavras? Explique.', r:'Sim: o artigo concorda com o substantivo em gênero e número – <b>o soninho</b> (masc. sing.), <b>a memória</b> (fem. sing.).'},
+  {pg:'p. 58', q:'31. As palavras circuladas (A lembrança / O tempo)…', r:'Alternativa <b>b)</b>: na primeira são femininas e no singular; na segunda, masculinas e no singular.'},
+  {pg:'p. 58', q:'32. “O bebê, quando nasce, chora de alegria.”', r:'a) Feminino: “<b>A bebê</b>, quando nasce, chora de alegria.” • b) Plural: “<b>Os bebês</b>, quando nascem, choram de alegria.”'},
+  {pg:'p. 59', q:'33. Complete com artigos.', r:'a) Todo mundo foi bebê <b>um</b> dia: <b>a</b> vovó, <b>o</b> papai, <b>os</b> meus irmãos. • b) Não vejo <b>a</b> hora de começar <b>a</b> festa de aniversário. Minha mãe preparou <b>uns</b> pastéis deliciosos.'},
+  {pg:'p. 59', q:'34. Título do poema da p. 54.', r:'“<b>A criança mais velha do mundo</b>”. a) Do <b>mundo</b>. b) “A criança mais velha mundo” – fica sem sentido.'},
+  {pg:'p. 59', q:'35. Complete o que falta.', r:'a) Envelhecer é o mesmo que viajar <b>de</b> trem. • b) O bebê, quando nasce, chora <b>de</b> alegria.'},
+  {pg:'p. 59', q:'36. Quais palavras foram trocadas?', r:'a) “em” e “de”: “Então, <b>de</b> segundo <b>em</b> segundo, a primeira hora vai embora.” • b) “de” e “no”: “É tão divertido como brincar <b>no</b> escuro e não ter medo <b>de</b> nada.”'}
+ ],
+ geo:[
+  {pg:'pp. 92 a 99', q:'Conceitue qualidade de vida.', r:'É viver bem, com saúde e bem-estar, num ambiente com ar limpo, água tratada, saneamento, boa moradia, trabalho, transporte, alimentação, segurança e lazer.'},
+  {pg:'pp. 92 a 99', q:'Por que o espaço físico é tão importante para a qualidade de vida?', r:'Porque é nele que vivemos: se o ambiente tem ar, água e moradia de boa qualidade, as pessoas vivem com mais saúde e bem-estar.'},
+  {pg:'pp. 92 a 99', q:'Quem é o responsável pelo meio ambiente?', r:'<b>Todos nós</b>: eu, você, a família, comerciantes, fabricantes, prestadores de serviço e governantes.'},
+  {pg:'pp. 98 e 99', q:'Que características indicam bioarquitetura?', r:'Plantas nos telhados e paredes, uso de luz e ventilação naturais, materiais naturais/locais, energia solar e captação da água da chuva.'},
+  {pg:'pp. 100 a 105', q:'Relacione o tipo de poluição com a consequência.', r:'(e) Radioativa → mutações nos peixes e câncer • (d) Térmica → reduz o oxigênio e acelera outros poluentes • (b) Química → pode intoxicar os animais • (c) Sedimentar → impede a luz e a fotossíntese • (a) Biológica → transmite doenças.'},
+  {pg:'pp. 100 a 105', q:'Que tipo de lixo seco mais contamina os oceanos?', r:'O <b>plástico</b> (garrafas, sacolas, embalagens).'},
+  {pg:'pp. 100 a 105', q:'Por que todos somos responsáveis pelo lixo que chega ao mar?', r:'Porque o lixo jogado em qualquer lugar é levado pela chuva aos rios, e os rios desembocam no mar.'},
+  {pg:'pp. 100 a 105', q:'Principais causas da maré negra.', r:'Vazamentos nas tubulações submersas durante a extração de petróleo e acidentes com navios petroleiros.'},
+  {pg:'pp. 100 a 105', q:'Consequências dos vazamentos de petróleo.', r:'<b>Peixes:</b> morrem por asfixia (falta de luz e oxigênio). <b>Aves e mamíferos:</b> morrem de hipotermia ou intoxicados. <b>Praias:</b> ficam sujas e impróprias para a população.'},
+  {pg:'pp. 100 a 105', q:'Sua responsabilidade com o lixo e a vida marinha.', r:'Descartar o lixo corretamente, separar recicláveis, usar menos plástico e nunca jogar lixo em rios, praias e mares.'},
+  {pg:'pp. 106 a 111', q:'O que determina o art. 225 da Constituição?', r:'Que o <b>Poder Público e a coletividade</b> têm o dever de defender e preservar o meio ambiente para as <b>presentes e futuras gerações</b>.'},
+  {pg:'pp. 106 a 111', q:'Camada atmosférica mais importante para a vida.', r:'A <b>troposfera</b>, onde vivemos, respiramos e acontecem chuva, vento e nuvens.'},
+  {pg:'pp. 106 a 111', q:'Situações que indicam contaminação do ar.', r:'Fumaça de carros e fábricas, céu acinzentado, pouca visibilidade, cheiro ruim, queimadas e pessoas com problemas respiratórios.'},
+  {pg:'pp. 106 a 111', q:'Como diminuir a poluição do ar na cidade?', r:'Andar a pé ou de bicicleta, dar carona, usar transporte coletivo, plantar árvores, não fazer queimadas e instalar filtros nas fábricas.'},
+  {pg:'pp. 112 a 119', q:'Qual afirmação define corretamente a erosão?', r:'Alternativa <b>d)</b>: é a ação provocada pelo homem ou pela própria natureza de remover ou deslocar o solo superficial ou profundo.'}
+ ],
+ mat:[
+  {pg:'Temperatura', q:'Que instrumento mede a temperatura?', r:'O <b>termômetro</b>. Unidade mais usada: grau Celsius (°C).'},
+  {pg:'Temperatura', q:'Alexandre tinha febre de 38,7 °C e baixou 2,2 °C.', r:'38,7 − 2,2 = <b>36,5 °C</b>.'},
+  {pg:'Operações', q:'Distribuidora/piscina/balde: 4.780 L em baldes de 20 L.', r:'4.780 ÷ 20 = <b>239 baldes</b>.'},
+  {pg:'Operações', q:'60 copos de 300 mL de suco, de 20 L preparados.', r:'60 × 300 = 18.000 mL = 18 L. Sobraram 20 − 18 = <b>2 L</b>.'},
+  {pg:'Tempo', q:'11h10 em minutos e segundos.', r:'11 × 60 + 10 = <b>670 min</b> = 670 × 60 = <b>40.200 s</b>.'},
+  {pg:'Tempo', q:'Adiantar 30 minutos é que fração da hora?', r:'<b>1/2</b> hora (meia hora).'},
+  {pg:'Tempo', q:'Cílios se renovam a cada 120 dias.', r:'120 dias ≈ <b>4 meses</b> → <b>(X) quadrimestre</b>.'},
+  {pg:'Tempo', q:'180 meses de casamento equivalem a…', r:'180 ÷ 12 = <b>15 anos</b>.'},
+  {pg:'Tempo', q:'Por que Juan perdeu o voo?', r:'O voo era às <b>8h da manhã</b>, e ele chegou às 19h (uma hora antes das 8 da noite).'},
+  {pg:'Tempo', q:'Voo às 10h com duração de 2h45min.', r:'Chegou às <b>12h45</b>.'},
+  {pg:'Tempo', q:'500 mil células em 30 segundos.', r:'a) Em 1 s ≈ <b>16.667</b> células. b) Em 1 min = <b>1.000.000</b> de células.'},
+  {pg:'Tempo', q:'Dormir 8 h por noite gastando 63 calorias por hora, numa semana.', r:'63 × 8 = 504 por noite; 504 × 7 = <b>3.528 calorias</b>.'},
+  {pg:'Medidas', q:'Mesa de 1 m em palmos de 22 cm.', r:'100 ÷ 22 ≈ 4,5 → <b>b) 4 palmos e meio</b>.'},
+  {pg:'Combinatório', q:'Duas cores entre branca, creme, azul e verde.', r:'branca-creme, branca-azul, branca-verde, creme-azul, creme-verde, azul-verde → <b>6 combinações</b>.'},
+  {pg:'Combinatório', q:'Boneca com 3 chapéus, 4 vestidos e 2 bolsas.', r:'3 × 4 × 2 = <b>24 possibilidades</b>.'},
+  {pg:'Combinatório', q:'Cadeado de 3 dígitos com o último 7.', r:'10 × 10 = <b>100 possibilidades</b> para os 2 primeiros dígitos.'},
+  {pg:'Combinatório', q:'Dois dados: soma exatamente 6.', r:'(1,5) (2,4) (3,3) (4,2) (5,1) → <b>5 possibilidades</b>.'},
+  {pg:'Probabilidade', q:'Dado: Walter ganha com par, Anita com ímpar.', r:'<b>Chances iguais</b>: 3 pares (2, 4, 6) e 3 ímpares (1, 3, 5).'},
+  {pg:'Probabilidade', q:'Podemos ter certeza do número que vai sair no dado?', r:'Não. Só temos certeza de que será um número inteiro de <b>1 a 6</b>.'},
+  {pg:'Probabilidade', q:'Uma entre seis necessidades é atendida: probabilidade.', r:'<b>1/6</b> ≈ <b>16,7%</b>.'},
+  {pg:'Estatística', q:'População e amostra (Inmetro).', r:'<b>População:</b> o lote de 10.000 brinquedos. <b>Amostra:</b> os 100 brinquedos testados.'}
+ ],
+ his:[
+  {pg:'pp. 64 a 73', q:'O que significa ser patrimônio mundial (da humanidade)?', r:'Ser um bem (natural ou cultural) de valor tão grande que a Unesco o reconhece como importante para <b>todos os povos</b>, devendo ser preservado.'},
+  {pg:'pp. 64 a 73', q:'Por que o Parque de Göreme é patrimônio mundial?', r:'Pela paisagem natural (rochas vulcânicas esculpidas pela erosão) e pela história: moradias, igrejas e cidades subterrâneas usadas por cristãos.'},
+  {pg:'pp. 64 a 73', q:'Por que Kyoto e as memórias de Lutero são patrimônios?', r:'Pelo valor <b>arquitetônico</b> e pela <b>memória e riqueza cultural</b> que representam.'},
+  {pg:'pp. 64 a 73', q:'Que tipo de conhecimento é preservado nos exemplos (Uganda/Vanuatu)?', r:'<b>b) Artesanal</b> – saberes manuais e tradicionais passados de geração em geração.'},
+  {pg:'pp. 64 a 73', q:'Diferença entre patrimônio natural e cultural.', r:'<b>Natural:</b> áreas da natureza preservadas (biodiversidade, formações geológicas). <b>Cultural:</b> bens criados pelos seres humanos (materiais ou imateriais).'},
+  {pg:'pp. 64 a 73', q:'Machu Picchu é um patrimônio…', r:'<b>(X) natural, histórico e cultural.</b> Fica no <b>Peru</b>; é patrimônio mundial: obra-prima dos incas em harmonia com a natureza e rica biodiversidade.'},
+  {pg:'pp. 76 a 90', q:'Entre 1980 e 1999, a maior parte dos sítios brasileiros era patrimônio…', r:'<b>(X) cultural.</b>'},
+  {pg:'pp. 76 a 90', q:'Mais antigo e mais recente da lista.', r:'Mais antigo: <b>Ouro Preto (1980)</b>. Mais recentes (na lista do livro): Pampulha (2016) e Cais do Valongo (2017).'},
+  {pg:'pp. 76 a 90', q:'Estados que aparecem mais de uma vez.', r:'Ex.: <b>Minas Gerais</b> (Ouro Preto, Congonhas, Diamantina, Pampulha), <b>Rio de Janeiro</b> (paisagens cariocas, Cais do Valongo), <b>Pernambuco</b> (Olinda, Fernando de Noronha), <b>Goiás</b> (cidade de Goiás, Veadeiros/Emas).'},
+  {pg:'pp. 76 a 90', q:'O que os abridores de letras e os artesãos da viola de cocho têm em comum?', r:'<b>a)</b> Aprenderam as técnicas com os antepassados e <b>c)</b> revelam a diversidade do patrimônio imaterial brasileiro.'},
+  {pg:'pp. 76 a 90', q:'Ordem dos fatos do patrimônio ferroviário.', r:'1ª ferrovia (1854) → 2ª ferrovia, no Recife (1858) → maxambombas no Recife (1867) → substituição das marias-fumaças (anos 1960) → metrôs nas grandes cidades (anos 1970) → Iphan cuida do patrimônio ferroviário (2007).'}
+ ],
+ ing:[
+  {pg:'p. 29', q:'Write a short paragraph about your partner using To Be.', r:'Ex.: “My partner <b>is</b> Ana. She <b>is</b> 10 years old. She <b>is</b> kind and funny. Her eyes <b>are</b> brown. We <b>are</b> friends.”', p:1},
+  {pg:'p. 30', q:'Write five sentences using To Be in the past.', r:'Ex.: I <b>was</b> happy yesterday. • She <b>was</b> at school. • We <b>were</b> tired. • They <b>were</b> at the park. • It <b>was</b> sunny last Sunday.', p:1},
+  {pg:'p. 38', q:'Silent word riddle.', r:'1. <b>w</b>rong • 2. <b>k</b>nee • 3. nam<b>e</b> • 4. hi<b>gh</b> • 5. <b>k</b>nife (letras mudas em negrito).'}
+ ]
+};
+
+/* =====================================================================
+   MOTOR DO JOGO
+   ===================================================================== */
+const $ = s => document.querySelector(s);
+const app = $('#app');
+const esc = t => String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ANO = 2026;
+const TITULOS = ['Novato','Aprendiz','Explorador','Estudante Ninja','Cientista Jr.','Mestre do Saber','Lenda da Turma','Gênio Supremo','Imortal do 5º Ano'];
+const AVATARES = ['🎮','🦊','🐼','🐯','🦄','🐸','🤖','👾','🐉','🦖','🐙','⚽','🎧','🚀','🧙','🦸'];
+
+/* ---------- Salvamento (vários jogadores no mesmo aparelho) ---------- */
+const KEY = 'estudoGamer.av2.v1';
+let DB = (() => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; } })();
+DB.players = DB.players || {};
+if (DB.sound === undefined) DB.sound = true;
+const salvar = () => { try { localStorage.setItem(KEY, JSON.stringify(DB)); } catch (e) {} };
+const P = () => DB.players[DB.current];
+function novoJogador(nome, av) {
+  const id = 'p' + Date.now().toString(36);
+  DB.players[id] = {nome, av, xp:0, seen:{}, done:{}, combo:0, maxCombo:0, acertos:0, erros:0};
+  DB.current = id; salvar();
+}
+
+/* ---------- Níveis ---------- */
+const precisa = n => 100 + (n - 1) * 60;           // XP para passar do nível n
+function nivel(xp) {
+  let n = 1, resto = xp;
+  while (resto >= precisa(n)) { resto -= precisa(n); n++; }
+  return {n, resto, meta: precisa(n), titulo: TITULOS[Math.min(n - 1, TITULOS.length - 1)]};
+}
+
+/* ---------- Som (Web Audio, sem arquivos) ---------- */
+let AC = null;
+function tom(freq, dur, tipo = 'sine', vol = .12, atraso = 0) {
+  if (!DB.sound) return;
+  try {
+    AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+    const o = AC.createOscillator(), g = AC.createGain(), t = AC.currentTime + atraso;
+    o.type = tipo; o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+    o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t + dur);
+  } catch (e) {}
+}
+const SFX = {
+  swipe: () => tom(520, .08, 'triangle', .06),
+  ok:    () => { tom(660, .12, 'square', .07); tom(880, .14, 'square', .07, .1); tom(1320, .22, 'square', .06, .2); },
+  no:    () => { tom(180, .25, 'sawtooth', .09); tom(140, .3, 'sawtooth', .08, .12); },
+  xp:    () => tom(1200, .06, 'triangle', .05),
+  lvl:   () => [523, 659, 784, 1047, 1319].forEach((f, i) => tom(f, .25, 'square', .07, i * .11)),
+  win:   () => [784, 988, 1175, 1568].forEach((f, i) => tom(f, .22, 'triangle', .09, i * .12))
+};
+
+/* ---------- Confete ---------- */
+const cv = $('#confetti'), cx = cv.getContext('2d');
+let pecas = [], animando = false;
+function confete(qtd = 140) {
+  cv.width = innerWidth; cv.height = innerHeight;
+  const cores = ['#00e5ff','#a855f7','#ff2d95','#22ff88','#ffd23f','#ff8a3d'];
+  for (let i = 0; i < qtd; i++) pecas.push({x: innerWidth / 2 + (Math.random() - .5) * 200, y: innerHeight * .35,
+    vx: (Math.random() - .5) * 16, vy: -Math.random() * 15 - 4, r: Math.random() * 7 + 4, c: cores[i % cores.length],
+    a: Math.random() * 6, va: (Math.random() - .5) * .4, vida: 140 + Math.random() * 60});
+  if (!animando) { animando = true; requestAnimationFrame(passo); }
+}
+function passo() {
+  cx.clearRect(0, 0, cv.width, cv.height);
+  pecas = pecas.filter(p => p.vida-- > 0 && p.y < cv.height + 40);
+  for (const p of pecas) {
+    p.vy += .42; p.vx *= .99; p.x += p.vx; p.y += p.vy; p.a += p.va;
+    cx.save(); cx.translate(p.x, p.y); cx.rotate(p.a); cx.fillStyle = p.c;
+    cx.fillRect(-p.r / 2, -p.r / 4, p.r, p.r / 2); cx.restore();
+  }
+  if (pecas.length) requestAnimationFrame(passo); else { animando = false; cx.clearRect(0, 0, cv.width, cv.height); }
+}
+
+/* ---------- HUD, XP e avisos ---------- */
+function hud() {
+  const p = P(); if (!p) return;
+  const L = nivel(p.xp);
+  $('#hudAv').textContent = p.av; $('#hudNm').textContent = p.nome;
+  $('#hudLv').textContent = 'Nível ' + L.n; $('#hudTitle').textContent = L.titulo;
+  $('#hudXpTxt').textContent = L.resto + '/' + L.meta + ' XP';
+  $('#hudBar').style.width = (L.resto / L.meta * 100) + '%';
+  $('#hudXp').textContent = p.xp; $('#hudCombo').textContent = p.combo;
+  $('#btnSom').textContent = DB.sound ? '🔊' : '🔇';
+}
+function toast(txt) {
+  const t = document.createElement('div'); t.className = 'toast'; t.textContent = txt;
+  document.body.appendChild(t); setTimeout(() => t.remove(), 1650);
+}
+function ganharXP(qtd, motivo) {
+  const p = P(); const antes = nivel(p.xp).n;
+  p.xp += qtd; salvar(); hud();
+  toast('+' + qtd + ' XP' + (motivo ? ' • ' + motivo : '')); SFX.xp();
+  const depois = nivel(p.xp);
+  if (depois.n > antes) setTimeout(() => subiuNivel(depois), 500);
+}
+function subiuNivel(L) {
+  SFX.lvl(); confete(220); if (navigator.vibrate) navigator.vibrate([60, 40, 60, 40, 120]);
+  const ov = document.createElement('div'); ov.className = 'ov';
+  ov.innerHTML = '<div class="modal lvup"><div class="big">🏆</div><h2 class="orb">LEVEL UP!</h2>' +
+    '<p>Você chegou ao <b>Nível ' + L.n + '</b><br>Novo título: <b>' + esc(L.titulo) + '</b></p>' +
+    '<button class="btn go" style="width:100%;margin-top:18px;--c:var(--gold)">BORA CONTINUAR! 🚀</button></div>';
+  ov.querySelector('button').onclick = () => ov.remove();
+  document.body.appendChild(ov);
+}
+
+/* ---------- Perfil (nome + avatar) ---------- */
+function telaPerfil(podeFechar) {
+  const ov = document.createElement('div'); ov.className = 'ov';
+  const lista = Object.entries(DB.players).sort((a, b) => b[1].xp - a[1].xp);
+  let av = AVATARES[Math.floor(Math.random() * AVATARES.length)];
+  ov.innerHTML = '<div class="modal">' +
+    '<div style="font-size:52px">🎮</div><h2 class="orb">ESTUDO GAMER</h2><p>AV2 de Dezembro • 5º Ano</p>' +
+    (lista.length ? '<div class="sec-t" style="margin:16px 0 0">🏅 Ranking da galera</div><div class="plist">' +
+      lista.map(([id, p], i) => '<button data-id="' + id + '"><span>' + (['🥇','🥈','🥉'][i] || '🎖️') + '</span><span>' + p.av + ' ' + esc(p.nome) + '</span><small>Nv ' + nivel(p.xp).n + ' • ' + p.xp + ' XP</small></button>').join('') + '</div>' : '') +
+    '<div class="sec-t" style="margin:16px 0 0">' + (lista.length ? '➕ Novo jogador' : 'Crie seu jogador') + '</div>' +
+    '<input id="inNome" maxlength="16" placeholder="Seu nome ou apelido" autocomplete="off">' +
+    '<div class="avs">' + AVATARES.map(a => '<button class="' + (a === av ? 'sel' : '') + '">' + a + '</button>').join('') + '</div>' +
+    '<button class="btn go" id="btnCriar" style="width:100%;--c:var(--cyan)">COMEÇAR ▶</button>' +
+    (podeFechar ? '<button class="btn" id="btnFechar" style="width:100%;margin-top:8px">Voltar</button>' : '') + '</div>';
+  document.body.appendChild(ov);
+  ov.querySelectorAll('.avs button').forEach(b => b.onclick = () => {
+    ov.querySelectorAll('.avs button').forEach(x => x.classList.remove('sel')); b.classList.add('sel'); av = b.textContent; SFX.swipe();
+  });
+  ov.querySelectorAll('.plist button').forEach(b => b.onclick = () => { DB.current = b.dataset.id; salvar(); ov.remove(); hud(); home(); });
+  const criar = () => {
+    const nome = $('#inNome').value.trim();
+    if (!nome) { $('#inNome').focus(); $('#inNome').style.borderColor = 'var(--bad)'; SFX.no(); return; }
+    novoJogador(nome, av); ov.remove(); hud(); home(); SFX.win(); confete(90);
+  };
+  $('#btnCriar').onclick = criar;
+  $('#inNome').onkeydown = e => { if (e.key === 'Enter') criar(); };
+  if (podeFechar) $('#btnFechar').onclick = () => ov.remove();
+  setTimeout(() => $('#inNome').focus(), 50);
+}
+$('#btnPerfil').onclick = () => telaPerfil(true);
+$('#btnSom').onclick = () => { DB.sound = !DB.sound; salvar(); hud(); SFX.swipe(); };
+
+/* ---------- Utilidades de tela ---------- */
+const totalTopicos = () => MATERIAS.reduce((s, m) => s + m.topicos.length, 0);
+const concluidos = () => Object.keys(P().done).length;
+const estrelasTot = () => Object.values(P().done).reduce((s, d) => s + d.stars, 0);
+const starsTxt = n => '⭐'.repeat(n) + '☆'.repeat(3 - n);
+function diasPara(ddmm) {
+  const [d, m] = ddmm.split('/').map(Number);
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+  return Math.round((new Date(ANO, m - 1, d) - hoje) / 864e5);
+}
+const quando = n => n > 1 ? 'em ' + n + ' dias' : n === 1 ? 'AMANHÃ!' : n === 0 ? 'HOJE!' : 'já foi ✔';
+function tela(html, comNav) {
+  $('#navbar').classList.toggle('hide', !comNav);
+  app.innerHTML = '<div class="view">' + html + '</div>';
+  scrollTo({top: 0, behavior: 'instant' in window ? 'instant' : 'auto'});
+}
+
+/* ---------- MENU PRINCIPAL ---------- */
+function home() {
+  const p = P();
+  const mats = [...MATERIAS].sort((a, b) => diasPara(a.data) - diasPara(b.data));
+  const prox = mats.find(m => diasPara(m.data) >= 0);
+  tela(
+    '<section class="hero"><div class="big">🎓</div>' +
+    '<h1 class="orb">Fala, ' + esc(p.nome) + '! ' + p.av + '</h1>' +
+    '<p>' + (prox ? 'Próxima prova: <b>' + esc(prox.nome) + '</b> (' + prox.data + ') – ' + quando(diasPara(prox.data)) : 'Provas da AV2 encerradas! Revise quando quiser.') + '</p>' +
+    '<p style="font-size:13px;opacity:.8">Deslize os cards, responda os quizzes e suba de nível. Cada acerto vale XP! ⚡</p></section>' +
+    '<div class="kpis" style="margin-top:0"><div class="kpi" style="--c:var(--gold)"><b>' + p.xp + '</b><small>XP total</small></div>' +
+    '<div class="kpi" style="--c:var(--ok)"><b>' + concluidos() + '/' + totalTopicos() + '</b><small>fases</small></div>' +
+    '<div class="kpi" style="--c:var(--pink)"><b>' + estrelasTot() + '</b><small>estrelas</small></div></div>' +
+    '<button class="gabbtn" id="btnRel" style="border-style:solid;color:var(--cyan);border-color:var(--cyan);background:linear-gradient(135deg,rgba(0,229,255,.15),rgba(168,85,247,.15))">⚡ DESAFIO RELÂMPAGO • 10 perguntas sorteadas de tudo</button>' +
+    '<div class="sec-t">📅 Calendário da AV2 – Dezembro</div><div class="grid">' +
+    mats.map(m => {
+      const feitos = m.topicos.filter(t => p.done[t.id]).length, d = diasPara(m.data);
+      return '<button class="mcard" data-m="' + m.id + '" style="--c:' + m.cor + '">' +
+        '<span class="cd">' + quando(d) + '</span><div class="em">' + m.em + '</div>' +
+        '<h3>' + esc(m.nome) + '</h3><div class="dt">📆 ' + m.dia + ', ' + m.data + ' • ' + m.topicos.length + ' fases</div>' +
+        '<div class="prog"><i style="width:' + (feitos / m.topicos.length * 100) + '%"></i></div>' +
+        '<div class="pt"><span>' + feitos + '/' + m.topicos.length + ' concluídas</span><span>' +
+        m.topicos.reduce((s, t) => s + (p.done[t.id] ? p.done[t.id].stars : 0), 0) + ' ⭐</span></div>' +
+        '<span class="tag livro">📖 com gabarito do livro</span></button>';
+    }).join('') + '</div>' +
+    '<p class="foot">Conteúdo da AV2 (4º bimestre) do 5º ano, montado a partir do boletim “Saiba +” e das páginas do livro.<br>' +
+    'Seu progresso fica salvo neste aparelho. Toque em 👥 para trocar de jogador e ver o ranking da galera.</p>'
+  );
+  app.querySelectorAll('.mcard').forEach(b => b.onclick = () => { SFX.swipe(); materia(b.dataset.m); });
+  $('#btnRel').onclick = () => { SFX.swipe(); relampago(); };
+}
+
+/* ---------- TELA DA MATÉRIA ---------- */
+function materia(id) {
+  const m = MATERIAS.find(x => x.id === id), p = P();
+  tela(
+    '<button class="back" id="bk">◀ Menu</button>' +
+    '<section class="hero" style="background:linear-gradient(135deg,' + m.cor + '44,rgba(18,26,51,.9));border-color:' + m.cor + '">' +
+    '<div class="big">' + m.em + '</div><h1 class="orb">' + esc(m.nome) + '</h1>' +
+    '<p>📆 Prova: ' + m.dia + ', ' + m.data + ' – ' + quando(diasPara(m.data)) + '</p></section>' +
+    '<div class="sec-t">🎮 Fases</div>' +
+    m.topicos.map((t, i) => {
+      const d = p.done[t.id];
+      return '<button class="topic ' + (d ? 'done' : '') + '" data-t="' + t.id + '" style="--c:' + m.cor + '">' +
+        '<span class="n">' + (d ? '✓' : i + 1) + '</span><span class="tt"><b>' + t.em + ' ' + esc(t.titulo) + '</b>' +
+        '<small>' + t.cards.length + ' cards • ' + t.quiz.length + ' perguntas • ' + t.pg + '</small></span>' +
+        '<span class="stars">' + (d ? starsTxt(d.stars) : '▶') + '</span></button>';
+    }).join('') +
+    (GABARITO[m.id] ? '<button class="gabbtn" id="gab">🔓 GABARITO DO LIVRO – ' + GABARITO[m.id].length + ' respostas</button>' : '')
+  );
+  $('#bk').onclick = () => { SFX.swipe(); home(); };
+  app.querySelectorAll('.topic').forEach(b => b.onclick = () => {
+    SFX.swipe(); const t = m.topicos.find(x => x.id === b.dataset.t); jogar(m, t);
+  });
+  if ($('#gab')) $('#gab').onclick = () => { SFX.swipe(); gabarito(m.id); };
+}
+
+/* ---------- GABARITO ---------- */
+function gabarito(id) {
+  const m = MATERIAS.find(x => x.id === id), itens = GABARITO[id];
+  tela(
+    '<button class="back" id="bk">◀ ' + esc(m.nome) + '</button>' +
+    '<section class="hero" style="background:linear-gradient(135deg,rgba(255,210,63,.25),rgba(18,26,51,.9));border-color:var(--gold)">' +
+    '<div class="big">🔓</div><h1 class="orb">Gabarito • ' + esc(m.nome) + '</h1>' +
+    '<p>Toque na pergunta para revelar a resposta. Tente responder de cabeça antes! 🧠</p></section>' +
+    '<button class="btn" id="abrir" style="width:100%;margin-bottom:12px">👁️ Abrir / fechar todas</button>' +
+    itens.map(g => '<details class="gq"><summary><span>' + g.q + '<small>' + g.pg + (g.p ? ' • resposta pessoal (exemplo)' : '') + '</small></span></summary>' +
+      '<div class="ans">' + g.r + '</div></details>').join('') +
+    '<p class="foot">Respostas sugeridas para conferir o estudo. Nas perguntas pessoais, a resposta é só um exemplo – escreva a sua!</p>'
+  );
+  $('#bk').onclick = () => { SFX.swipe(); materia(id); };
+  let aberto = false;
+  $('#abrir').onclick = () => { aberto = !aberto; app.querySelectorAll('details').forEach(d => d.open = aberto); SFX.swipe(); };
+  app.querySelectorAll('details').forEach(d => d.addEventListener('toggle', () => { if (d.open) SFX.xp(); }));
+}
+
+/* ---------- DECK DE CARDS + QUIZ ---------- */
+const ELOGIOS = ['MANDOU BEM! 🔥','GÊNIO! 🧠','É ISSO AÍ! 🚀','ACERTOU EM CHEIO! 🎯','BRABO DEMAIS! 😎','INCRÍVEL! ⭐','PERFEITO! 💯','NINGUÉM SEGURA! ⚡'];
+const ERROS = ['Quase! Tenta de novo 💪','Errou, mas faz parte! 🤔','Ops! Olha de novo… 👀','Não foi dessa vez! Bora! 🎮','Hmm… essa não! Pensa mais um pouco 🧐'];
+const sorteia = a => a[Math.floor(Math.random() * a.length)];
+const embaralha = a => { const b = [...a]; for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; };
+let D = null;   // estado da fase em andamento
+
+function preparaQuiz(q, cor, rot) {
+  return {tipo:'quiz', q, cor, rot, ordem: embaralha(q.o.map((_, i) => i)), erros: 0, ok: false};
+}
+function jogar(m, t) {
+  const itens = t.cards.map((c, i) => ({tipo:'card', c, cor: m.cor, key: t.id + ':' + i}))
+    .concat(embaralha(t.quiz).map(q => preparaQuiz(q, m.cor, m.em + ' ' + m.nome)));
+  iniciar({itens, cor: m.cor, titulo: t.titulo, m, t});
+}
+function relampago() {
+  const todas = [];
+  MATERIAS.forEach(m => m.topicos.forEach(t => t.quiz.forEach(q => todas.push(preparaQuiz(q, m.cor, m.em + ' ' + m.nome)))));
+  iniciar({itens: embaralha(todas).slice(0, 10), cor: '#00e5ff', titulo: 'Desafio Relâmpago', relampago: true});
+}
+function iniciar(cfg) {
+  D = Object.assign(cfg, {i: 0, xp: 0, primeira: 0, nQuiz: cfg.itens.filter(x => x.tipo === 'quiz').length, combo: 0, maxCombo: 0, trava: false});
+  tela('<div class="deckhead"><button class="back" id="bk">✕</button><div class="dots" id="dots">' +
+    D.itens.map(x => '<i class="' + (x.tipo === 'quiz' ? 'q' : '') + '"></i>').join('') + '</div></div>' +
+    '<div class="stage" id="stage"></div>', true);
+  $('#navbar').style.setProperty('--c', D.cor);
+  $('#bk').onclick = sair;
+  ligaSwipe($('#stage'));
+  desenha(1);
+}
+function sair() {
+  const id = D && D.m ? D.m.id : null; D = null; SFX.swipe();
+  if (id) materia(id); else home();
+}
+
+function desenha(dir) {
+  const it = D.itens[D.i], st = $('#stage');
+  st.style.setProperty('--c', it.cor);
+  [...$('#dots').children].forEach((d, k) => d.classList.toggle('on', k <= D.i));
+  let h;
+  if (it.tipo === 'card') {
+    const c = it.c;
+    h = '<div class="kick">' + c.k + '</div><div class="emo">' + c.e + '</div><h2>' + c.t + '</h2>' +
+      '<div class="tx">' + c.h + '</div>' + (c.b ? '<div class="box">' + c.b + '</div>' : '') +
+      (c.d ? '<div class="box dica">💡 ' + c.d + '</div>' : '');
+    if (!D.relampago && !P().seen[it.key]) { P().seen[it.key] = 1; D.xp += 5; ganharXP(5, 'card novo'); }
+  } else {
+    const q = it.q, valor = 20;
+    h = '<span class="qbadge">🎯 QUIZ • VALE ' + valor + ' XP</span>' + (D.relampago ? '<div class="kick" style="margin-top:10px">' + it.rot + '</div>' : '') +
+      '<div class="qtx">' + q.q + '</div><div class="opts' + (it.ok ? ' lock' : '') + '" id="opts">' +
+      it.ordem.map((oi, k) => '<button class="opt' + (it.ok ? (oi === q.a ? ' right' : ' dim') : '') + '" data-oi="' + oi + '"><span class="L">' + 'ABCD'[k] + '</span><span>' + q.o[oi] + '</span></button>').join('') +
+      '</div><div id="fb">' + (it.ok ? '<div class="fb ok"><b>✅ Certinho!</b><br>' + q.x + '</div>' : '') + '</div>';
+  }
+  st.innerHTML = '<article class="slide ' + (dir > 0 ? 'anim-in-right' : 'anim-in-left') + '">' + h +
+    '<span class="pg">' + (D.i + 1) + ' / ' + D.itens.length + '</span></article>';
+  if (it.tipo === 'quiz' && !it.ok) st.querySelectorAll('.opt').forEach(b => b.onclick = () => responder(b, it));
+  botoes();
+}
+function botoes() {
+  const it = D.itens[D.i], nx = $('#btnNext');
+  $('#btnPrev').disabled = D.i === 0;
+  const bloqueado = it.tipo === 'quiz' && !it.ok;
+  nx.disabled = bloqueado;
+  nx.textContent = bloqueado ? '🔒 RESPONDA PRA AVANÇAR' : D.i === D.itens.length - 1 ? 'FINALIZAR 🏁' : 'AVANÇAR ▶';
+  nx.classList.toggle('pulse', it.tipo === 'quiz' && it.ok);
+}
+function responder(b, it) {
+  const q = it.q, oi = +b.dataset.oi, p = P(), fb = $('#fb');
+  if (oi === q.a) {
+    it.ok = true;
+    b.classList.add('right'); $('#opts').classList.add('lock');
+    $('#opts').querySelectorAll('.opt').forEach(o => { if (o !== b) o.classList.add('dim'); });
+    let ganho = it.erros === 0 ? 20 : it.erros === 1 ? 10 : 5;
+    if (it.erros === 0) { D.primeira++; D.combo++; p.combo++; D.maxCombo = Math.max(D.maxCombo, D.combo); p.maxCombo = Math.max(p.maxCombo, p.combo); }
+    if (it.erros === 0 && D.combo >= 3) ganho += 5;
+    p.acertos++;
+    fb.innerHTML = '<div class="fb ok"><b>✅ ' + sorteia(ELOGIOS) + '</b>' + (D.combo >= 3 && it.erros === 0 ? ' <b style="color:#ff8a3d">🔥 COMBO x' + D.combo + '</b>' : '') + '<br>' + q.x + '</div>';
+    SFX.ok(); confete(it.erros === 0 ? 70 : 30); if (navigator.vibrate) navigator.vibrate(40);
+    D.xp += ganho; ganharXP(ganho, it.erros === 0 ? 'de primeira!' : 'acertou');
+    botoes();
+  } else {
+    it.erros++; D.combo = 0; p.combo = 0; p.erros++; salvar(); hud();
+    b.classList.remove('wrong'); void b.offsetWidth; b.classList.add('wrong'); b.disabled = true;
+    const sl = $('#stage .slide'); sl.classList.remove('flash-bad'); void sl.offsetWidth; sl.classList.add('flash-bad');
+    fb.innerHTML = '<div class="fb no"><b>❌ ' + sorteia(ERROS) + '</b><br>Ainda dá pra ganhar XP. Escolha outra opção!</div>';
+    SFX.no(); if (navigator.vibrate) navigator.vibrate([120, 60, 120]);
+  }
+}
+function mover(delta) {
+  if (!D || D.trava) return;
+  const it = D.itens[D.i];
+  if (delta > 0 && it.tipo === 'quiz' && !it.ok) {
+    const o = $('#opts'); if (o) { o.style.animation = 'none'; void o.offsetWidth; o.style.animation = 'shake .4s'; }
+    if (navigator.vibrate) navigator.vibrate(60); return;
+  }
+  if (delta > 0 && D.i === D.itens.length - 1) return resultado();
+  if (delta < 0 && D.i === 0) return;
+  D.trava = true; SFX.swipe();
+  const s = $('#stage .slide');
+  if (s) s.className = 'slide ' + (delta > 0 ? 'anim-out-left' : 'anim-out-right');
+  setTimeout(() => { if (!D) return; D.i += delta; D.trava = false; desenha(delta); }, 280);
+}
+$('#btnNext').onclick = () => mover(1);
+$('#btnPrev').onclick = () => mover(-1);
+function ligaSwipe(el) {
+  let x0 = null, y0 = null;
+  el.addEventListener('touchstart', e => { x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, {passive: true});
+  el.addEventListener('touchend', e => {
+    if (x0 === null) return;
+    const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0; x0 = null;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.4) mover(dx < 0 ? 1 : -1);
+  });
+}
+document.addEventListener('keydown', e => {
+  if (!D || document.querySelector('.ov')) return;
+  if (e.key === 'ArrowRight' || e.key === 'Enter') { e.preventDefault(); mover(1); }
+  else if (e.key === 'ArrowLeft') mover(-1);
+  else {
+    const k = '1234abcd'.indexOf(e.key.toLowerCase());
+    if (k >= 0) { const b = document.querySelectorAll('#opts .opt')[k % 4]; if (b && !b.disabled) b.click(); }
+  }
+});
+
+/* ---------- RESULTADO ---------- */
+function resultado() {
+  const p = P(), r = D.nQuiz ? D.primeira / D.nQuiz : 1;
+  const stars = r >= .9 ? 3 : r >= .6 ? 2 : 1;
+  let bonus = 0;
+  if (!D.relampago) {
+    const antes = p.done[D.t.id];
+    if (!antes) bonus += 30;
+    if (stars === 3 && (!antes || antes.stars < 3)) bonus += 50;
+    p.done[D.t.id] = {stars: Math.max(stars, antes ? antes.stars : 0), best: Math.max(D.primeira, antes ? antes.best : 0)};
+  } else if (stars === 3) bonus += 40;
+  salvar();
+  const ganhoFase = D.xp + bonus, frase = stars === 3 ? 'LENDÁRIO! Você é fera! 🏆' : stars === 2 ? 'Muito bom! Falta pouco pra perfeição! 💪' : 'Boa! Joga de novo pra pegar 3 estrelas! 🎮';
+  const ctx = D;
+  tela('<div class="result" style="--c:' + ctx.cor + '"><div class="trophy">' + (stars === 3 ? '🏆' : stars === 2 ? '🥈' : '🎖️') + '</div>' +
+    '<h1 class="orb" style="font-size:26px">FASE CONCLUÍDA!</h1><p style="color:var(--mut)">' + esc(ctx.titulo) + '</p>' +
+    '<div class="st">' + [0, 1, 2].map(k => '<span style="animation-delay:' + (.3 + k * .25) + 's">' + (k < stars ? '⭐' : '☆') + '</span>').join('') + '</div>' +
+    '<p style="font-weight:900;font-size:18px">' + frase + '</p>' +
+    '<div class="kpis"><div class="kpi"><b>' + ctx.primeira + '/' + ctx.nQuiz + '</b><small>de primeira</small></div>' +
+    '<div class="kpi"><b>+' + ganhoFase + '</b><small>XP na fase</small></div>' +
+    '<div class="kpi"><b>x' + ctx.maxCombo + '</b><small>combo máx.</small></div></div>' +
+    (bonus ? '<p style="color:var(--gold);font-weight:900">🎁 Bônus: +' + bonus + ' XP</p>' : '') +
+    '<button class="btn go" id="rep" style="width:100%;margin-top:14px">🔁 JOGAR DE NOVO</button>' +
+    (!ctx.relampago && GABARITO[ctx.m.id] ? '<button class="btn" id="gab" style="width:100%;margin-top:10px">🔓 Ver gabarito do livro</button>' : '') +
+    (!ctx.relampago ? '<button class="btn" id="vol" style="width:100%;margin-top:10px">◀ Voltar para ' + esc(ctx.m.nome) + '</button>' : '') +
+    '<button class="btn" id="men" style="width:100%;margin-top:10px">🏠 Menu</button></div>', false);
+  D = null;
+  SFX.win(); confete(stars === 3 ? 260 : 140);
+  if (bonus) setTimeout(() => ganharXP(bonus, 'bônus da fase'), 900);
+  $('#rep').onclick = () => ctx.relampago ? relampago() : jogar(ctx.m, ctx.t);
+  if ($('#gab')) $('#gab').onclick = () => gabarito(ctx.m.id);
+  if ($('#vol')) $('#vol').onclick = () => materia(ctx.m.id);
+  $('#men').onclick = () => home();
+}
+
+/* ---------- INÍCIO ---------- */
+if (DB.current && DB.players[DB.current]) { hud(); home(); }
+else { app.innerHTML = ''; telaPerfil(false); }
+</script>
+</body>
+</html>
