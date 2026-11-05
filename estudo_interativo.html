@@ -386,6 +386,56 @@ main{max-width:640px;margin:0 auto;padding:14px 14px calc(96px + var(--safeB))}
 .foot{color:var(--mut);font-size:12px;text-align:center;margin-top:24px;line-height:1.6}
 @media (max-width:420px){.st{padding:5px 7px;font-size:13px}.me .lvl{max-width:90px}.tx{font-size:16px}}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+/* ===== v4: alerta de prova, missões, loja de estilo, foto, corretor ===== */
+.alerta{display:flex;align-items:center;gap:12px;padding:14px;border-radius:18px;margin-bottom:12px;background:linear-gradient(135deg,rgba(255,59,92,.25),rgba(255,138,61,.15));border:1px solid var(--bad);box-shadow:0 0 24px -8px var(--bad);animation:viewIn .4s}
+.alerta .ai{font-size:34px;animation:bump 1.6s infinite}
+.alerta .at{flex:1;min-width:0}
+.alerta .at b{display:block;font-size:16px}
+.alerta .at small{display:block;color:#ffd0d8;font-size:12px;margin-top:2px}
+.alerta .ab{display:flex;flex-direction:column;gap:6px}
+.alerta .ab button{padding:8px 10px;border-radius:12px;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.2);font-weight:900;font-size:12px;white-space:nowrap}
+.missoes{margin-top:12px;padding:14px 16px;border-radius:var(--r);background:var(--card);border:1px solid var(--line)}
+.missoes .mh{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.missoes .mh b{font-size:15px}
+.missoes .mh small{color:var(--mut);font-size:11px;text-align:right}
+.ms{display:flex;align-items:center;gap:10px;margin-top:10px}
+.ms .mi{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;background:rgba(255,255,255,.06);font-size:19px;flex:none}
+.ms .mt{flex:1;min-width:0}
+.ms .mt span{display:block;font-size:13.5px;font-weight:800}
+.ms .mb{height:9px;border-radius:9px;background:#1b2347;overflow:hidden;margin-top:5px}
+.ms .mb i{display:block;height:100%;background:linear-gradient(90deg,var(--ok),var(--cyan));transition:width .6s}
+.ms .mv{font-size:12px;font-weight:900;color:var(--mut);white-space:nowrap}
+.ms.ok .mi{background:var(--ok);color:#03140b;font-weight:900}
+.ms.ok .mv{color:var(--ok)}
+.estilo{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.estilo button{padding:10px 0 6px;border-radius:14px;background:var(--card);border:2px solid var(--line);font-size:26px;line-height:1}
+.estilo button small{display:block;font-size:10px;font-weight:900;color:var(--gold);margin-top:5px;font-family:Nunito,sans-serif}
+.estilo button.tem small{color:var(--mut)}
+.estilo button.uso{border-color:var(--cyan);box-shadow:0 0 12px -2px var(--cyan)}
+.estilo button.uso small{color:var(--cyan)}
+.temas{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+.temas button{padding:10px 6px;border-radius:14px;background:var(--card);border:2px solid var(--line);font-weight:800;font-size:12px}
+.temas button i{display:block;height:22px;border-radius:8px;margin-bottom:6px}
+.temas button small{display:block;color:var(--gold);font-weight:900;margin-top:2px}
+.temas button.tem small{color:var(--mut)}
+.temas button.uso{border-color:var(--cyan)} .temas button.uso small{color:var(--cyan)}
+.foto{margin:8px 0;padding:14px;border-radius:18px;background:linear-gradient(150deg,rgba(168,85,247,.18),var(--card));border:1px solid rgba(168,85,247,.5)}
+.foto b{display:block;font-size:15px}
+.foto p{color:var(--mut);font-size:13px;margin:4px 0 10px;line-height:1.4}
+.foto .prev{display:none;width:100%;max-height:190px;object-fit:contain;border-radius:12px;margin-bottom:10px;background:#000}
+.foto label.btn{cursor:pointer}
+.escrita textarea{width:100%;min-height:100px;padding:12px;border-radius:14px;border:2px solid var(--line);background:#0b1026;color:#fff;font:inherit;font-size:15px;resize:vertical;outline:none;margin-top:4px}
+.escrita textarea:focus{border-color:var(--cyan)}
+.resultado{margin-top:12px;padding:12px 14px;border-radius:14px;font-size:14.5px;line-height:1.5;animation:viewIn .3s}
+.resultado.certo{background:rgba(34,255,136,.1);border:1px solid rgba(34,255,136,.5)}
+.resultado.quase{background:rgba(255,210,63,.1);border:1px solid rgba(255,210,63,.5)}
+.resultado.errado{background:rgba(255,59,92,.1);border:1px solid rgba(255,59,92,.5)}
+.resultado .esp{margin-top:8px;padding-top:8px;border-top:1px dashed rgba(255,255,255,.2);color:#d5ffe6}
+.unit .ub{display:flex;flex-direction:column;gap:6px}
+.lstat .cb{color:var(--orange);margin-left:8px}
+.top2 .acoes{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+html.grande body{zoom:1.12}
+.lcard,.hero{overflow:clip}  /* o enfeite do canto não pode rolar o conteúdo */
 </style>
 </head>
 <body>
@@ -1355,7 +1405,7 @@ const salvar = () => { try { localStorage.setItem(KEY, JSON.stringify(DB)); } ca
 const P = () => DB.players[DB.current];
 function norm(p) {
   const pad = {xp:0, seen:{}, done:{}, combo:0, maxCombo:0, acertos:0, erros:0, wrong:{}, badges:{}, simu:{}, streak:0, dominadas:0, relBest:0,
-    gems:20, hearts:5, hTs:0, nodes:{}, mem:{}, meta:50, xpDia:{}, xpSem:{}, metaDia:'', freeze:0, plano:null, licoes:0, perfeitas:0, iaUsos:0, sub:null};
+    gems:20, hearts:5, hTs:0, nodes:{}, mem:{}, meta:50, xpDia:{}, xpSem:{}, metaDia:'', freeze:0, plano:null, licoes:0, perfeitas:0, iaUsos:0, sub:null, loja:{av: [], temas: ['ciano']}, tema:'ciano', dia:null, escritas:{}};
   for (const k in pad) if (p[k] === undefined) p[k] = pad[k];
   for (const tid in p.done) if (TOP[tid]) nodesDe(TOP[tid].m).forEach(n => { if (n.tid === tid && !p.nodes[n.id]) p.nodes[n.id] = {em: Date.now()}; });
   return p;
@@ -1599,12 +1649,14 @@ function buscar(pergunta, qtd = 4, mid) {
 const trechos = docs => docs.map(d => '[' + d.m.nome + ' • ' + d.t.titulo + '] ' + d.c.t + ': ' + d.txt.slice(0, 700)).join('\n');
 
 /* ---------- Conexão com a IA (Claude) ---------- */
-let IA = null, IA_ESTADO = 'buscando', IA_MOTIVO = '';
+let IA = null, IA_ESTADO = 'buscando', IA_MOTIVO = '', IA_IMG = false, IA_IMG_TIPOS = [];
 (async () => {
   try {
     if (window.claude && typeof window.claude.use === 'function') {
       const s = await window.claude.use('sample');
-      if (s) { IA = s; IA_ESTADO = 'on'; } else { IA_ESTADO = 'off'; IA_MOTIVO = 'fora'; }
+      if (s) { IA = s; IA_ESTADO = 'on';
+        try { const lim = await s.limits(); if (lim && lim.images) { IA_IMG = true; IA_IMG_TIPOS = lim.images.mediaTypes || []; } } catch (e) {}
+      } else { IA_ESTADO = 'off'; IA_MOTIVO = 'fora'; }
     } else { IA_ESTADO = 'off'; IA_MOTIVO = 'fora'; }
   } catch (e) { IA_ESTADO = 'off'; IA_MOTIVO = 'fora'; }
   setTimeout(aoMudarIA, 0);   /* só depois que o app inteiro carregou */
@@ -1614,6 +1666,8 @@ function erroIA(e) {
   const code = (e && e.code) || 'upstream_error';
   if (IA_FIM.includes(code)) { IA = null; IA_ESTADO = 'off'; IA_MOTIVO = code === 'not_granted' ? 'negado' : 'indisponivel'; aoMudarIA(); return 'A IA não foi liberada aqui. Sem problema: continuo ajudando no modo offline 😉'; }
   if (code === 'cancelled') return '';
+  if (code === 'images_unavailable') { IA_IMG = false; setTimeout(aoMudarIA, 0); return 'Este aparelho não consegue mandar fotos para a IA 😕'; }
+  if (code === 'image_rejected') return 'Essa foto não deu certo (tipo ou tamanho). Tenta outra! 📷';
   if (code === 'rate_limited') return 'Muitos pedidos seguidos 😅 Espera um pouquinho e tenta de novo.';
   if (code === 'session_expired') return 'Sua sessão do Claude expirou. Entre de novo no claude.ai.';
   if (code === 'refused') return 'Hmm, isso eu não posso responder. Me pergunta algo da matéria! 📚';
@@ -1829,7 +1883,7 @@ function abaTrilha(rolar) {
   const p = P(), pl = planoHoje(), mats = porData();
   if (!p.sub || !matDe(p.sub)) p.sub = (mats.find(m => diasPara(m.data) >= 0) || mats[0]).id;
   const m = matDe(p.sub), ns = nodesDe(m), d = diasPara(m.data);
-  let h = planoHTML(pl) +
+  let h = alertaHTML() + planoHTML(pl) + missoesHTML() +
     '<div class="subs">' + mats.map(x => '<button class="sub' + (x.id === m.id ? ' on' : '') + '" data-sub="' + x.id + '" style="--c:' + x.cor + '"><i>' + x.em + '</i>' +
       x.nome.replace('Língua ', '') + '<small>' + x.data + ' • ' + quando(diasPara(x.data)).toLowerCase() + '</small></button>').join('') + '</div>' +
     '<div class="exam" style="--c:' + m.cor + '"><span class="ee">' + m.em + '</span><div class="ei"><b>' + esc(m.nome) + '</b>' +
@@ -1842,14 +1896,16 @@ function abaTrilha(rolar) {
     const f = Math.round(forcaUnidade(t) * 100), pend = pendentes(t);
     h += '<div class="unit" style="--c:' + m.cor + '"><div class="ut"><small>UNIDADE ' + (ui + 1) + '</small><b>' + t.em + ' ' + esc(t.titulo) + '</b><span>' + t.pg + '</span>' +
       '<div class="forca">💪 força <i><s style="width:' + f + '%"></s></i> ' + f + '%' + (pend ? ' • 🔁 ' + pend + ' p/ revisar' : '') + '</div></div>' +
-      '<button class="ug" data-guia="' + t.id + '">📄 Guia</button></div><div class="path">';
+      '<div class="ub"><button class="ug" data-guia="' + t.id + '">📄 Guia</button>' +
+      ((pend || (f < 60 && ns.some(n => n.tid === t.id && p.nodes[n.id]))) ? '<button class="ug" data-rev="' + t.id + '">🔁 Revisar</button>' : '') + '</div></div><div class="path">';
     ns.filter(n => n.tid === t.id).forEach(n => { h += noHTML(m, n, OFF[k++ % 8]); });
     h += '</div>';
   });
   h += '<div class="path" style="margin-top:20px">' + noHTML(m, ns[ns.length - 1], 0) + '</div>' +
     '<p class="foot">Complete as lições na ordem para liberar as próximas. Os baús dão cristais 💎 e o troféu é o simulado da prova!</p>';
   app.innerHTML = '<div class="view">' + h + '</div>';
-  ligaPlano();
+  ligaPlano(); ligaAlerta();
+  $$('[data-rev]').forEach(b => b.onclick = () => { SFX.tap(); treinoUnidade(TOP[b.dataset.rev].t); });
   $$('.sub').forEach(b => b.onclick = () => { SFX.tap(); P().sub = b.dataset.sub; salvar(); abaTrilha(true); });
   $('#eRes').onclick = () => { SFX.tap(); resumao(m.id); };
   $('#eGab').onclick = () => { SFX.tap(); gabarito(m.id); };
@@ -2030,14 +2086,15 @@ function abreLicao(cfg) {
 function statusBar() {
   const s = $('#lStat'); if (!L || !s) return;
   if (L.tempo) { s.className = 'lstat timer'; s.textContent = '⏱ ' + (L.restante !== undefined ? L.restante : L.tempo); }
-  else if (L.vidas) { s.className = 'lstat heart'; s.textContent = '❤️ ' + vidas(); }
+  else if (L.vidas) { s.className = 'lstat heart'; s.innerHTML = '❤️ ' + vidas() + (L.combo >= 2 ? '<span class="cb">🔥' + L.combo + '</span>' : ''); }
   else if (L.modo === 'simulado') { s.className = 'lstat'; s.textContent = '📝 ' + Math.min(L.feitos + 1, L.total) + '/' + L.total; }
   else { s.className = 'lstat'; s.textContent = (L.modo === 'treino' || L.modo === 'erros') ? '❤️ ' + vidas() + ' 🔼' : '🔥 ' + L.combo; }
 }
 const tutorFala = txt => '<div class="tutor"><div class="tb">🤖</div><div class="fala">' + txt + '</div></div>';
 function htmlItem(it) {
   if (it.t === 'card') { const c = it.c;
-    return '<div class="lcard"><div class="top2"><span class="lkick">' + c.k + '</span>' + (TTS ? '<button class="ouvir" id="ouvir">🔊 Ouvir</button>' : '') + '</div>' +
+    return '<div class="lcard"><div class="top2"><span class="lkick">' + c.k + '</span><span class="acoes">' + (iaOn() ? '<button class="ouvir" id="bExp">🤖 Explica diferente</button>' : '') +
+      (TTS ? '<button class="ouvir" id="ouvir">🔊 Ouvir</button>' : '') + '</span></div>' +
       '<div class="emo">' + c.e + '</div><h2>' + c.t + '</h2><div class="tx">' + c.h + '</div>' + (c.b ? '<div class="box">' + c.b + '</div>' : '') +
       (c.d ? '<div class="box dica">💡 ' + c.d + '</div>' : '') + '</div>'; }
   const ouvir = TTS ? '<div style="text-align:right;margin-top:-6px"><button class="ouvir" id="ouvir">🔊 Ouvir</button></div>' : '';
@@ -2073,6 +2130,7 @@ function renderItem() {
   if (it.t === 'card') { chk.disabled = false; chk.textContent = 'CONTINUAR'; }
   else { chk.disabled = true; chk.textContent = it.t === 'par' ? 'LIGUE TODOS OS PARES' : 'VERIFICAR'; }
   ligaItem(it);
+  const be = $('#bExp'); if (be) be.onclick = () => explicaCard(it, be);
   if (TTS) { botaoOuvir($('#ouvir'), () => textoFala(it)); if (DB.narrador && it.t !== 'ord' && it.t !== 'par') setTimeout(() => { if (L && L.fila[0] === it && !L.sheet) falar(textoFala(it), $('#ouvir')); }, 450); }
   if (L.tempo && it.t !== 'card') {
     L.t0 = Date.now(); L.restante = L.tempo; statusBar();
@@ -2152,7 +2210,7 @@ function verificar() {
   const it = L.fila[0], chk = $('#lCheck');
   if (it.t === 'card') {
     if (!P().seen[it.key]) { P().seen[it.key] = 1; L.xp += 2; ganharXP(2, null, true); }
-    L.fila.shift(); L.feitos++; SFX.tap(); return proximo();
+    L.fila.shift(); L.feitos++; SFX.tap(); conta('cards'); return proximo();
   }
   if (chk.disabled || it.t === 'par') return;
   let ok = false, resp = '';
@@ -2182,7 +2240,8 @@ function resolve(ok, resp, esgotou) {
     ganho = L.modo === 'simulado' ? 15 : primeira ? (L.ajudou ? 7 : 10) : 5;
     if (primeira && L.combo >= 3) { ganho += Math.min(10, (L.combo - 2) * 2); extra.push('🔥 combo x' + L.combo); }
     if (L.modo === 'relampago' && Date.now() - L.t0 < 6000) { ganho += 5; extra.push('⚡ rapidinho!'); }
-    if (it.id && primeira && p.wrong[it.id]) { delete p.wrong[it.id]; p.dominadas++; extra.push('🧠 erro superado!'); }
+    if (it.id && primeira && p.wrong[it.id]) { delete p.wrong[it.id]; p.dominadas++; extra.push('🧠 erro superado!'); conta('superados'); }
+    conta('acertos'); if (primeira) conta('combo', L.combo, true);
     p.acertos++; L.feitos++;
     if ((L.modo === 'treino' || L.modo === 'erros') && vidas() < MAXV) { ganhaVida(1); extra.push('+1 ❤️'); }
     SFX.ok(); vibra(30); if (primeira && L.combo >= 3) confete(40);
@@ -2272,8 +2331,9 @@ function fimLicao() {
   if (c.modo === 'simulado') return fimSimulado(c, seg);
   const prec = c.nEx ? Math.round(c.primeira / c.nEx * 100) : 100, perfeita = c.nEx > 0 && c.erros === 0;
   let bxp = 10, bgem = 0, titulo = 'LIÇÃO CONCLUÍDA!', big = '🎉', nota = '';
-  p.licoes++;
-  if (perfeita) { bxp += 5; bgem += 5; p.perfeitas++; }
+  p.licoes++; conta('licoes');
+  if (perfeita) { bxp += 5; bgem += 5; p.perfeitas++; conta('perfeitas'); }
+  if (c.modo === 'relampago') conta('relampagos');
   if (c.modo === 'licao') {
     const ja = p.nodes[c.node.id];
     p.nodes[c.node.id] = {em: ja ? ja.em : Date.now(), perf: !!((ja && ja.perf) || perfeita), prec: Math.max(prec, ja && ja.prec || 0)};
@@ -2305,7 +2365,7 @@ function fimSimulado(c, seg) {
   if (nota >= 7 && (antes === undefined || antes < 7)) bxp += 30;
   if (nota >= 10 && (antes === undefined || antes < 10)) { bxp += 50; bgem += 20; }
   if (nota >= 7 && c.node && !p.nodes[c.node.id]) p.nodes[c.node.id] = {em: Date.now(), perf: nota >= 10};
-  p.licoes++; marcaPlano('simulado:' + m.id); if (c.tarefa) marcaPlano(c.tarefa); salvar();
+  p.licoes++; conta('licoes'); conta('simulados'); marcaPlano('simulado:' + m.id); if (c.tarefa) marcaPlano(c.tarefa); salvar();
   const msg = nota >= 9 ? '🏆 Nota de gênio! A AV2 que se prepare!' : nota >= 7 ? '✅ Aprovado! Acima da média 7!' + (c.node && p.nodes[c.node.id] ? ' Troféu conquistado!' : '') : '📚 Abaixo da média 7. Revise os erros e tente de novo!';
   SFX.win(); confete(nota >= 7 ? 260 : 80);
   telaFim(c, '<div class="big">' + (nota >= 9 ? '🏆' : nota >= 7 ? '✅' : '📚') + '</div><h1 class="orb">SIMULADO CONCLUÍDO</h1><p class="mut">' + esc(m.nome) + ' • prova em ' + m.data + '</p>' +
@@ -2355,11 +2415,12 @@ function gabarito(mid) {
   app.innerHTML = '<div class="view"><button class="back" id="bk">◀ Voltar</button>' +
     '<section class="hero" style="background:linear-gradient(135deg,rgba(255,210,63,.25),rgba(18,26,51,.9));border-color:var(--gold)"><div class="big">🔓</div>' +
     '<h1 class="orb">Gabarito • ' + esc(m.nome) + '</h1><p>Toque na pergunta para ver a resposta. Tente responder de cabeça antes! 🧠</p></section>' +
-    '<button class="btn w" id="abrir" style="margin-bottom:12px">👁️ Abrir / fechar todas</button>' +
+    '<div class="row2" style="margin-bottom:12px"><button class="btn" id="escr" style="border-color:var(--ok);color:var(--ok)">✍️ Responder e corrigir</button><button class="btn" id="abrir">👁️ Abrir todas</button></div>' +
     itens.map(g => '<details class="gq"><summary><span>' + g.q + '<small>' + g.pg + (g.p ? ' • resposta pessoal (exemplo)' : '') + '</small></span></summary><div class="ans">' + g.r + '</div></details>').join('') +
     '<p class="foot">Respostas sugeridas para conferir o estudo. Nas perguntas pessoais, a resposta é só um exemplo: escreva a sua!</p></div>';
   scrollTo(0, 0);
   $('#bk').onclick = () => { SFX.tap(); mostraAba(); };
+  $('#escr').onclick = () => { SFX.tap(); escrita(mid, 0); };
   let aberto = false;
   $('#abrir').onclick = () => { aberto = !aberto; $$('details').forEach(d => d.open = aberto); SFX.tap(); };
 }
@@ -2405,12 +2466,13 @@ function abaByte() {
   const opcoes = MATERIAS.map(m => '<optgroup label="' + m.em + ' ' + esc(m.nome) + '">' + m.topicos.map(t => '<option value="' + t.id + '">' + esc(t.titulo) + '</option>').join('') + '</optgroup>').join('');
   app.innerHTML = '<div class="view"><section class="hero" style="padding-right:70px"><div class="big">🤖</div><h1 class="orb">Byte</h1><p>Seu tutor com IA. ' + statusIA() + '</p>' +
     (IA_ESTADO === 'off' ? '<p style="font-size:12.5px;opacity:.85">' + (IA_MOTIVO === 'negado' ? 'A IA não foi liberada nesta visita.' : 'A IA funciona quando o app é aberto pelo link do claude.ai (usa a conta do Claude de quem está jogando).') +
-      ' Agora eu procuro as respostas no conteúdo das provas.</p>' : '') + '</section>' +
+      ' Agora eu procuro as respostas no conteúdo das provas.</p>' : '') +
+    (iaOn() && !P().iaUsos ? '<p style="font-size:12.5px;opacity:.9">🔐 Na primeira vez, o claude.ai pede permissão para o Byte usar a IA. É só aceitar!</p>' : '') + '</section>' +
     '<div class="chips2">' + SUGESTOES.map(s => '<button data-sg="' + esc(s) + '">' + esc(s) + '</button>').join('') + '</div>' +
     (iaOn() ? '<div class="card" style="margin:6px 0 4px"><b>✨ Lição criada pela IA</b><p class="mut" style="font-size:13px;margin:4px 0 8px">Escolha a unidade e o Byte inventa 5 perguntas novas (confira com o livro se algo parecer estranho).</p>' +
       '<div style="display:flex;gap:8px"><select id="selIA" style="flex:1;padding:12px;border-radius:12px;background:#0b1026;color:#fff;border:2px solid var(--line);font:inherit;font-weight:700">' + opcoes + '</select>' +
       '<button class="btn go" id="bIA" style="--c:var(--pur);padding:0 14px">CRIAR</button></div></div>' : '') +
-    '<div class="chat" id="chat"></div>' +
+    fotoHTML() + '<div class="chat" id="chat"></div>' +
     '<div class="chatin"><textarea id="chatTxt" maxlength="500" placeholder="Pergunte para o Byte…"></textarea><button class="btn go" id="bEnv" style="--c:var(--cyan)">➤</button></div></div>';
   $('#chatTxt').value = velho;
   desenhaChat();
@@ -2418,6 +2480,7 @@ function abaByte() {
   $('#bEnv').onclick = () => { if (ENVIANDO && chatCtl) { chatCtl.abort(); return; } const t = $('#chatTxt'); enviar(t.value); t.value = ''; };
   $('#chatTxt').onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('#bEnv').click(); } };
   if ($('#bIA')) $('#bIA').onclick = () => criarLicaoIA($('#selIA').value);
+  ligaFoto();
 }
 function desenhaChat() {
   const box = $('#chat'); if (!box) return;
@@ -2467,7 +2530,7 @@ function quizNoChat(msg) {
     b.onclick = () => {
       if (z.feito) return; z.feito = true; z.esc = oi; const ok = oi === z.q.a;
       lembra(z.q.id, ok);
-      if (ok) { SFX.ok(); P().acertos++; ganharXP(5, 'pergunta surpresa'); } else { SFX.no(); P().erros++; P().wrong[z.q.id] = (P().wrong[z.q.id] || 0) + 1; salvar(); }
+      if (ok) { SFX.ok(); P().acertos++; conta('acertos'); ganharXP(5, 'pergunta surpresa'); } else { SFX.no(); P().erros++; P().wrong[z.q.id] = (P().wrong[z.q.id] || 0) + 1; salvar(); }
       CHATV.push({quem: 'bot', txt: (ok ? '✅ Isso aí! ' : '❌ Quase! A certa é: ' + z.q.o[z.q.a].replace(/<[^>]+>/g, '') + '. ') + z.q.x.replace(/<[^>]+>/g, '') + '\n\nQuer outra? Toca em 🎲 Pergunta surpresa!'});
       desenhaChat(); rolaChat();
     };
@@ -2489,6 +2552,257 @@ async function criarLicaoIA(tid) {
     setTimeout(() => abreLicao({modo: 'ia', titulo: 'Lição da IA: ' + t.titulo, cor: m.cor, itens: qs.map(q => mkMC(q, m.id))}), 700);
   } catch (e) { bot.think = false; bot.txt = erroIA(e) || '⏹ Cancelado.'; ENVIANDO = false; desenhaChat(); }
   const b2 = $('#bIA'); if (b2) b2.disabled = false;
+}
+
+/* ---------- Missões do dia ---------- */
+const MISSOES = [
+  {id: 'licoes', ic: '📚', t: 'Complete 2 lições', alvo: 2},
+  {id: 'acertos', ic: '✅', t: 'Acerte 15 exercícios', alvo: 15},
+  {id: 'combo', ic: '🔥', t: 'Faça um combo de 5', alvo: 5},
+  {id: 'perfeitas', ic: '👑', t: 'Termine 1 lição sem errar', alvo: 1},
+  {id: 'superados', ic: '🧠', t: 'Supere 3 erros do caderno', alvo: 3},
+  {id: 'simulados', ic: '📝', t: 'Faça 1 simulado', alvo: 1},
+  {id: 'relampagos', ic: '⚡', t: 'Faça 1 Desafio Relâmpago', alvo: 1},
+  {id: 'cards', ic: '📖', t: 'Leia 8 cards de conteúdo', alvo: 8}
+];
+function diaAtual() {
+  const p = P(), hj = diaStr();
+  if (!p.dia || p.dia.d !== hj) {
+    const poucosErros = Object.keys(p.wrong).length < 3;
+    const ordem = MISSOES.filter(m => !(poucosErros && m.id === 'superados'))
+      .map(m => ({id: m.id, s: hash01(hj + '|' + m.id + '|' + DB.current)})).sort((a, b) => a.s - b.s).map(x => x.id);
+    p.dia = {d: hj, ms: ordem.slice(0, 3), ok: {}, bau: 0};
+    MISSOES.forEach(m => { p.dia[m.id] = 0; });
+    salvar();
+  }
+  return p.dia;
+}
+function conta(campo, n = 1, maximo) {
+  const p = P(); if (!p) return;
+  const d = diaAtual();
+  d[campo] = maximo ? Math.max(d[campo] || 0, n) : (d[campo] || 0) + n;
+  for (const id of d.ms) {
+    const M = MISSOES.find(x => x.id === id);
+    if (!d.ok[id] && (d[id] || 0) >= M.alvo) { d.ok[id] = 1; comemora(fim => { ganhaGemas(10, 'missão cumprida'); fim(); }); }
+  }
+  if (!d.bau && d.ms.every(id => d.ok[id])) {
+    d.bau = 1;
+    comemora(fim => { SFX.win(); confete(200); ganhaGemas(20, 'missões completas');
+      janela('<div class="big">🏅</div><h2 class="orb">MISSÕES COMPLETAS!</h2><p>Você cumpriu as 3 missões de hoje. Ganhou <b>+20 💎</b> extras!</p>', [{t: 'ARRASEI! 😎'}], fim); });
+  }
+  salvar();
+}
+function missoesHTML() {
+  const d = diaAtual();
+  return '<div class="missoes"><div class="mh"><b>🎯 Missões do dia</b><small>+10 💎 cada • renovam à meia-noite</small></div>' +
+    d.ms.map(id => {
+      const M = MISSOES.find(x => x.id === id), v = Math.min(M.alvo, d[id] || 0), ok = !!d.ok[id];
+      return '<div class="ms' + (ok ? ' ok' : '') + '"><span class="mi">' + (ok ? '✓' : M.ic) + '</span><div class="mt"><span>' + M.t + '</span>' +
+        '<div class="mb"><i style="width:' + (v / M.alvo * 100) + '%"></i></div></div><span class="mv">' + (ok ? 'FEITO' : v + '/' + M.alvo) + '</span></div>';
+    }).join('') + '</div>';
+}
+
+/* ---------- Aviso de prova chegando ---------- */
+function alertaHTML() {
+  const m = porData().find(x => { const d = diasPara(x.data); return d >= 0 && d <= 2; });
+  if (!m) return '';
+  const d = diasPara(m.data), nota = P().simu[m.id];
+  return '<div class="alerta"><span class="ai">⚠️</span><div class="at"><b>Prova de ' + esc(m.nome) + ' ' + quando(d) + '!</b><small>' +
+    (nota === undefined ? 'Faça o simulado e leia o resumão hoje.' : 'Seu melhor simulado: ' + String(nota).replace('.', ',') + '/10. Que tal mais um?') + '</small></div>' +
+    '<div class="ab"><button data-al="sim:' + m.id + '">📝 Simulado</button><button data-al="res:' + m.id + '">📄 Resumão</button></div></div>';
+}
+function ligaAlerta() {
+  $$('[data-al]').forEach(b => b.onclick = () => { SFX.tap(); const [tipo, id] = b.dataset.al.split(':'); if (tipo === 'sim') simulado(matDe(id)); else resumao(id); });
+}
+
+/* ---------- Loja de estilo: avatares e cores ---------- */
+const AV_LOJA = [['🦁', 80], ['🦅', 80], ['🦈', 100], ['👽', 100], ['🐺', 120], ['🐲', 150], ['🧛', 150], ['🧚', 150], ['🤴', 200], ['👸', 200]];
+const TEMAS = [
+  {id: 'ciano', n: 'Ciano Neon', c: '#00e5ff', p: '#a855f7', preco: 0},
+  {id: 'galaxia', n: 'Galáxia', c: '#c084fc', p: '#6366f1', preco: 80},
+  {id: 'matrix', n: 'Matrix', c: '#22ff88', p: '#0ea5e9', preco: 80},
+  {id: 'lava', n: 'Lava', c: '#ff8a3d', p: '#ff2d95', preco: 100},
+  {id: 'rosa', n: 'Rosa Neon', c: '#ff4fd8', p: '#7c3aed', preco: 100},
+  {id: 'ouro', n: 'Lendário', c: '#ffd23f', p: '#ff8a3d', preco: 200}
+];
+function aplicaTema() {
+  const p = P(), t = TEMAS.find(x => x.id === (p && p.tema)) || TEMAS[0], r = document.documentElement;
+  r.style.setProperty('--cyan', t.c); r.style.setProperty('--pur', t.p);
+  r.classList.toggle('grande', !!DB.grande);
+  const mt = document.querySelector('meta[name="theme-color"]'); if (mt) mt.content = '#070a14';
+}
+function estiloHTML() {
+  const p = P(), loja = p.loja;
+  return '<div class="sec-t">🎨 Loja de estilo</div><div class="card"><b>Avatares especiais</b><p class="mut" style="font-size:12px;margin:2px 0 10px">Toque para comprar com cristais ou para usar.</p>' +
+    '<div class="estilo">' + AV_LOJA.map(([a, preco]) => { const tem = loja.av.includes(a), uso = p.av === a;
+      return '<button data-av="' + a + '" data-preco="' + preco + '" class="' + (uso ? 'uso' : tem ? 'tem' : '') + '">' + a + '<small>' + (uso ? 'USANDO' : tem ? 'USAR' : preco + ' 💎') + '</small></button>'; }).join('') + '</div>' +
+    '<b style="display:block;margin-top:14px">Cor do app</b><div class="temas">' + TEMAS.map(t => { const tem = loja.temas.includes(t.id), uso = (p.tema || 'ciano') === t.id;
+      return '<button data-tema="' + t.id + '" class="' + (uso ? 'uso' : tem ? 'tem' : '') + '"><i style="background:linear-gradient(90deg,' + t.c + ',' + t.p + ')"></i>' + t.n +
+        '<small>' + (uso ? 'USANDO' : tem ? 'USAR' : t.preco + ' 💎') + '</small></button>'; }).join('') + '</div></div>';
+}
+function ligaEstilo() {
+  $$('[data-av]').forEach(b => b.onclick = () => {
+    const p = P(), a = b.dataset.av, preco = +b.dataset.preco;
+    if (!p.loja.av.includes(a)) {
+      if (p.gems < preco) { SFX.no(); toast('Faltam ' + (preco - p.gems) + ' 💎 para esse avatar'); return; }
+      p.gems -= preco; p.loja.av.push(a); SFX.gem(); confete(80); toast('🎉 Avatar novo: ' + a);
+    } else SFX.tap();
+    p.av = a; salvar(); hud(); abaPerfil();
+  });
+  $$('[data-tema]').forEach(b => b.onclick = () => {
+    const p = P(), t = TEMAS.find(x => x.id === b.dataset.tema);
+    if (!p.loja.temas.includes(t.id)) {
+      if (p.gems < t.preco) { SFX.no(); toast('Faltam ' + (t.preco - p.gems) + ' 💎 para essa cor'); return; }
+      p.gems -= t.preco; p.loja.temas.push(t.id); SFX.gem(); confete(80); toast('🎨 Cor nova: ' + t.n);
+    } else SFX.tap();
+    p.tema = t.id; salvar(); aplicaTema(); hud(); abaPerfil();
+  });
+}
+
+/* ---------- Compartilhar o progresso ---------- */
+async function compartilhar() {
+  const p = P(), Lv = nivel(p.xp), nC = CONQ.filter(c => p.badges[c.id]).length;
+  const txt = '🎮 Estudo Gamer • AV2 do 5º ano\n' + p.av + ' ' + p.nome + ' • Nível ' + Lv.n + ' (' + Lv.titulo + ')\n⚡ ' + p.xp + ' XP • 🔥 ' + streakAtual(p) +
+    ' dias de ofensiva • 🏅 ' + nC + ' conquistas\nBora estudar também? 🚀';
+  try { await navigator.clipboard.writeText(txt); SFX.gem(); toast('📋 Copiado! Cole no grupo da turma 😉'); }
+  catch (e) {
+    janela('<h2 class="orb">Copie seu progresso</h2><textarea readonly style="width:100%;height:130px;margin-top:10px;padding:12px;border-radius:14px;background:#0b1026;color:#fff;border:2px solid var(--line);font:inherit">' + esc(txt) + '</textarea>', [{t: 'OK'}]);
+  }
+}
+
+/* ---------- IA: explicar um card de outro jeito ---------- */
+async function iaExplica(c, onText) {
+  const prompt = 'Você é o Byte, tutor de crianças do 5º ano no Brasil. Explique o conteúdo abaixo DE OUTRO JEITO, bem simples, como se fosse para um amigo de 10 anos: ' +
+    '3 frases curtas, 1 exemplo do dia a dia e 1 truque para lembrar. No máximo 90 palavras, português do Brasil, até 2 emojis. Não invente fatos.\n\n' +
+    'Conteúdo: ' + c.t + ': ' + txtDe(c.h + ' ' + (c.b || '') + ' ' + (c.d || ''));
+  const r = await IA(prompt, {modelTier: 'quick', onText}); contaUsoIA(); return r.text;
+}
+async function explicaCard(it, btn) {
+  if (!iaOn() || !L) return;
+  btn.disabled = true; SFX.tap();
+  const box = $('#ajuda');
+  box.innerHTML = '<div class="aibox"><b class="who">🤖 Byte:</b> <span id="expTxt">pensando…</span></div>';
+  box.scrollIntoView({block: 'nearest', behavior: 'smooth'});
+  try { await iaExplica(it.c, ({text}) => { const e = $('#expTxt'); if (e && L && L.fila[0] === it) e.textContent = text; }); }
+  catch (e) { const el = $('#expTxt'); if (el) el.textContent = erroIA(e) || '⏹ Parado.'; }
+}
+
+/* ---------- IA: corrigir respostas escritas do livro ---------- */
+function palavrasChave(txt) { return [...new Set(semAcento(txtDe(txt)).split(/[^a-z0-9]+/).filter(w => w.length > 4 && !PARADAS.has(w)))]; }
+async function corrige(g, resp) {
+  if (iaOn()) {
+    const prompt = 'Você é o Byte, professor gentil de crianças do 5º ano no Brasil. Corrija a resposta da criança para a atividade do livro, comparando com a resposta esperada. ' +
+      'Aceite outras palavras quando a ideia estiver certa. ' + (g.p ? 'É uma pergunta pessoal: avalie se a resposta faz sentido e responde ao que foi pedido. ' : '') +
+      '\n\nAtividade: ' + txtDe(g.q) + '\nResposta esperada: ' + txtDe(g.r) + '\nResposta da criança: ' + resp +
+      '\n\nResponda SOMENTE com JSON: {"resultado":"certo" ou "quase" ou "errado","comentario":"até 40 palavras, animado, dizendo o que ela acertou e o que faltou, sem bronca"}';
+    const v = await IA.json(prompt, {modelTier: 'quick'}); contaUsoIA();
+    const res = ['certo', 'quase', 'errado'].includes(v && v.resultado) ? v.resultado : 'quase';
+    return {res, txt: esc(String((v && v.comentario) || 'Compare com a resposta esperada abaixo.').slice(0, 300)), ia: true};
+  }
+  const chaves = palavrasChave(g.r), minha = semAcento(resp);
+  const achou = chaves.filter(w => minha.includes(w));
+  const fr = chaves.length ? achou.length / chaves.length : 0;
+  return {res: fr >= .5 ? 'certo' : fr >= .25 ? 'quase' : 'errado', ia: false,
+    txt: 'Modo offline: sua resposta tem <b>' + achou.length + ' de ' + chaves.length + '</b> palavras-chave da resposta esperada. Compare com calma! 👇'};
+}
+function escrita(mid, i) {
+  SUBTELA = true;
+  const m = matDe(mid), itens = GABARITO[mid] || [], g = itens[i];
+  if (!g) return gabarito(mid);
+  app.innerHTML = '<div class="view"><button class="back" id="bk">◀ Gabarito</button>' +
+    '<section class="hero" style="background:linear-gradient(135deg,' + m.cor + '44,rgba(18,26,51,.9));border-color:' + m.cor + '"><div class="big">✍️</div>' +
+    '<h1 class="orb">Responda e confira</h1><p>' + esc(m.nome) + ' • atividade ' + (i + 1) + ' de ' + itens.length + (iaOn() ? ' • o Byte corrige com IA 🤖' : '') + '</p></section>' +
+    '<div class="card escrita"><div class="lkick">' + g.pg + (g.p ? ' • resposta pessoal' : '') + '</div><div class="ltitle" style="font-size:18px">' + g.q + '</div>' +
+    '<textarea id="resp" maxlength="600" placeholder="Escreva sua resposta aqui…"></textarea>' +
+    '<div class="row2" style="margin-top:10px"><button class="btn go" id="bCor" style="--c:var(--ok)">' + (iaOn() ? '🤖 CORRIGIR' : '✔ CONFERIR') + '</button>' +
+    '<button class="btn" id="bVer">👀 Só ver a resposta</button></div><div id="resCor"></div></div>' +
+    '<div class="row2" style="margin-top:12px"><button class="btn" id="bAnt"' + (i === 0 ? ' disabled' : '') + '>◀ Anterior</button>' +
+    '<button class="btn" id="bProx"' + (i >= itens.length - 1 ? ' disabled' : '') + '>Próxima ▶</button></div></div>';
+  scrollTo(0, 0);
+  const mostra = (cls, html) => { $('#resCor').innerHTML = '<div class="resultado ' + cls + '">' + html + '<div class="esp"><b>Resposta esperada:</b> ' + g.r + '</div></div>'; };
+  $('#bk').onclick = () => { SFX.tap(); gabarito(mid); };
+  $('#bAnt').onclick = () => escrita(mid, i - 1);
+  $('#bProx').onclick = () => escrita(mid, i + 1);
+  $('#bVer').onclick = () => { SFX.tap(); mostra('quase', '👀 Tente explicar com as suas palavras da próxima vez!'); };
+  $('#bCor').onclick = async () => {
+    const resp = $('#resp').value.trim(), btn = $('#bCor');
+    if (resp.length < 3) { SFX.no(); $('#resp').focus(); toast('Escreva sua resposta primeiro ✍️'); return; }
+    btn.disabled = true; btn.textContent = '🤖 Corrigindo…';
+    try {
+      const r = await corrige(g, resp), p = P(), chave = mid + ':' + i;
+      const selo = (r.ia ? {certo: '✅ Certinho!', quase: '🟡 Quase lá!', errado: '❌ Ainda não'} : {certo: '✅ Parece certo!', quase: '🟡 Quase lá!', errado: '🔎 Compare com a resposta:'})[r.res];
+      mostra(r.ia || r.res !== 'errado' ? r.res : 'quase', '<b>' + selo + '</b> ' + r.txt);
+      p.escritas = p.escritas || {};
+      if (!p.escritas[chave] && r.res !== 'errado') { p.escritas[chave] = 1; salvar(); ganharXP(r.res === 'certo' ? 10 : 5, 'resposta escrita'); }
+      if (r.res === 'certo') { SFX.ok(); confete(60); } else if (r.res === 'errado') SFX.no(); else SFX.xp();
+    } catch (e) { mostra('quase', esc(erroIA(e) || 'Cancelado.')); }
+    btn.disabled = false; btn.textContent = iaOn() ? '🤖 CORRIGIR DE NOVO' : '✔ CONFERIR DE NOVO';
+  };
+}
+
+/* ---------- IA: foto de uma página do livro ---------- */
+let FOTO = null;
+function validaQs(v) {
+  return (Array.isArray(v) ? v : []).filter(q => q && typeof q.q === 'string' && q.q.trim() && Array.isArray(q.o) && q.o.length === 4 &&
+    q.o.every(o => typeof o === 'string' && o.trim()) && new Set(q.o.map(o => o.trim())).size === 4 && Number.isInteger(q.a) && q.a >= 0 && q.a <= 3)
+    .map(q => ({id: null, q: esc(q.q.trim()), o: q.o.map(o => esc(o.trim())), a: q.a, x: esc(String(q.x || 'Confira na página do livro.').trim())}));
+}
+async function iaLicaoFoto(arquivo, onText) {
+  const prompt = 'A imagem é a foto de uma página de livro escolar do 5º ano (Brasil). Leia o conteúdo e crie 5 perguntas de múltipla escolha para a criança revisar ESSE conteúdo. ' +
+    'Use só o que aparece na página, sem inventar. Cada pergunta: enunciado curto, 4 alternativas curtas e diferentes, só 1 correta, explicação de 1 frase. ' +
+    'Se a imagem não for uma página de estudo legível, responda [] (array vazio).\n\nResponda SOMENTE com um JSON array: [{"q":"...","o":["A","B","C","D"],"a":0,"x":"..."}] (a = índice da correta, de 0 a 3).';
+  const v = await IA.json(prompt, {modelTier: 'default', images: [arquivo], cache: false, onText}); contaUsoIA();
+  const qs = validaQs(v);
+  if (qs.length < 3) throw {code: 'foto_ilegivel'};
+  return qs.slice(0, 5);
+}
+async function iaExplicaFoto(arquivo, onText) {
+  const prompt = 'A imagem é a foto de uma página de livro escolar do 5º ano (Brasil). Explique para uma criança de 10 anos, de forma simples, o que a página ensina: ' +
+    'um resumo em até 4 tópicos curtos e, se houver atividades, como pensar para resolvê-las (sem dar as respostas prontas). No máximo 140 palavras, português do Brasil, até 2 emojis. ' +
+    'Se não for uma página de estudo legível, peça gentilmente outra foto.';
+  const r = await IA(prompt, {modelTier: 'default', images: [arquivo], onText}); contaUsoIA(); return r.text;
+}
+function fotoHTML() {
+  if (!iaOn() || !IA_IMG) return '';
+  return '<div class="foto"><b>📸 Foto do livro → lição</b><p>Tire foto de qualquer página (até de outra matéria ou da AV1!) e o Byte cria perguntas ou explica a página.</p>' +
+    '<img class="prev" id="fPrev" alt="Foto escolhida">' +
+    '<label class="btn w" for="fIn">📷 Tirar ou escolher foto</label><input type="file" id="fIn" accept="' + esc(IA_IMG_TIPOS.join(',') || 'image/*') + '" hidden>' +
+    '<div class="row2" style="margin-top:8px"><button class="btn go" id="fLic" style="--c:var(--pur)" disabled>✨ Criar lição</button><button class="btn" id="fExp" disabled>🧠 Explicar</button></div></div>';
+}
+function ligaFoto() {
+  const inp = $('#fIn'); if (!inp) return;
+  inp.onchange = () => {
+    const f = inp.files && inp.files[0]; if (!f) return;
+    FOTO = f; const img = $('#fPrev'); img.src = URL.createObjectURL(f); img.style.display = 'block';
+    $('#fLic').disabled = false; $('#fExp').disabled = false; SFX.tap();
+  };
+  $('#fLic').onclick = async () => {
+    if (!FOTO || ENVIANDO) return;
+    const bot = {quem: 'bot', txt: '📸 Lendo a página e criando 5 perguntas… pode levar até 1 minuto ⏳', think: true, ia: true};
+    CHATV.push({quem: 'eu', txt: '📸 Cria uma lição com esta foto'}, bot); ENVIANDO = true; desenhaChat(); rolaChat();
+    $('#fLic').disabled = true;
+    try {
+      const qs = await iaLicaoFoto(FOTO);
+      bot.think = false; bot.txt = '✅ Pronto! Criei ' + qs.length + ' perguntas sobre a sua foto. Abrindo a lição… (feitas pela IA: confira no livro se algo parecer estranho!)';
+      ENVIANDO = false; desenhaChat();
+      setTimeout(() => abreLicao({modo: 'ia', titulo: 'Lição da foto 📸', cor: '#a855f7', itens: qs.map(q => mkMC(q, null))}), 700);
+    } catch (e) {
+      bot.think = false; ENVIANDO = false;
+      bot.txt = e && e.code === 'foto_ilegivel' ? 'Não consegui ler essa página 😕 Tira outra foto bem de pertinho, reta e com bastante luz!' : (erroIA(e) || '⏹ Cancelado.');
+      desenhaChat();
+    }
+    const b = $('#fLic'); if (b) b.disabled = false;
+  };
+  $('#fExp').onclick = async () => {
+    if (!FOTO || ENVIANDO) return;
+    const bot = {quem: 'bot', txt: '', think: true, ia: true};
+    CHATV.push({quem: 'eu', txt: '📸 Me explica esta página'}, bot); ENVIANDO = true; desenhaChat(); rolaChat();
+    try {
+      const r = await iaExplicaFoto(FOTO, ({text}) => { bot.txt = text; bot.think = false; const box = $('#chat'); if (box && box.lastChild) box.lastChild.lastChild.textContent = text; });
+      bot.txt = r;
+    } catch (e) { bot.txt = (e && e.text ? e.text + '\n\n' : '') + (erroIA(e) || '⏹ Parado.'); }
+    bot.think = false; ENVIANDO = false; if (ABA === 'byte' && !L) { desenhaChat(); rolaChat(); }
+  };
 }
 
 /* ---------- ABA LIGA (ranking da semana) ---------- */
@@ -2541,9 +2855,11 @@ function abaPerfil() {
     '<div class="sec-t">🛒 Loja de cristais</div>' +
     '<div class="loja"><span class="le">❤️</span><span class="lt"><b>Recarregar vidas</b><small>Enche as 5 vidas na hora. Você tem ' + vidas(p) + '/5.</small></span><button class="btn go" id="lVida" style="--c:var(--bad)"' + (p.hearts >= MAXV || p.gems < 30 ? ' disabled' : '') + '>30 💎</button></div>' +
     '<div class="loja"><span class="le">🧊</span><span class="lt"><b>Protetor de ofensiva</b><small>Salva sua ofensiva se você esquecer de estudar 1 dia. Você tem ' + p.freeze + '/2.</small></span><button class="btn go" id="lGelo" style="--c:var(--cyan)"' + (p.freeze >= 2 || p.gems < 50 ? ' disabled' : '') + '>50 💎</button></div>' +
-    '<div class="sec-t">⚙️ Ajustes</div>' +
+    estiloHTML() + '<div class="sec-t">⚙️ Ajustes</div>' +
     '<button class="toggle' + (DB.sound ? ' on' : '') + '" id="tSom"><span>🔊 Sons do jogo<small>Efeitos de acerto, erro e conquistas</small></span><span class="sw"></span></button>' +
     (TTS ? '<button class="toggle' + (DB.narrador ? ' on' : '') + '" id="tNar"><span>🎙️ Narrador automático<small>Lê os cards e as perguntas em voz alta</small></span><span class="sw"></span></button>' : '') +
+    '<button class="toggle' + (DB.grande ? ' on' : '') + '" id="tGr"><span>🔎 Letras maiores<small>Aumenta o tamanho de tudo na tela</small></span><span class="sw"></span></button>' +
+    '<button class="btn w" id="pShare" style="margin-top:10px">📤 Copiar meu progresso para mandar à turma</button>' +
     '<div class="sec-t">🏅 Conquistas • ' + nConq + '/' + CONQ.length + '</div><div class="badges">' +
     CONQ.map(c => '<div class="bdg' + (p.badges[c.id] ? ' on' : '') + '"><i>' + c.e + '</i><b>' + esc(c.n) + '</b>' + esc(c.d) + '</div>').join('') + '</div>' +
     '<div class="sec-t">🤖 Sobre o Byte e a IA</div><div class="card" style="font-size:14px;line-height:1.55;color:#cdd3ff">' +
@@ -2551,6 +2867,9 @@ function abaPerfil() {
     'A IA usa a conta do Claude de quem está jogando, e o navegador pede permissão na primeira vez.<br><br>No arquivo baixado (fora do claude.ai), o Byte funciona no <b>modo offline</b>: procura as respostas no conteúdo das provas e o treinador automático escolhe as tarefas.</div>' +
     '<p class="foot">Conteúdo da AV2 (4º bimestre) do 5º ano, feito a partir do boletim “Saiba +” e das páginas do livro.<br>Seu progresso fica salvo neste aparelho.</p></div>';
   $('#pTroca').onclick = () => telaPerfil(true);
+  ligaEstilo();
+  $('#pShare').onclick = () => compartilhar();
+  $('#tGr').onclick = () => { DB.grande = !DB.grande; salvar(); aplicaTema(); $('#tGr').classList.toggle('on', DB.grande); SFX.tap(); };
   $$('[data-meta]').forEach(b => b.onclick = () => { SFX.tap(); P().meta = +b.dataset.meta; salvar(); abaPerfil(); toast('🎯 Meta: ' + b.dataset.meta + ' XP por dia'); });
   $('#lVida').onclick = () => { const p = P(); if (p.gems < 30) return; p.gems -= 30; p.hearts = MAXV; p.hTs = Date.now(); salvar(); hud(); SFX.heart(); toast('❤️ Vidas recarregadas!'); abaPerfil(); };
   $('#lGelo').onclick = () => { const p = P(); if (p.gems < 50 || p.freeze >= 2) return; p.gems -= 50; p.freeze++; salvar(); hud(); SFX.gem(); toast('🧊 Protetor comprado!'); abaPerfil(); };
@@ -2572,11 +2891,11 @@ function telaPerfil(podeFechar) {
     '<button class="btn go w" id="btnCriar">COMEÇAR ▶</button>' + (podeFechar ? '<button class="btn ghost w" id="btnFechar" style="margin-top:8px">Voltar</button>' : '') + '</div>';
   document.body.appendChild(ov);
   ov.querySelectorAll('.avs button').forEach(b => b.onclick = () => { ov.querySelectorAll('.avs button').forEach(x => x.classList.remove('sel')); b.classList.add('sel'); av = b.textContent; SFX.tap(); });
-  ov.querySelectorAll('.plist button').forEach(b => b.onclick = () => { DB.current = b.dataset.id; norm(P()); salvar(); ov.remove(); premioLiga(); hud(); mostraAba('trilha', true); rodaFila(); });
+  ov.querySelectorAll('.plist button').forEach(b => b.onclick = () => { DB.current = b.dataset.id; norm(P()); salvar(); ov.remove(); aplicaTema(); premioLiga(); hud(); mostraAba('trilha', true); rodaFila(); });
   const criar = () => {
     const nome = $('#inNome').value.trim();
     if (!nome) { $('#inNome').focus(); $('#inNome').style.borderColor = 'var(--bad)'; SFX.no(); return; }
-    novoJogador(nome, av); P().ligaSem = semanaStr(); salvar(); ov.remove(); hud(); mostraAba('trilha', true); SFX.win(); confete(90);
+    novoJogador(nome, av); P().ligaSem = semanaStr(); salvar(); ov.remove(); aplicaTema(); hud(); mostraAba('trilha', true); SFX.win(); confete(90);
     comemora(fim => janela('<div class="mascote">🤖</div><h2 class="orb">Oi, ' + esc(nome) + '!</h2><p style="text-align:left">Eu sou o <b>Byte</b>, seu tutor. Funciona assim:<br><br>' +
       '🗺️ Siga a <b>trilha</b>: cada lição libera a próxima.<br>❤️ Errar tira uma <b>vida</b> (elas voltam com o tempo).<br>🔁 O que você errar <b>volta</b> no fim da lição.<br>' +
       '🔥 Estude todo dia para manter a <b>ofensiva</b>.<br>🤖 Eu monto seu <b>plano do dia</b> e te ajudo com dicas!</p>', [{t: 'BORA! 🚀'}], fim));
@@ -2619,7 +2938,7 @@ $('#hStreak').onclick = () => { const p = P(); if (p) toast(p.lastDay === diaStr
 $('#lX').onclick = sairLicao; $('#lCheck').onclick = verificar; $('#lHint').onclick = pedeDica;
 setInterval(() => { const p = P(); if (!p) return; const h = p.hearts; vidas(p); if (p.hearts !== h) { salvar(); hud(); statusBar(); } }, 30000);
 (function comecar() {
-  if (DB.current && DB.players[DB.current]) { norm(P()); salvar(); premioLiga(); hud(); mostraAba('trilha', true); setTimeout(checaConquistas, 900); setTimeout(rodaFila, 400); }
+  if (DB.current && DB.players[DB.current]) { norm(P()); salvar(); aplicaTema(); premioLiga(); hud(); mostraAba('trilha', true); setTimeout(checaConquistas, 900); setTimeout(rodaFila, 400); }
   else telaPerfil(false);
 })();
 </script>
