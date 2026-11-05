@@ -1,3 +1,22 @@
+## 0.53.1 — o erro do microfone aparece na tela, com o caminho certo
+
+Você contou que a permissão não ia e o site dizia que não tinha permissão.
+
+**Corrigido:**
+- **O erro não aparecia na tela:** no chat, o erro do microfone ia só para o leitor de tela. Agora aparece na conversa,
+  um de cada vez. O "não ouvi nada" é só um lembrete rápido.
+- **Mensagem errada:** o "service-not-allowed" também dizia "permita o microfone". Esse erro não é o microfone: é o
+  navegador que não deixa usar o reconhecimento de voz, então permitir não resolvia.
+- **Cada erro com o seu caminho, no chat e na esfera:**
+  - **microfone bloqueado:** Permissões › Microfone no Chrome, ou a permissão do próprio Chrome no Android;
+  - **reconhecimento indisponível:** abrir no Chrome e conferir o app Google;
+  - **microfone ocupado por outro app.**
+- **Microfone já bloqueado para o site:** o chat explica como liberar sem tentar ouvir e falhar calado.
+
+**Testes (+2):** as mensagens, e num Chromium de verdade os avisos no chat e na esfera. O teste falha no código anterior.
+
+**Guia:** a tabela "Se o microfone não funcionar" em `docs/MODO_SITE.md`.
+
 ## 0.53.0 — um site só: conversa, voz, aliados, foto e vídeo no mesmo lugar
 
 Você pediu "tudo em um só site": o modo voz e o resto juntos. Até a 0.52.0 eram duas páginas (chat e voz), e o aliado

@@ -408,11 +408,31 @@
     G.falar(texto, { aoTerminar: () => { if (botao && botaoFalando === botao) soltarBotaoDaFala(); } });
   }
 
-  function ditar() {
+  // v0.53.1: o erro do microfone aparece NA TELA (antes só o leitor de tela ouvia) e no lugar do anterior
+  let avisoDoMic = null;
+  function erroDoMic(codigo) {
+    const m = G.mensagemDeErroDeVoz(codigo);
+    if (!m) return;
+    anunciar(`${m.titulo}. ${m.texto}`);
+    if (!m.grave) { avisarNaBandeja(m.texto); return; }
+    if (avisoDoMic) avisoDoMic.remove();
+    avisoDoMic = aviso(`${m.titulo}: ${m.texto}`, 'msg-alerta');
+  }
+
+  let preparando = false;
+  async function ditar() {
     if (rec) { try { rec.stop(); } catch { /* já parou */ } return; } // tocar de novo: manda o que já ouviu
     const R = Reconhecimento();
-    if (!R) { anunciar('Este navegador não ouve voz: use o Chrome ou o Edge (ou digite).'); return; }
-    if (ocupado || !token) return;
+    if (!R) { erroDoMic('service-not-allowed'); return; }
+    if (ocupado || !token || preparando) return;
+    // microfone já bloqueado para o site: explica como liberar, em vez de tentar e falhar calado
+    preparando = true;
+    try {
+      const st = navigator.permissions && navigator.permissions.query ? await navigator.permissions.query({ name: 'microphone' }) : null;
+      if (st && st.state === 'denied') { erroDoMic('not-allowed'); return; }
+    } catch { /* navegador sem essa consulta: tenta assim mesmo */ } finally { preparando = false; }
+    if (rec || ocupado) return;
+    if (avisoDoMic) { avisoDoMic.remove(); avisoDoMic = null; }
     pararDeFalar();
     const antes = elTexto.value.trim();
     let final = '';
@@ -435,11 +455,7 @@
       elTexto.value = [antes, (final + parcial).trim()].filter(Boolean).join(' ');
       ajustarAltura();
     };
-    rec.onerror = (ev) => {
-      if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') anunciar('Microfone bloqueado: permita o microfone para esta página (no ícone ao lado do endereço).');
-      else if (ev.error === 'network') anunciar('O reconhecimento de voz do navegador precisa de internet. Você pode digitar.');
-      else if (ev.error === 'no-speech') anunciar('Não ouvi nada. Toque no microfone e fale.');
-    };
+    rec.onerror = (ev) => erroDoMic(ev.error);
     rec.onend = () => {
       rec = null;
       elMic.setAttribute('aria-pressed', 'false');

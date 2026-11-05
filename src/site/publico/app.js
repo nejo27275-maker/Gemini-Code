@@ -322,14 +322,12 @@
       orbe.bater(0.9);
     };
     rec.onerror = (ev) => {
-      if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') {
-        continuo = false; marcar('btn-continuo', false);
-        estado('erro', 'Microfone bloqueado');
-        mostrarResposta('Permita o microfone para esta página (ícone ao lado do endereço) e toque de novo.');
-      } else if (ev.error === 'network') {
-        estado('erro', 'Sem conexão para reconhecer a voz');
-        mostrarResposta('O reconhecimento de voz do Chrome usa a internet. Verifique a conexão ou digite.');
-      }
+      // v0.53.1: cada erro com o seu caminho (o "service-not-allowed" não é o microfone: permitir não resolvia)
+      const m = G.mensagemDeErroDeVoz(ev.error);
+      if (!m || !m.grave) return; // "não ouvi nada" no modo contínuo só volta a ouvir
+      if (ev.error !== 'network') { continuo = false; marcar('btn-continuo', false); }
+      estado('erro', m.titulo);
+      mostrarResposta(m.texto);
     };
     rec.onend = () => {
       rec = null;

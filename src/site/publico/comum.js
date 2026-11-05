@@ -681,9 +681,28 @@
   }
   function pararFala() { if (podeFalar()) window.speechSynthesis.cancel(); }
 
+  /**
+   * v0.53.1: o que dizer quando o reconhecimento de voz falha, pelo código do navegador. "not-allowed" é o microfone
+   * bloqueado; "service-not-allowed" NÃO é o microfone (o navegador não deixa usar o reconhecimento) — antes os dois
+   * diziam "permita o microfone", e permitir não resolvia. @returns {{titulo, texto, grave}|null} (null = ignorar)
+   */
+  function mensagemDeErroDeVoz(codigo) {
+    const M = {
+      'not-allowed': ['Microfone bloqueado', 'O navegador não deixou este site usar o microfone. No Chrome do celular: toque no ícone à esquerda do endereço, depois em Permissões › Microfone › Permitir, e recarregue a página. Se o Chrome não perguntar nada, libere o microfone para o próprio Chrome: Configurações do Android › Apps › Chrome › Permissões › Microfone › Permitir.'],
+      'service-not-allowed': ['Reconhecimento de voz indisponível', 'Não é o microfone: este navegador não deixa usar o reconhecimento de voz. Abra o link no Chrome (e não dentro de outro app que abre links) e confira se o app Google está instalado e ativo, porque o Chrome do Android usa a voz do Google para entender o que você fala.'],
+      'audio-capture': ['Sem acesso ao microfone', 'O microfone não respondeu: outro app pode estar usando (gravador, ligação, o Termux gravando) ou o Android não deu o microfone ao Chrome (Configurações do Android › Apps › Chrome › Permissões › Microfone).'],
+      network: ['Sem conexão para entender a voz', 'O reconhecimento de voz do Chrome usa a internet. Confira a conexão ou digite.'],
+      'language-not-supported': ['Sem português no reconhecimento de voz', 'O reconhecimento de voz deste aparelho não tem português do Brasil: instale o idioma da "Digitação por voz do Google" nas configurações do Android, ou digite.'],
+      'no-speech': ['Não ouvi nada', 'Toque no microfone e fale perto dele.', false],
+    };
+    if (codigo === 'aborted') return null; // nós mesmos paramos
+    const m = M[codigo] || ['O microfone falhou', `O reconhecimento de voz parou (${String(codigo || 'sem motivo').slice(0, 40)}). Tente de novo ou digite.`];
+    return { titulo: m[0], texto: m[1], grave: m[2] !== false };
+  }
+
   window.GeminiSite = Object.freeze({
     lerToken, criarApi, eventos, analisarMarkdown, montarMarkdown, copiarTexto, linkSeguro,
     tamanhoLegivel, tipoDoArquivo, enviarArquivo, cartaoMidia, mostrarQuadro, MAX_ENVIO, cartaoChave, seloDoFim,
-    paraFala, frases, podeFalar, falar, pararFala,
+    paraFala, frases, podeFalar, falar, pararFala, mensagemDeErroDeVoz,
   });
 })();

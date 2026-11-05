@@ -28,6 +28,19 @@ vez**: abra o endereço completo e não compartilhe.
 - **Até a v0.52.0:** a voz e o chat eram duas páginas, e o aliado era fixo por execução. O `--chat` continua aceito,
   mas não precisa mais.
 
+### Se o microfone não funcionar (v0.53.1)
+
+O site mostra o motivo na conversa, e cada caso tem um caminho:
+
+| O aviso | O que fazer (Chrome no Android) |
+|---|---|
+| **Microfone bloqueado** | Toque no ícone à esquerda do endereço, depois em **Permissões › Microfone › Permitir**, e recarregue. Se o Chrome não perguntar nada, o Android não deu o microfone ao Chrome: **Configurações › Apps › Chrome › Permissões › Microfone › Permitir**. |
+| **Reconhecimento de voz indisponível** | Não é o microfone. Abra o link no **Chrome** (não dentro de outro app que abre links) e confira se o app **Google** está instalado e ativo: o Chrome do Android usa a voz do Google para entender a fala. |
+| **Sem acesso ao microfone** | Outro app está usando o microfone (gravador, ligação, o Termux gravando), ou o Chrome está sem a permissão do Android (veja acima). |
+| **Sem conexão para entender a voz** | O reconhecimento do Chrome usa a internet. |
+
+Sem o microfone, dá para digitar normalmente, e o "Ouvir" continua lendo as respostas.
+
 ## Só com a chave do Gemini (v0.52.0)
 
 Para usar o site, basta a chave da API do Gemini. Não precisa de modelo local nem de configurar mais nada.

@@ -160,10 +160,12 @@ const pular = acharNavegador() ? false : 'nenhum Chrome/Chromium instalado';
 // O reconhecimento e a síntese de voz do Chrome precisam de microfone, alto-falante e internet: no teste, falsos que
 // ditam uma frase e guardam o que seria falado (no mundo da própria página, antes dos scripts dela).
 const FALSOS_DE_VOZ = `
-window.__falas = []; window.__canceladas = 0;
+window.__falas = []; window.__canceladas = 0; window.__iniciados = 0;
 window.SpeechRecognition = class {
   start() {
+    window.__iniciados++;
     setTimeout(() => {
+      if (window.__erroDoMic) { this.onerror && this.onerror({ error: window.__erroDoMic }); this.onend && this.onend(); return; }
       this.onstart && this.onstart();
       const r = [{ transcript: 'monta o treino de amanhã' }]; r.isFinal = true;
       this.onresult && this.onresult({ resultIndex: 0, results: [r] });
@@ -175,7 +177,61 @@ window.SpeechRecognition = class {
 if (window.speechSynthesis) {
   window.speechSynthesis.speak = (u) => { window.__falas.push(u.text); setTimeout(() => u.dispatchEvent(new Event('end')), 300); };
   window.speechSynthesis.cancel = () => { window.__canceladas++; };
+}
+if (navigator.permissions && navigator.permissions.query) {
+  const consultar = navigator.permissions.query.bind(navigator.permissions);
+  navigator.permissions.query = (d) => (d && d.name === 'microphone' && window.__permissaoMic ? Promise.resolve({ state: window.__permissaoMic }) : consultar(d));
 }`;
+
+test('mensagens do microfone: cada erro com o seu caminho; "service-not-allowed" não manda permitir o microfone', () => {
+  const vm = require('vm');
+  const ctx = { window: {}, URL, TextDecoder, setTimeout, clearTimeout };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'site', 'publico', 'comum.js'), 'utf8'), ctx);
+  const m = ctx.window.GeminiSite.mensagemDeErroDeVoz;
+  assert.match(m('not-allowed').texto, /Permissões › Microfone › Permitir/);
+  assert.match(m('not-allowed').texto, /Configurações do Android › Apps › Chrome/, 'e o caso do Chrome sem a permissão do Android');
+  assert.match(m('service-not-allowed').texto, /^Não é o microfone/);
+  assert.doesNotMatch(m('service-not-allowed').texto, /Permitir/);
+  assert.match(m('audio-capture').texto, /outro app/);
+  assert.equal(m('no-speech').grave, false, '"não ouvi nada" não é um alarme');
+  assert.equal(m('aborted'), null, 'nós mesmos paramos: nada a dizer');
+  assert.match(m('bad-grammar').texto, /\(bad-grammar\)/);
+  assert.equal(ctx.window.GeminiSite.podeFalar(), false, 'sem a síntese, não quebra');
+});
+
+test('navegador real: o erro do microfone aparece na tela, um de cada vez, e microfone já bloqueado nem tenta', { skip: pular, timeout: 120000 }, async (t) => {
+  const s = await subir({ conversar: conversarFalso(null, []), aliados: aliadosFalsos([]) });
+  const nav = new Navegador({ executavel: acharNavegador(), permitirLocal: true, navegacaoBarrada: () => null });
+  await nav.iniciar();
+  t.after(() => nav.fechar());
+  const pagina = async (expr) => {
+    const r = await nav.enviar('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true });
+    if (r.exceptionDetails) throw new Error(r.exceptionDetails.text);
+    return r.result.value;
+  };
+  await nav.enviar('Page.addScriptToEvaluateOnNewDocument', { source: FALSOS_DE_VOZ });
+  await nav.abrir(s.endereco('/chat'));
+  assert.ok(await nav.esperarTexto('Como posso ajudar?', 10000));
+  await pagina("window.__erroDoMic = 'not-allowed'; document.getElementById('btn-mic').click()");
+  assert.ok(await nav.esperarTexto('Microfone bloqueado', 10000), 'o aviso aparece na conversa (antes só o leitor de tela ouvia)');
+  assert.match(await pagina("document.querySelector('.msg-alerta').textContent"), /Permissões › Microfone › Permitir/);
+  await pagina("window.__erroDoMic = 'service-not-allowed'; document.getElementById('btn-mic').click()");
+  assert.ok(await nav.esperarTexto('Reconhecimento de voz indisponível', 10000));
+  assert.equal(await pagina("document.querySelectorAll('.msg-alerta').length"), 1, 'o aviso novo entra no lugar do anterior');
+  // já bloqueado para o site: explica sem nem tentar ouvir
+  const antes = await pagina('window.__iniciados');
+  await pagina("window.__erroDoMic = null; window.__permissaoMic = 'denied'; document.getElementById('btn-mic').click()");
+  assert.ok(await nav.esperarTexto('Microfone bloqueado', 10000));
+  assert.equal(await pagina('window.__iniciados'), antes, 'não tentou ouvir');
+  // "não ouvi nada" é só um lembrete na bandeja, não um alarme na conversa
+  await pagina("window.__permissaoMic = null; window.__erroDoMic = 'no-speech'; document.getElementById('btn-mic').click()");
+  assert.ok(await nav.esperarTexto('fale perto dele', 10000));
+  assert.equal(await pagina("document.querySelectorAll('.msg-alerta').length"), 0, 'o aviso grave anterior saiu quando tentou de novo');
+  // a página de voz usa as mesmas mensagens
+  await nav.eEsperar(() => pagina("document.getElementById('btn-modo-voz').click()"));
+  await pagina("window.__erroDoMic = 'service-not-allowed'; document.getElementById('btn-mic').click()");
+  assert.ok(await nav.esperarTexto('Não é o microfone', 10000), 'na esfera também');
+});
 
 test('navegador real: trocar de aliado no topo, ditar pelo microfone (a resposta vem falada), "Ouvir", e ir e voltar do modo voz', { skip: pular, timeout: 120000 }, async (t) => {
   const pedidos = [];
