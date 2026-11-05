@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="referrer" content="no-referrer">
+<title>Gemini Code — modo voz</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<div id="app" class="app" data-estado="ocioso">
+  <header class="topo">
+    <div class="marca" aria-label="Gemini Code, modo voz">
+      <span class="marca-ponto" aria-hidden="true"></span>
+      <span class="marca-nome">GEMINI CODE</span>
+      <span id="marca-modo" class="marca-modo">modo voz</span>
+    </div>
+    <nav class="topo-acoes" aria-label="Opções">
+      <a id="btn-chat" class="chip" href="/chat" title="Voltar para o chat (a mesma conversa)">Chat</a>
+      <button id="btn-continuo" class="chip" type="button" aria-pressed="false" title="Conversa contínua: volta a ouvir depois de responder">Contínuo</button>
+      <button id="btn-ate" class="chip" type="button" aria-pressed="false" title="Modo até terminar: o agente continua sozinho até a tarefa estar feita (você ainda pode parar)">Até terminar</button>
+      <button id="btn-voz" class="chip" type="button" aria-pressed="true" title="Ler as respostas em voz alta">Falar respostas</button>
+      <button id="btn-historico" class="chip" type="button" aria-expanded="false" aria-controls="historico">Conversa</button>
+    </nav>
+  </header>
+
+  <main class="palco">
+    <canvas id="orbe" class="orbe" aria-hidden="true"></canvas>
+    <div class="hud">
+      <p id="estado" class="estado" role="status" aria-live="polite">Toque no microfone para falar</p>
+      <p id="ouvido" class="ouvido"></p>
+    </div>
+  </main>
+
+  <section id="painel" class="painel" hidden>
+    <p id="alerta" class="alerta" hidden></p>
+    <div id="resposta" class="resposta" aria-live="polite"></div>
+    <div id="midias" class="midias" hidden></div>
+  </section>
+
+  <section id="pergunta" class="pergunta" role="alertdialog" aria-labelledby="pergunta-titulo" aria-describedby="pergunta-texto" hidden>
+    <h2 id="pergunta-titulo">O agente precisa da sua permissão</h2>
+    <pre id="pergunta-texto" class="pergunta-texto"></pre>
+    <div class="pergunta-botoes">
+      <button id="btn-sim" class="botao botao-sim" type="button">Sim, permitir</button>
+      <button id="btn-nao" class="botao botao-nao" type="button">Não</button>
+    </div>
+    <form id="form-outra" class="pergunta-outra">
+      <input id="outra" type="text" maxlength="200" placeholder="Outra resposta (ex.: sempre)" aria-label="Outra resposta">
+      <button class="botao" type="submit">Responder</button>
+    </form>
+  </section>
+
+  <footer class="controles">
+    <form id="form" class="entrada" autocomplete="off">
+      <input id="texto" type="text" maxlength="16000" placeholder="Fale ou digite aqui…" aria-label="Mensagem para o agente">
+      <button class="enviar" type="submit" aria-label="Enviar">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 20.5 3.5 14 21l-2.6-7.4z"/></svg>
+      </button>
+    </form>
+    <button id="btn-mic" class="mic" type="button" aria-label="Falar (espaço)" title="Falar (tecla espaço) · Esc para parar">
+      <svg class="icone-mic" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/></svg>
+      <svg class="icone-parar" viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="6.5" width="11" height="11" rx="2.2"/></svg>
+    </button>
+  </footer>
+
+  <aside id="historico" class="historico" aria-label="Conversa" hidden>
+    <div class="historico-topo">
+      <h2>Conversa</h2>
+      <button id="btn-limpar" class="chip" type="button">Limpar</button>
+    </div>
+    <ol id="historico-lista" class="historico-lista"></ol>
+  </aside>
+</div>
+<script src="/comum.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

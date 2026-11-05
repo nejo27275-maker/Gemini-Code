@@ -10,7 +10,9 @@ const path = require('path');
 const { spawn, spawnSync } = require('child_process');
 
 function dirDados() {
-  const dir = path.join(process.env.HOME || os.homedir(), '.gemini-code');
+  // v0.49.2: nunca relativa (HOME vazio gravava na pasta atual) — a mesma regra de src/config.js
+  const home = process.env.HOME && path.isAbsolute(process.env.HOME) ? process.env.HOME : require('./config').pastaDoUsuario();
+  const dir = path.join(home, '.gemini-code');
   fs.mkdirSync(dir, { recursive: true });
   return dir;
 }
@@ -18,7 +20,7 @@ const pidPath = () => path.join(dirDados(), 'llama-server.pid');
 const logPath = () => path.join(dirDados(), 'llama-server.log');
 
 function caminhos(env = process.env, config = {}) {
-  const home = env.HOME || os.homedir();
+  const home = env.HOME && path.isAbsolute(env.HOME) ? env.HOME : require('./config').pastaDoUsuario();
   return {
     servidor: env.LLAMA_SERVER_BIN || path.join(home, 'llama.cpp', 'build', 'bin', 'llama-server'),
     // Prioridade: override da sessão > caminho escolhido no Gemini Code > compatibilidade legada.

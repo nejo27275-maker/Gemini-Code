@@ -31,6 +31,13 @@ const CAMPOS_CAMINHO = new Set(['read_file', 'write_file', 'edit_file', 'list_di
 function alvos(nome, args = {}) {
   if (nome === 'run_shell') return [String(args.command || '')];
   if (nome === 'web_fetch') return urls(args.url);
+  // v0.44.0: no navegador, as regras olham a URL (ex.: "negar": ["browser(*banco*)"]); sem URL, a chamada inteira.
+  if (nome === 'browser') return args.url ? urls(args.url) : [JSON.stringify(args)];
+  // v0.44.1: no adb, o comando como se escreve ("tecla ok", "abrir_app com.netflix.ninja") — antes só o JSON
+  // ({"acao":"tecla",...}) e os exemplos "adb(tecla*)" da documentação nunca batiam. O JSON continua valendo.
+  if (nome === 'adb') return [textoAdb(args), JSON.stringify(args)];
+  // v0.47.0: no computador, também o comando como se escreve ("tecla ctrl+c", "clicar 100 200", "tela")
+  if (nome === 'computador') return [require('./computador').textoDaAcao(String(args.acao || ''), args), JSON.stringify(args)];
   if (nome === 'edit_files' && Array.isArray(args.edits)) return args.edits.flatMap((e) => caminhos(e && e.path));
   if (CAMPOS_CAMINHO.has(nome)) return caminhos(args.path || '.');
   return [JSON.stringify(args)];
@@ -38,6 +45,16 @@ function alvos(nome, args = {}) {
 
 // URL como o modelo escreveu e normalizada (HTTPS://Exemplo.COM:443/x → https://exemplo.com/x): sem isso
 // variações de maiúsculas/porta padrão escapavam de web_fetch(https://exemplo.com/*).
+// v0.47.0: + direcao/x/y/x2/y2 ("tocar 540 1210", "tocar Enviar", "deslizar cima")
+const CAMPOS_ADB = ['tecla', 'app', 'link', 'texto', 'espaco', 'chave', 'valor', 'comando', 'arquivo', 'porta', 'linhas', 'direcao', 'x', 'y', 'x2', 'y2'];
+function textoAdb(args) {
+  const partes = [String(args.acao || '')];
+  // conectar/desconectar/parear: o alvo é o assunto do comando ("conectar 192.168.0.50")
+  if (['conectar', 'desconectar', 'parear'].includes(args.acao) && args.alvo) partes.push(String(args.alvo));
+  for (const c of CAMPOS_ADB) if (args[c] !== undefined && args[c] !== null && args[c] !== '') partes.push(String(args[c]));
+  return partes.join(' ');
+}
+
 function urls(u) {
   const bruta = String(u || '');
   let normal = '';
@@ -93,7 +110,7 @@ function shellPermitido(command, cfg) {
 /**
  * true se uma chamada (de qualquer ferramenta que NÃO seja o run_shell) bate numa regra de "permitir".
  * Usado pela ferramenta adb (src/tools/adbTools.js) para dispensar a confirmação de ações específicas,
- * ex.: "permitir": ["adb(info*)", "adb(tecla*)"]. Não vale para run_shell (esse usa shellPermitido, que
+ * ex.: "permitir": ["adb(tecla *)", "adb(abrir_app com.netflix*)"]. Não vale para run_shell (esse usa shellPermitido, que
  * é mais restrito por causa de comandos compostos).
  */
 function permitido(nome, args, cfg) {

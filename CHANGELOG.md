@@ -1,3 +1,990 @@
+## 0.53.2 — o microfone de verdade: o Chrome pergunta, o aviso diz onde está o bloqueio e o Termux ouve se o Chrome não deixar
+
+Você mandou o aviso "O navegador não deixou este site usar o microfone": o microfone continuava recusado.
+
+**Corrigido:**
+- **O site não pedia de verdade:** a 0.53.1 consultava a permissão e, quando ela dizia "bloqueado", parava ali sem
+  pedir. Agora, ao tocar no microfone, o site faz o pedido padrão do navegador ("Permitir que 127.0.0.1 use o
+  microfone?"). É esse pedido que faz o Chrome perguntar, e que diz por que recusou.
+- **O motivo exato:** cada recusa tem o seu aviso:
+  - **o site bloqueado** e, quando o ícone do endereço diz que o site não tem permissões, **o Chrome inteiro**
+    (Configurações do site › Microfone);
+  - **o Android não deu o microfone ao Chrome**;
+  - **o pedido fechou** sem resposta;
+  - **o reconhecimento de voz recusou** com o microfone já liberado: o app Google, outro app ouvindo ou outro navegador.
+
+  O fim do aviso traz o detalhe do navegador (`detalhe: ...`), que ajuda a achar o bloqueio.
+
+**Novo — ouvir pelo Termux:**
+- Rodando no Termux, se o navegador não deixar usar o microfone, o site ouve pelo app **Termux:API**, que tem a própria
+  permissão do microfone. A mensagem vai sozinha, como no ditado, e daí em diante, nesta aba, o microfone é o dele.
+  Tocar de novo cancela. Funciona no chat, na esfera e num navegador sem reconhecimento de voz.
+- **Precisa:** do app Termux:API (da mesma loja do Termux) e de `pkg install termux-api`. Na primeira vez, o Termux:API
+  pede a permissão: toque em Permitir e depois no microfone de novo.
+
+**Por dentro:**
+- **A rota nova:** `/api/ouvir` roda o `termux-speech-to-text`.
+  - **O comando:** sem argumentos, e só um que o agente não pode ter plantado (fora das pastas em que ele grava, como o
+    `bwrap`).
+  - **Os limites:** um por vez, nunca no meio de uma resposta, prazo de 45 s. Fechar a página, tocar de novo ou "Parar"
+    encerra o comando e o que ele abriu.
+  - **O que volta:** só o texto ouvido, limpo. Ele não vai para o log.
+- **O proxy do navegador:** quando a página desiste de um pedido, o pedido de saída também é cancelado. Antes ele ficava
+  aberto até o servidor responder.
+
+**Testes (+7):**
+- a rota, com um Termux falso;
+- o `termux-speech-to-text` trocado por scripts de verdade: o prazo e o cancelar, sem deixar processo órfão;
+- o programa plantado, que não roda;
+- o proxy;
+- num Chromium de verdade, cada recusa e o Termux no chat e na esfera.
+
+**Não testado:** o Chrome e o Termux:API de um celular de verdade.
+
+## 0.53.1 — o erro do microfone aparece na tela, com o caminho certo
+
+Você contou que a permissão não ia e o site dizia que não tinha permissão.
+
+**Corrigido:**
+- **O erro não aparecia na tela:** no chat, o erro do microfone ia só para o leitor de tela. Agora aparece na conversa,
+  um de cada vez. O "não ouvi nada" é só um lembrete rápido.
+- **Mensagem errada:** o "service-not-allowed" também dizia "permita o microfone". Esse erro não é o microfone: é o
+  navegador que não deixa usar o reconhecimento de voz, então permitir não resolvia.
+- **Cada erro com o seu caminho, no chat e na esfera:**
+  - **microfone bloqueado:** Permissões › Microfone no Chrome, ou a permissão do próprio Chrome no Android;
+  - **reconhecimento indisponível:** abrir no Chrome e conferir o app Google;
+  - **microfone ocupado por outro app.**
+- **Microfone já bloqueado para o site:** o chat explica como liberar sem tentar ouvir e falhar calado.
+
+**Testes (+2):** as mensagens, e num Chromium de verdade os avisos no chat e na esfera. O teste falha no código anterior.
+
+**Guia:** a tabela "Se o microfone não funcionar" em `docs/MODO_SITE.md`.
+
+## 0.53.0 — um site só: conversa, voz, aliados, foto e vídeo no mesmo lugar
+
+Você pediu "tudo em um só site": o modo voz e o resto juntos. Até a 0.52.0 eram duas páginas (chat e voz), e o aliado
+ficava fixo enquanto o site estava aberto.
+
+**Novo — o site com tudo:**
+- **`gemini-code site --abrir`** abre o site completo, e o terminal mostra um link só. `--voz` abre direto na esfera.
+  O `--chat` continua aceito, mas não precisa mais.
+- **Com quem conversar, no topo:** o agente geral ou um dos seus aliados (o treinador, o central...).
+  - **A troca:** começa uma conversa nova, porque cada um tem as ferramentas, a memória e as instruções dele.
+  - **As sugestões:** a tela inicial passa a mostrar as do aliado.
+- **O microfone na caixa de mensagem:** você fala, e quando para a mensagem vai. Uma mensagem falada ganha a resposta
+  falada.
+- **"Ouvir" em cada resposta:** lê a resposta em voz alta. Tocar de novo para, e o Esc também para.
+- **Modo voz:** o botão no topo abre a esfera, com a mesma conversa e o mesmo aliado. Na esfera, o botão **Chat** volta.
+
+**Por dentro:**
+- **A rota nova:** `/api/aliado` troca de aliado.
+  - **O que aceita:** só um aliado que existe, nunca no meio de uma resposta.
+  - **A conversa nova:** a troca zera o histórico, os turnos e as mídias, então a conversa de um aliado não vai para outro.
+  - **As travas:** a mesma chave da sessão e as mesmas de origem e de `Host`.
+  - **Na página:** os nomes e as descrições vão limpos, como texto.
+- **A voz:** o reconhecimento e a fala são os do navegador. Só o texto final da mensagem vai para o servidor.
+- **Código compartilhado:** o texto para a fala agora é um só (`comum.js`), usado pelo chat e pela esfera.
+
+**Testes (+5):**
+- **Servidor:** a troca (lista limpa, conversa nova, só um que existe, nunca no meio, um aliado quebrado não troca nada,
+  sem a chave nada).
+- **Comando:** o `site` de verdade, com a lista de aliados do usuário.
+- **Chromium de verdade:** o seletor, o ditado com a resposta falada, o "Ouvir" e o parar, e o vai e volta entre o chat
+  e a esfera.
+- **Simulados no Chromium:** o reconhecimento e a síntese de voz, porque aqui não há microfone, alto-falante nem
+  internet.
+
+**Não testado:** o microfone de um celular de verdade.
+
+## 0.52.0 — o site só com a chave do Gemini, criar imagem, o modo até terminar e o treinador de futebol
+
+Base: a 0.51.0 (no PR [#7](https://github.com/nejo27275-maker/Gemini-Code/pull/7)). Você pediu:
+- o site funcionando só com a chave da API do Gemini;
+- criar imagem;
+- um modo que só para quando terminar;
+- depois, a IA treinando futebol "feito o melhor treinador que já existiu", e o código ainda melhor.
+
+**Novo — o site só com a chave do Gemini:**
+- **Sem chave:** a página (chat e voz) mostra um cartão para colar a chave, com o link do Google AI Studio.
+  - O servidor confere a chave com o Google antes de salvar. A conferência usa a lista de modelos, que não gasta cota.
+  - A chave nunca volta para a página nem vai para o log.
+  - O `gemini-code site` também avisa no terminal que falta a chave.
+- **Com a chave:** a conversa do site vai direto para a nuvem. No modo híbrido (o padrão), as perguntas simples iriam
+  para o modelo local, que talvez nem esteja instalado. Um aliado com modelo próprio continua com o dele.
+- **Chave recusada no meio da conversa:** o cartão aparece de novo.
+- **Com um aliado** (`gemini-code site --aliado treinador`): as sugestões da tela inicial são as dele.
+
+**Novo — criar imagem no formato das redes:**
+- **No terminal:** `gemini-code imagem gerar "..." --formato feed|quadrado|stories|youtube|16:9`.
+  - A ferramenta `imagem` também aceita o formato, e a proporção vai para a API (`imageConfig.aspectRatio`).
+  - Um formato desconhecido é recusado antes de gastar cota.
+- **Permissão:** a ferramenta pergunta antes de cada criação, porque gasta cota. "sempre" libera só nesta execução.
+- **Cota zerada (`limit: 0`):** o erro agora fala do modelo de **imagem** e do comando certo
+  (`gemini-code config set-image-model NOME`). Antes, mandava trocar o modelo do chat.
+- **No site:** a sugestão "Crie uma imagem…" e a imagem na conversa, com o botão Baixar.
+
+**Novo — modo até terminar:**
+- **Como funciona:** o agente trabalha sozinho até a tarefa estar pronta e marca o fim: concluída, ou "preciso de você"
+  com o que falta. Se ele parar sem marcar, o gemini-code manda continuar de onde parou.
+- **Limites:**
+  - até 25 continuações e 400 passos (em vez de 60);
+  - duas respostas iguais seguidas (ou vazias), sem nenhuma ferramenta no meio, também encerram;
+  - o Parar (Ctrl+C) e as permissões continuam valendo;
+  - um subagente nunca entra no modo.
+- **As marcas** nunca aparecem, nem cortadas entre pedaços do streaming.
+- **Onde ligar:**
+  - `/ate-terminar` no chat do terminal;
+  - `gemini-code run --ate-terminar "..."`;
+  - `gemini-code config set-ate-terminar on`, para começar sempre ligado;
+  - o botão **Até terminar** no site.
+- **No site:**
+  - nesse modo, fechar a página não para o agente;
+  - ao voltar, você vê o que ele já fez (o texto, as ferramentas e as mídias), e uma permissão espera até 30 minutos;
+  - a resposta termina com um selo: ✓ Tarefa concluída, ⚑ Precisa de você, ou o motivo de ter parado.
+
+**Novo — o treinador de futebol** (`docs/FUTEBOL.md`):
+- **O aliado:** `gemini-code futebol aliado` cria o "treinador".
+  - **Ferramentas:** o preset `futebol` traz `futebol`, `video`, `imagem`, `desafio` e `web_fetch`.
+  - **Instruções de treinador de elite:** os 4 momentos do jogo e as bolas paradas, treinar como se joga, liderança e
+    o plano de jogo contra o adversário, sem fingir ser nenhuma pessoa real.
+- **A ferramenta `futebol`** (sob demanda) e o comando `gemini-code futebol`, sem IA:
+  - **treino:** a sessão por tema (12), categoria (sub-7 a veterano), número de jogadores e tempo, com 25 exercícios
+    de verdade (organização, regras, pontos de correção, progressão);
+  - **semana:** a periodização tática (MD-4 tensão, MD-3 duração, MD-2 velocidade, MD-1 ativação, recuperação),
+    também com 2 jogos na semana;
+  - **carga:** PSE x minutos, aguda, crônica, ACWR, monotonia e tensão;
+  - **prancheta:** a formação em PNG e SVG, com os nomes e as setas das jogadas.
+- **Idade e segurança:**
+  - criança brinca de jogar: sem bloco analítico;
+  - um tema avançado demais para a idade é avisado;
+  - todo plano traz a hidratação e a regra da pancada na cabeça ("na dúvida, fora");
+  - o aliado não diagnostica nem receita.
+
+**Corrigido na revisão** (cada um com teste):
+- **Sub-11 repetia exercício:** com o tema posse ou pressão, o mesmo exercício aparecia nos dois blocos principais. Agora
+  ele ganha o tempo dos dois, em duas etapas (a segunda com a progressão).
+- **Goleiros no aquecimento:** o plano dizia que os goleiros aquecem com o preparador, mas dividia todo mundo nos grupos
+  do rondo. Agora o aquecimento divide só os de linha.
+- **Prancheta:**
+  - **Nomes encostando:** nomes compridos encostavam no do lado. Agora o limite depende de quantos jogadores há na
+    linha, e linhas de 4 ou mais usam fonte menor.
+  - **Emoji:** virava um buraco no PNG; agora sai.
+  - **Título:** era cortado em 18 letras, como os nomes; agora vai até 40.
+- **Carga:**
+  - **O "hoje":** era o dia em UTC: em São Paulo, depois das 21h, já era amanhã. Agora é o dia local.
+  - **As datas:** como a gente digita (04/11/2026, "ontem"), lidas por `src/datas.js`. Uma data no futuro é recusada.
+  - **Alarme falso:** com menos de 3 semanas de registros, a crônica é pequena e o ACWR sai alto. Mesmo assim, o
+    resultado dizia "aumento brusco, reduza". Agora o ACWR aparece "ainda sem base", sem faixa de risco.
+- **Modo até terminar:**
+  - duas respostas vazias seguidas gastavam as 25 continuações; agora param na segunda;
+  - a mesma frase depois de usar uma ferramenta contava como "sem avançar"; agora a ferramenta conta como avanço.
+- **ESLint:** uma atribuição inútil no servidor do site, e caracteres invisíveis num regex (agora são códigos).
+
+**Testes (+37):**
+- 11 do treinador;
+- 12 da chave, das sugestões do aliado e do modo até terminar no site;
+- 10 do modo até terminar;
+- 4 de criar imagem.
+
+Em ambiente de verdade:
+- no Chromium: o cartão da chave, as sugestões do aliado e o botão "Até terminar";
+- num pseudo-terminal: o `/ate-terminar`;
+- com o ImageMagick: a prancheta, conferida pelos pixels.
+
+**Limites honestos:** este ambiente não tem internet nem modelo de IA.
+- **Testado aqui,** com um Gemini falso: a conversa, a chave e o modo até terminar.
+- **Não testado:**
+  - uma chave de verdade conferida com o Google;
+  - a imagem criada de verdade pelo Gemini;
+  - um modelo de verdade seguindo as marcas de fim;
+  - a conversa com o aliado treinador.
+
+## 0.51.0 — foto e vídeo pelo modo site, e cores e volume certos na edição
+
+Base: a 0.50.1 (no PR [#7](https://github.com/nejo27275-maker/Gemini-Code/pull/7)). Você pediu para conferir se o
+erro das cores do vídeo HDR também aparecia em outro lugar, conferir o modo site e mostrar uma edição de foto e vídeo
+"com aquele sistema": bota a foto e o vídeo. Achei o mesmo tipo de erro em três lugares, e mais um no volume.
+
+**Corrigido:**
+- **`video melhorar` com vídeo HDR saía desbotado:** o mesmo erro da 0.50.1, que tinha ficado de fora do "melhorar".
+  - Reproduzido: a saída era 8 bits ainda marcada como HLG.
+  - Agora converte para SDR BT.709 como o `editar`, ou avisa num ffmpeg sem `zscale`.
+- **Foto de iPhone desbotava no `imagem ajustar`:**
+  - **O erro:** o iPhone grava em Display P3, com o perfil de cor dentro da foto. Tirar a localização (o padrão) tirava
+    também o perfil. A foto passava a ser lida como sRGB, e as cores desbotavam.
+  - **Medido:** um vermelho P3 (200,60,40) saía como (200,60,40) sRGB, quando o certo é (217,42,23).
+  - **Agora:** a foto é convertida para sRGB antes. O perfil sRGB é montado pelo próprio gemini-code
+    (`src/perfilCor.js`), porque nem todo aparelho tem um arquivo `.icc`. Sem o lcms no ImageMagick, a localização sai
+    e o perfil de cor fica.
+- **O vídeo de fotos (`slideshow`) desbotava foto P3:** o ffmpeg ignora o perfil de cor. A foto P3 agora entra
+  convertida.
+- **GIF animado no `ajustar`:**
+  - **Antes:** as medidas saíam erradas ("10 2010 20") e o resultado virava vários arquivos, com erro.
+  - **Agora:** vira uma foto só (o primeiro quadro).
+- **Volume das redes:** o `editar` e o `juntar` diziam "-14 LUFS", mas um vídeo curto com som de mar saía com -15,5 (no
+  teste) e -16,3 (no Reels da demonstração).
+  - **Por quê:** o `loudnorm` numa passada só não chegava lá.
+  - **Agora:** depois de exportar, mede de verdade. Se passou de 1 LU da meta, refaz só o áudio (ganho e limitador de
+    pico; o vídeo é copiado, sem perder qualidade).
+  - **Medido:** o mesmo Reels ficou em -14,5 LUFS.
+
+**Novo — foto, vídeo e áudio pelo modo site (chat):**
+- **Mandar:** pelo clipe (no celular, galeria ou câmera), arrastando para a conversa ou colando uma foto.
+  - O arquivo sobe na hora, com a barra de progresso, e vai para `midia-recebida/` na pasta do projeto (com um
+    `.gitignore`).
+  - Nunca sobrescreve: um arquivo com o mesmo nome vira `-2`.
+  - Limites: até 1 GB por arquivo e 10 por mensagem.
+- **O agente vê a foto,** como no `/imagem` do terminal: até ~15 MB de fotos por mensagem. Ele também recebe o caminho
+  de cada arquivo.
+- **Vídeo:** mandar um vídeo liga a ferramenta `video` nesta execução, porque ela é sob demanda. A lista de um aliado
+  não muda.
+- **Resultado:** a foto editada, o vídeo e a capa aparecem na resposta, com o botão **Baixar**. Recarregar a página traz
+  as mídias de volta, e a página de voz mostra o que o agente criou.
+- **Segurança:**
+  - O envio é a única rota que não é JSON. Exige a mesma chave e passa pelas mesmas travas de origem e de `Host`.
+  - Só aceita os tipos de mídia da lista, conferidos pelos primeiros bytes: uma página HTML chamada de foto não entra.
+  - O nome do arquivo é limpo, e a extensão vem do tipo. Uma pasta `midia-recebida` que seja um link é recusada.
+  - A página só vê o que o servidor registrou, conferido de novo na hora: nada de segredo do gemini-code nem de link no
+    lugar. A CSP ganhou só `blob:` para as prévias.
+
+**Testes (+25):** cada correção tem um teste que falha no código anterior:
+- HDR do "melhorar", foto P3, sem o lcms, GIF, volume e slideshow P3;
+- o teste de ponta a ponta no Chromium falha sem `blob:` na CSP;
+- e o envio inteiro: segurança, nome, sem sobrescrever, um por vez, envio cortado, prévias, histórico e a ferramenta
+  ligada na sessão.
+
+**Demonstração (honesta):** a foto e o vídeo de teste foram desenhados aqui, porque este ambiente não tem internet nem
+modelo de IA.
+- **De verdade:** a edição (ImageMagick e ffmpeg), o envio, a página e as ferramentas, no Chromium com a tela de um
+  Pixel 7.
+- **Roteiro:** o texto das respostas do agente.
+
+**Verificado:**
+- **Local:** 1082 testes no Node 22, no 20 e no fuso de São Paulo (1 pulado como root).
+- **CI do PR #7** (commit `9e9af10`, [execução](https://github.com/nejo27275-maker/Gemini-Code/actions/runs/41914679928)):
+  1082/1082 nos Node 20, 22 e 24, nenhum pulado.
+- **Checagens:** ESLint com 0 problemas, varredura de segredos limpa e autoteste das avaliações 7/7.
+
+**Limites:**
+- O navegador de um celular de verdade não foi testado.
+- Foto HEIC ainda não é aceita: no iPhone, use "Mais Compatível".
+- A prévia de um vídeo grande é carregada inteira na memória do navegador.
+
+## 0.50.1 — acabamento para vídeo de celular e a edição posta à prova
+
+Base: a 0.50.0 (no PR [#7](https://github.com/nejo27275-maker/Gemini-Code/pull/7)). Testei a edição nova com casos de
+verdade e com estresse. Um bug real apareceu, junto com dois acabamentos.
+
+**Corrigido:**
+- **Vídeo HDR saía com as cores erradas.** iPhone e celular top de linha gravam em HDR (HLG, 10 bits). Reproduzido com
+  um vídeo HLG: a saída era H.264 de 8 bits ainda marcada como HDR, e no Instagram/WhatsApp as cores ficam desbotadas.
+  - Agora `editar`, `juntar` e `capa` convertem para cores normais (SDR BT.709) com `zscale` + `tonemap`, para HLG e
+    para PQ (HDR10). Conferi olhando o quadro: as cores saíram vivas.
+  - O `info` mostra quando o vídeo é HDR.
+  - Num ffmpeg sem `zscale`, o resultado avisa que as cores podem ficar desbotadas.
+- **Espaço do fim da linha na edição tolerante.** Quando o `old_text` começa (ou termina) com o espaço do fim de uma
+  linha, a troca agora leva junto o espaço que o arquivo tem ali. Antes, sobrava um tab colado no texto novo. Fora do
+  trecho, nada mudava.
+- **A prévia do `/passo` mostra o diff de verdade,** com números de linha, no `edit_file` e no `write_file` (antes, as
+  primeiras linhas do conteúdo novo).
+  - Ela nunca lê um arquivo de segredo do gemini-code: nele, mostra só o texto pedido, como antes.
+
+**Procurado e não achado (medido):**
+- **Motor de edição:** 100.000 edições sorteadas (CRLF, espaços no fim, trechos parecidos, `replace_all`), 0 quebras das
+  invariantes:
+  - a troca exata é igual à troca ingênua;
+  - a troca tolerante não muda nada fora do trecho;
+  - a contagem do diff bate com a diferença de linhas.
+- **Escape do texto para o ImageMagick:** 20.000 textos sorteados (`%w`, `%[fx:...]`, `@/etc/hostname`, `\`, aspas,
+  emoji) saíram exatamente iguais no `-print` do próprio ImageMagick. A única diferença é o espaço do começo, que o
+  ImageMagick tira até sem escape, e os textos já chegam aparados.
+- **Escape dos filtros do ffmpeg:** a pasta temporária e os arquivos num caminho com `'`, `:`, `,`, `[`, `]`, `;`, `=`,
+  `%` e acentos. O texto e a legenda saíram certos (conferido olhando o quadro), e a pasta temporária ficou limpa.
+- **Vídeo de celular gravado em pé** (rotação 90° no arquivo): sai 360x640, em pé e sem distorcer (conferido olhando o
+  quadro).
+
+**Testes:**
+- +3 em `edicaoProfissional.test.js`:
+  - o espaço do fim de linha;
+  - um estresse determinístico de 3.000 edições;
+  - a prévia do `/passo`, inclusive o segredo.
+- +4 em `videoEdicao.test.js`:
+  - HDR no plano;
+  - HDR de verdade no editar/juntar/capa;
+  - celular em pé;
+  - caminhos estranhos.
+- +1 em `imagemEdicao.test.js`: 500 textos no `-print` de verdade.
+- Os de HDR, do espaço e da prévia falham no código anterior (conferido). Os do vídeo em pé e dos caminhos passam
+  também nele: medem o que já funcionava.
+
+**Achado ao rodar a suíte inteira:** o teste "publicar nas 8 redes AO MESMO TEMPO" falhou uma vez ("levou 642 ms").
+- **A causa:** ele provava o paralelismo pelo tempo de relógio (menos de 600 ms). Com os testes de vídeo novos, que usam
+  muito processador, rodando ao lado, a máquina fica carregada.
+- **Medido:**
+  - com a máquina folgada, 222 a 243 ms;
+  - com 8 processos gastando CPU, até 696 ms;
+  - em ambos os casos, as 7 redes ficaram com o pedido aberto ao mesmo tempo.
+- **Agora:** o teste prova o "ao mesmo tempo" pelo servidor falso: todas as redes do plano abertas juntas, o que é mais
+  forte que o "pelo menos 5" de antes e não depende da carga.
+- **Conferido:** com a publicação trocada de propósito por uma em sequência, o teste falha ("máx 1, 1198 ms").
+- **Com a máquina sobrecarregada:** passou 5 de 5 vezes.
+
+**Suíte inteira:** 1057 testes (1056 passando, 1 pulado como root) no Node 22, no Node 20 e no fuso de São Paulo.
+ESLint 0 problemas.
+
+**CI do PR #7 (commit 4b93c8a):** 1057/1057 nos Node 20, 22 e 24, nenhum pulado.
+
+## 0.50.0 — editar como um profissional: código, vídeo e foto
+
+Base: a 0.49.3 (no PR [#7](https://github.com/nejo27275-maker/Gemini-Code/pull/7)). Pedido: "faça ele editar feito um
+profissional" — código e também vídeo e foto (a pessoa escolheu "os dois"). Guia: `docs/EDICAO.md`.
+
+**Código** (as ferramentas de arquivo do agente):
+- **Não sobrescreve o que não leu.** O `write_file` recusa sobrescrever um arquivo que o agente não leu nesta sessão, ou
+  que mudou no disco depois da leitura (você mexeu no editor, um comando mexeu). Antes, apagava sem ver. Conteúdo igual
+  vira "Sem mudança", sem gravar.
+- **Mostra o que mudou.** `edit_file`, `edit_files` e `write_file` devolvem o diff com os números de linha, para o agente
+  conferir sem ler o arquivo de novo.
+- **Confere a sintaxe** de `.js`/`.mjs`/`.cjs`, `.json`, `.py` e `.sh` depois da edição, e avisa quando a edição quebrou
+  um arquivo que estava certo.
+  - Só analisa, o código não roda: `node --check`, `ast.parse` do Python e `bash -n`, tudo pela entrada padrão.
+  - O `python3` e o `bash` só vêm das pastas do sistema: um plantado no projeto não roda.
+  - Arquivo que já tinha erro não vira alarme.
+  - JSON com comentários (tsconfig) também não vira alarme; um package.json continua estrito.
+  - Desliga com `config set-conferir-sintaxe off`.
+- **Mantém o estilo do arquivo:**
+  - arquivo CRLF (Windows) com o trecho em LF agora edita, mantendo o CRLF (antes recusava);
+  - o `write_file` mantém o CRLF e o BOM de quem sobrescreve.
+- **Acha o trecho mesmo com espaço sobrando no fim da linha** (se for um lugar só). Quando não acha, mostra o trecho
+  mais parecido com os números de linha.
+- **O `edit_file` usa o mesmo núcleo do `edit_files`.** Com isso, ganhou o `replace_all` e passou a recusar arquivo
+  binário e Latin-1 (antes corrompia os acentos).
+- **As instruções do agente** pedem para editar como um profissional.
+
+**Vídeo** (`gemini-code video editar`, ffmpeg, sem IA):
+- **Uma receita numa passada só:**
+  - cortar e velocidade (o áudio fica no tom);
+  - estabilizar e melhorar;
+  - 8 cores prontas, mais brilho, contraste e saturação;
+  - o formato de cada rede (Reels/TikTok/Shorts em 9:16, feed em 4:5, quadrado, YouTube), com fundo desfocado,
+    preenchendo ou com barras;
+  - legenda `.srt`/`.vtt`/`.ass` queimada, com os tempos ajustados ao corte;
+  - textos na tela, quebrados em linhas, centralizados e empilhados quando aparecem juntos;
+  - fade;
+  - marca d'água;
+  - música de fundo que abaixa quando alguém fala;
+  - o áudio no volume das redes (-14 LUFS).
+- **Também:**
+  - `juntar` (tamanhos diferentes, clipe sem som e transição suave);
+  - `capa` (a melhor imagem do começo, ou a de um instante);
+  - `audio` (.mp3/.m4a);
+  - `info` (duração, tamanho, áudio, rotação do celular).
+- **No chat**, pela ferramenta `video` (sob demanda: `config ferramentas-extras video`).
+- **Segurança:** o texto vai por arquivo (`textfile`, `expansion=none`), nunca dentro do filtro, e os valores do filtro
+  passam pelos dois níveis de escape do ffmpeg. As travas de sempre continuam: entradas `file:` com
+  `-protocol_whitelist file`, saída sempre num arquivo novo (`-n`).
+- **O que a primeira versão mostrou:** olhei os quadros gerados antes de considerar pronto. Na primeira versão, o texto
+  "grande" ocupava a tela inteira, as linhas ficavam alinhadas à esquerda e o texto de baixo ficava em cima da legenda.
+  - Agora o tamanho é proporcional ao menor lado do vídeo, cada linha é centralizada e o texto de baixo sobe quando há
+    legenda.
+  - Dois textos na mesma posição ficavam um em cima do outro; agora empilham.
+
+**Foto** (`gemini-code imagem ajustar`, ImageMagick, sem IA):
+- **A receita:**
+  - formato de cada rede (feed 4:5, quadrado, stories 9:16, capa do YouTube), com fundo desfocado;
+  - melhorar automático e as mesmas cores do vídeo;
+  - brilho, contraste, saturação e nitidez;
+  - textos com contorno ou faixa;
+  - marca d'água (o texto daquele lado sobe para não ficar em cima dela);
+  - `leve` para o WhatsApp;
+  - lote (várias fotos de uma vez).
+- **Por padrão tira a localização e os dados da câmera (EXIF),** depois de endireitar a foto girada.
+- **No chat**, pela ferramenta `imagem` (ação "ajustar"), que não pergunta nada porque não gasta cota.
+- **Segurança:** o texto é escapado para o ImageMagick. Um `@` no começo leria um arquivo, e `%w`/`%[fx:...]` seriam
+  interpretados; isso foi conferido com o `-print` do próprio ImageMagick.
+
+**Medições:**
+- **Volume do vídeo editado:** -14,4 LUFS, medido com o `ebur128` do ffmpeg (o teste aceita -14 ± 2).
+- **Tempo da edição completa:** 9 s para um Reels de 3 s com todas as opções; 0,75 s para uma foto.
+
+**Testes:**
+- `edicaoProfissional.test.js` (novo, 18): 13 deles falham no código anterior (conferido). Os outros 5 testam os
+  módulos novos diretamente.
+- `videoEdicao.test.js` (novo, 15) e `imagemEdicao.test.js` (novo, 8): com ffmpeg e ImageMagick de verdade, que não
+  podem ser pulados no CI.
+  - Os quadros e a foto foram conferidos olhando a imagem gerada.
+  - A foto girada usa um EXIF de verdade, montado no teste: o `-orient` do ImageMagick 6 não grava isso num JPEG.
+- **Testes antigos atualizados para o comportamento novo:**
+  - o CRLF agora edita, em vez de recusar;
+  - os testes do `rewind` leem o arquivo antes de sobrescrever;
+  - as contagens de linha do `edit_files` agora ignoram o diff.
+- Suíte inteira: 1049 testes (1048 passando, 1 pulado como root) no Node 22, no Node 20 e no fuso de São Paulo. ESLint
+  0 problemas.
+- **CI do PR #7 (commit 8bc5cb2):** 1049/1049 nos Node 20, 22 e 24, nenhum pulado; ffmpeg e ImageMagick de verdade. O
+  passo dos testes levou de 55 a 61 s.
+
+## 0.49.3 — caça aos bugs: a pasta do usuário em todo lugar e o contraste do chat
+
+Base: a 0.49.2 (no PR [#7](https://github.com/nejo27275-maker/Gemini-Code/pull/7)). Nesta rodada, procurei bugs de
+verdade e medi o resultado.
+
+**Corrigido:**
+- **(segurança) Com `HOME` vazio, ainda sobravam lugares que confundiam a pasta do usuário com a pasta atual.** A 0.49.2
+  corrigiu a config e a sandbox. Agora todo o resto também usa `pastaDoUsuario()`:
+  - **`config add-pasta-gravavel`:** a trava que proíbe liberar a própria pasta do usuário (ou uma acima dela) comparava
+    com a pasta atual. Dava para liberar a pasta do usuário inteira, e aí o agente gravaria `~/.bashrc` sem perguntar.
+  - **`write_file`/`edit_file` com o projeto na pasta do usuário:** `~/.bashrc`, `~/.profile` e companhia contavam como
+    arquivos do projeto e eram gravados sem perguntar. Agora perguntam, como com o `HOME` normal.
+  - **`checkpoints`:** o checkpoint do projeto atual (o padrão) era recusado como "pasta pessoal inteira", e o da pasta
+    do usuário de verdade passava.
+  - **Outros lugares:** o `~` do `computador abrir`, a lista de apps do Linux, o cache do navegador, o `doctor` e o
+    `sandbox status`. Uma busca confirma que não sobrou nenhum `os.homedir()` solto.
+- **Contraste do chat no tema claro:** o azul dos links ficava em 4,26:1 sobre o fundo, abaixo do mínimo de leitura (WCAG
+  AA, 4,5:1). Agora é `#2563eb`: 4,82:1 no fundo e 5,17:1 nos cartões e no botão principal. A página de voz já passava em
+  tudo (o menor é 6,65:1).
+- **README:** começa pelo que o projeto é. O aviso do limite 429 desceu para antes das "Observações importantes", e o
+  MinhaIA veio para depois da lista. Os itens repetidos do modo site na lista viraram um só.
+
+**Procurado e não achado (medido):**
+- **Estresse dos comandos do terminal:** 10.248 execuções em 245 s, cada uma com uma pasta de usuário própria e o
+  provedor offline.
+  - **O que rodou:** os 57 comandos com argumentos estranhos (vazio, opção desconhecida, opção sem valor, `--`, texto de
+    5.000 caracteres, `$(id)`, acento e emoji, `-1`, `../../etc/passwd`) e 42 subcomandos comuns em cada um.
+  - **Resultado:** nenhum erro solto (pilha, TypeError), nenhum código de saída estranho e nenhum travamento.
+  - **Os 3 que passaram de 8 s** são `site`, `painel` e `web`, o servidor do modo site, que fica no ar de propósito.
+  - **O único caso marcado era alarme falso.** Em `sub list ../../etc/passwd`, o texto vira a tarefa do subagente, e a
+    palavra "TypeError" estava numa sugestão do assistente offline.
+- **Markdown seguro do modo site** (`comum.js`): 150.000 textos aleatórios, montados com pedaços de Markdown e de HTML
+  hostil, em 2,6 s (o mais lento levou 12 ms). Nenhum erro, nenhum elemento fora dos tipos conhecidos e nenhum link que
+  não seja http/https.
+- **Ctrl+C no modo voz do terminal** (`gemini-code live`): testado num pseudo-terminal de verdade, com o Termux:API falso
+  e um modelo falso.
+  - Funcionou durante a resposta, durante a fala e durante a escuta.
+  - Sai em menos de 50 ms, corta a conexão com o modelo e não deixa processo para trás.
+  - No `live`, Ctrl+C sai, como a tela avisa. Só o chat volta para o `você>`.
+- **Acessibilidade das duas páginas** (num Chromium de verdade, com permissão, código e link na tela):
+  - todos os elementos interativos têm nome (10 no chat, 12 na página de voz);
+  - as duas declaram `lang="pt-BR"`.
+- **Node 18:** o `package.json` promete Node >= 18, mas não há Node 18 nesta máquina e o download do nodejs.org foi
+  bloqueado (403). Uma busca no código por APIs mais novas que o Node 18 não achou nenhuma. **A suíte não rodou no
+  Node 18.**
+
+**Testes:**
+- `pastaDoUsuario.test.js` (novo, 3): com `HOME` vazio, valem a trava do `add-pasta-gravavel`, a pergunta antes de gravar
+  `~/.bashrc` e o checkpoint. O teste aponta a pasta do usuário para uma pasta temporária, então nada de verdade é tocado.
+  Os 3 falham no código anterior (conferido).
+- `site.test.js` (+1): contraste de todos os pares de texto e fundo do chat, nos temas claro e escuro. Falha com o azul
+  antigo.
+- Suíte inteira: 1008 testes (1007 passando, 1 pulado como root) no Node 22, no Node 20 e no fuso de São Paulo. ESLint 0
+  problemas.
+
+**Achado no CI deste PR** (commit ee0ae20; corrigido no commit seguinte):
+- **O que aconteceu:** o Node 24 passou, mas no Node 20 e no 22 o passo dos testes ficou parado até o limite de 15 min e
+  foi cancelado.
+- **A causa** é uma corrida entre arquivos de teste, latente desde a v0.48.0:
+  - O teste do print do navegador conta as pastas de perfil `gemini-code-navegador-*` no /tmp antes e depois de abrir o
+    navegador.
+  - O `site.test.js` também abre o navegador de verdade e roda em paralelo. Quando os dois coincidiam, a conta dava 2
+    em vez de 1.
+  - Esse teste era o único que não fechava o navegador ao falhar. O Chrome aberto segurava o arquivo de teste para sempre.
+  - O arquivo de teste novo mudou a ordem em que o `node --test` distribui os arquivos, e os dois passaram a coincidir.
+- **Reproduzido aqui** com um "intruso" criando perfis no /tmp: a mesma falha (`2 !== 1`), o teste pendurado e um Chrome
+  órfão.
+- **Agora:**
+  - o `navegador.test.js` usa uma pasta temporária só dele;
+  - o teste do print fecha o navegador mesmo quando falha.
+- **Conferido:**
+  - com o intruso, o teste passa;
+  - com uma falha forçada, o arquivo termina sozinho em 6 s, sem Chrome sobrando;
+  - `navegador.test.js` e `site.test.js` juntos: 5 rodadas, 34/34 em todas.
+- **CI do PR #7 (commit 2a7de2a):** 1008/1008 nos Node 20, 22 e 24, nenhum pulado. O passo dos testes levou de 39 a 42 s,
+  sem processo órfão na limpeza. ESLint e varredura de segredos limpos.
+
+## 0.49.2 — o "você>" à prova de dedo e a pasta do usuário sempre certa
+
+Base: a 0.49.1 (no PR [#7](https://github.com/nejo27275-maker/Gemini-Code/pull/7)). Três problemas reproduzidos num
+pseudo-terminal de verdade antes da correção:
+
+- **Ctrl+C com texto digitado no `você>` fechava o chat** e perdia a mensagem pela metade. Agora só apaga a linha, como
+  num terminal. Com a linha vazia, Ctrl+C sai como antes.
+- **Ctrl+D no `você>` com um servidor MCP rodando deixava o chat pendurado para sempre.** O fim da entrada só marcava
+  "fechado", e o servidor MCP mantinha o processo vivo. Agora sai pelo `encerrarComLimpeza`, que encerra os servidores
+  MCP. Com a entrada vindo de um pipe (`echo "pergunta" | gemini-code chat`), a mensagem continua sendo respondida antes
+  de sair, como antes (conferido).
+- **(segurança) Com `HOME` vazio, a `.gemini-code`, com a config e a chave da API, ia para a PASTA ATUAL.** Num projeto,
+  ela ficava pronta para entrar num commit. E a sandbox escondia `.ssh`, `.aws` etc. relativos à pasta atual, deixando os
+  de verdade visíveis.
+  - Agora `pastaDoUsuario()` (src/config.js) usa o `HOME` só quando ele é absoluto; senão, a pasta do usuário no sistema.
+  - Também está no `localServer.js` e nos padrões da sandbox.
+
+**CI:** a instalação do ImageMagick/ffmpeg travou duas vezes no runner, até o limite do job, antes de qualquer teste
+rodar. Os dois passos com `apt` ficaram assim:
+- sem perguntas e sem os pacotes "recomendados" (os testes só usam jpg, png, gif e mp4);
+- sem atualizar o man-db;
+- com prazo de rede e prazo por comando;
+- com uma nova tentativa;
+- com um limite no próprio passo. Se algo travar, o job cai rápido em vez de ficar pendurado.
+
+**Testes:**
+- `chatTerminal.test.js` (+1): Ctrl+C com texto, e Ctrl+D com um servidor MCP vivo, que precisa ser encerrado junto.
+- `emAndamento.test.js` (+1): com `HOME` vazio ou relativo, a config não vai para a pasta atual e a sandbox não esconde a
+  pasta errada.
+- Os dois falham no código anterior (conferido).
+- Achado ao rodar a suíte antes do commit: na primeira versão da correção do Ctrl+D, uma mensagem chegando por pipe
+  podia ser cortada. A colagem junta as linhas por 150 ms, e o fim da entrada chegava antes da resposta começar. Três
+  testes de ponta a ponta pegaram isso. Agora o `perguntarColando` avisa na hora que a primeira linha chegou.
+- Suíte inteira: 1004 testes (1003 passando, 1 pulado como root) no Node 20 e no 22, e no fuso de São Paulo. ESLint 0
+  problemas.
+- **CI do PR #7 (commit 456774a):** 1004/1004 nos Node 20, 22 e 24, nenhum pulado. Os passos com `apt` levaram de 8 a
+  27 s, sem travar.
+
+## 0.49.1 — Ctrl+C de verdade no chat do terminal
+
+Base: a 0.49.0 (mesmo branch, ainda sem PR).
+
+**O problema** (reproduzido num pseudo-terminal de verdade, com um modelo falso que escreve devagar): no `gemini-code chat`,
+Ctrl+C no meio de uma resposta **não parava nada**. A resposta seguia até o fim (com ferramentas, se houvesse), e o chat
+fechava sozinho depois, sem aviso. O Ctrl+C só fechava a leitura do teclado.
+
+**Agora:**
+- **Ctrl+C durante uma resposta:** para a resposta, como o "Parar" do modo site. O agente não chama o modelo de novo, a
+  conexão com o modelo é cortada e você volta para o `você>`.
+- **Ctrl+C numa pergunta de permissão:** vale "não", e a ação não roda.
+- **Ctrl+C com um comando de terminal rodando** (`run_shell`, `run_checks`): o comando é interrompido como num terminal
+  comum, com SIGINT nele e em tudo que ele abriu (o git, por exemplo, ainda limpa o próprio lock). Quem ignora leva
+  SIGKILL em 2 s. O modelo fica sabendo que você interrompeu e vê o que o comando tinha mostrado até ali. O `run_checks`
+  não começa a próxima verificação.
+- **Ctrl+C de novo enquanto ele para,** ou Ctrl+C no `você>`: sai, encerrando os servidores MCP como deve.
+- **Nenhum comando fica órfão:** ao sair, nenhum comando em primeiro plano fica rodando sozinho (`src/emAndamento.js`).
+- **O "Parar" do modo site** também interrompe o comando em andamento.
+- **Vale também para o `/ciencia`.** O aviso de abertura e o `/help` explicam o novo Ctrl+C.
+
+**Testes:**
+- `tests/chatTerminal.test.js` (3) abre o chat de verdade num pseudo-terminal (`script`, do util-linux) e confere:
+  - Ctrl+C no meio da resposta (com a conexão cortada);
+  - Ctrl+C numa permissão (o comando não roda e o modelo não é chamado de novo);
+  - Ctrl+C com um comando rodando, e duas vezes sem deixar órfão;
+  - Ctrl+C no `você>`.
+- Rodados contra o chat antigo, os 3 falham.
+- `tests/emAndamento.test.js` (7): SIGINT, SIGKILL para quem ignora (com os filhos), nada órfão ao sair, e o
+  `run_shell` (direto e na sandbox) e o `run_checks` interrompidos de verdade.
+- Um teste antigo trocava o `rl.question` por uma versão de 2 argumentos. Agora ela usa a assinatura real (com opções).
+- Suíte inteira: 1002 testes (1001 passando, 1 pulado como root) no Node 20 e no 22, e no fuso de São Paulo. ESLint 0
+  problemas.
+- **CI (commit bac4963):** 1002/1002 nos Node 20, 22 e 24, nenhum pulado, inclusive o chat no pseudo-terminal do GitHub.
+
+## 0.49.0 — versão chat do modo site
+
+Base: a 0.48.1 (mesmo branch, ainda sem PR).
+
+**Novo: a versão chat** (`gemini-code site --chat --abrir`, página `/chat`). É um chat comum, que não tem nada da esfera:
+- **Visual:** claro ou escuro conforme o sistema, e funciona no celular.
+- **Respostas formatadas:** títulos, listas (inclusive dentro de listas e de tarefas), tabelas com alinhamento,
+  citações e blocos de código com o botão **Copiar**.
+- **Links:** só `http`/`https`. Um link com texto próprio mostra o domínio de verdade ao lado, e uma imagem não carrega
+  nada de fora (vira link). HTML e scripts aparecem como texto.
+- **Resposta ao vivo:** aparece conforme chega, com as ferramentas usadas.
+- **Permissões:** aparecem **no meio da conversa** (Permitir / Não permitir / outra resposta). O que vem depois aparece
+  abaixo do pedido.
+- **Parar:** enquanto responde, o botão de enviar vira **Parar** (ou Esc).
+- **Nova conversa** e **conversa de volta ao recarregar** a página.
+- **Enter:** no PC, Enter envia e Shift+Enter quebra a linha; no celular, Enter quebra a linha.
+- **Mesmo servidor e mesma conversa da página de voz:** a segurança é a mesma (só `127.0.0.1`, chave por execução, Host e
+  Origin conferidos, CSP fechada).
+
+**Melhorias:**
+- `src/site/publico/comum.js`: as duas páginas usam o mesmo código para a chave, a API, os eventos e o **Markdown
+  seguro**. A análise é pura (testada sem navegador) e a montagem cria um elemento de cada vez, nunca HTML, sempre
+  com limites contra texto hostil.
+- **Página de voz:** a resposta agora vem formatada (antes os `**` e as crases apareciam crus), e o histórico da conversa
+  volta ao recarregar, mostrando com qual aliado você fala.
+- **`/api/historico`:** devolve só o que é para mostrar, sem resultado de ferramenta, pensamento do modelo ou contexto de
+  hook. Também diz se ainda está respondendo, para a página esperar terminar.
+- **Opções do `gemini-code site`:** `--porta`/`--aliado` sem valor não engolem mais a opção seguinte, e uma opção
+  desconhecida dá erro claro em vez de passar em silêncio. O terminal mostra os dois endereços (chat e voz).
+- **Tamanho das mensagens:** até 16.000 caracteres (antes 4.000), para caber um trecho de código colado. Ainda cabe nos
+  64 KB do pedido.
+- **Bug achado pelos testes novos:** uma lista com marcadores logo depois de uma lista numerada entrava nela (e ganhava
+  números). Agora começa outra lista.
+- **Corrida achada na revisão:** uma mensagem mandada antes de o histórico chegar (um clique rápido numa sugestão, por
+  exemplo) podia sumir da tela ou aparecer duas vezes. Agora o envio espera o histórico, o que leva milissegundos (é
+  local), nas duas páginas. Conferido com uma reprodução no Chromium que atrasa o histórico de propósito.
+
+**Testes:** `tests/site.test.js` tem 6 testes novos, um deles com o chat de ponta a ponta num Chromium de verdade. Também
+foram tirados prints da versão chat no tema claro, no escuro e no celular. A suíte inteira tem 992 testes (991 passando,
+1 pulado como root) no Node 20 e no 22, e também no fuso de São Paulo. ESLint 0 problemas. **CI (commit 3f4d1c9):**
+992/992 nos Node 20, 22 e 24, nenhum pulado, inclusive o chat de ponta a ponta no Chrome do GitHub. O job do Node 22
+travou uma vez instalando o ImageMagick (antes de qualquer teste) e passou ao rodar de novo.
+
+## 0.48.1 — "Parar" de verdade
+
+Base: a 0.48.0 (mesmo branch, ainda sem PR).
+
+**O problema:** no modo site, Esc e fechar a página só paravam a voz do navegador. O agente continuava rodando no
+computador: chamava o modelo e usava ferramentas sem ninguém olhando, e a próxima mensagem recebia "ainda estou
+respondendo".
+
+**Agora:**
+- **Botão "Parar":** enquanto o agente trabalha, o botão do microfone vira **Parar** (um quadrado). Ele e o **Esc**
+  param o agente de verdade, e a pergunta de permissão aberta conta como "não".
+- **Página fechada:** fechar ou recarregar a página no meio também para o agente.
+- **Espaço:** continua sendo só "falar", então não para nada sem querer.
+- **Onde o agente para (`runOnce({ signal })`):**
+  - não chama o modelo de novo;
+  - não roda a próxima ferramenta (ela recebe a resposta "não rodou", para o histórico continuar válido);
+  - não espera a resposta que está chegando.
+  - Uma ferramenta que **já** está rodando termina antes: cortar no meio deixaria um arquivo pela metade.
+  - A conversa guarda "(interrompido por você)", então o modelo sabe o que aconteceu.
+- **Provedores** (Gemini, compatível com OpenAI, llama.cpp, Ollama):
+  - cortam a conexão;
+  - depois do "Parar", **não** tentam de novo, **não** trocam para o outro lado no modo híbrido, **não** usam o
+    modelo reserva e **não** ligam o llama.cpp sozinhos. Nada de gastar cota depois de você mandar parar.
+- **Sem o "Parar":** nada muda. O terminal, as rotinas e o cowork funcionam como antes.
+
+**Testes novos:**
+- `tests/parar.test.js` (9): o loop do agente, os provedores e um servidor falso que vê a conexão cair.
+- `tests/site.test.js` (+5): `/api/parar`, página fechada, pergunta aberta, aliado e **o botão "Parar" clicado num
+  Chromium de verdade**.
+- Rodados contra o código antigo, falham ou travam esperando um "Parar" que nunca chegava.
+
+**Testes:** 986 (985 passando, 1 pulado como root) no Node 20 e no 22 — e a suíte inteira também no fuso de São Paulo.
+ESLint 0 problemas. Prints do botão "Parar" no PC e no celular, sem erro de JavaScript na página. **CI (commit 2cb9021):**
+986/986 nos Node 20, 22 e 24, nenhum pulado — inclusive o botão "Parar" clicado no Chrome do GitHub.
+
+## 0.48.0 — modo site: conversa por voz com a esfera
+
+Base: a 0.47.0 (mesmo branch, ainda sem PR).
+
+**Novo: `gemini-code site`** (`src/site/`, guia `docs/MODO_SITE.md`): uma página no navegador para conversar com o agente por voz ou texto.
+- **A esfera** (canvas, desenho próprio no estilo dos assistentes de filmes de ficção): núcleo brilhante com volume, anéis e arcos que giram, uma moldura com marcações, partículas em órbita e um **círculo de 120 risquinhos que reagem ao som**. Cada estado tem um visual:
+  - ouvindo: os risquinhos seguem o espectro do microfone;
+  - pensando: violeta, com uma onda girando;
+  - falando: pulsa a cada palavra;
+  - pedindo permissão: âmbar.
+- **Voz:** usa o próprio navegador (Chrome ou Edge, no PC ou no Android): reconhecimento de fala em português e leitura das respostas sem os blocos de código.
+- **Controles:**
+  - modo **contínuo**, para conversar sem as mãos;
+  - teclas espaço (falar) e Esc (parar);
+  - histórico da sessão e campo de texto.
+- **Resposta:** aparece aos poucos, enquanto chega, e a ferramenta em uso aparece na tela.
+- **Permissões das ferramentas na própria página:** "Sim", "Não" ou outra resposta. Sem resposta em 2 min, ou com a página fechada, conta como "não".
+- **`--aliado NOME`:** conversa com um aliado (ex.: `central`, para comandar computador, celular, sites e redes pela voz), com o alerta de emergência da saúde na tela.
+- **Segurança:**
+  - **Endereço:** só `127.0.0.1`.
+  - **Chave por execução:** vai no fragmento do endereço (não vai para log) e sai da barra de endereço.
+  - **Outros sites:** Host conferido (contra DNS rebinding), Origin conferida e nunca CORS.
+  - **Página:** CSP fechada (só os três arquivos do próprio servidor), sem moldura, e todo texto do modelo entra como texto.
+  - **Limites:** uma conversa por vez; mensagem de até 4.000 caracteres; corpo do pedido de até 64 KB.
+- **Por dentro:** `src/ui/prompt.js` ganhou `definirPerguntador`, por onde as confirmações vão para a página (uma rotina rodando continua com prioridade). `runOnce` ganhou `onFerramenta`.
+
+**Verificado:**
+- `tests/site.test.js` (8): segurança, conversa, confirmações, aliado e **a página num Chromium de verdade**, conversando com um agente falso.
+- Prints de todos os estados, no PC e no celular, com a voz simulada.
+
+**Limites:** este ambiente não tem microfone nem alto-falante, então a voz foi testada simulada no navegador. O reconhecimento real depende do Chrome/Edge e usa a internet.
+
+**Testes:** 972 (971 passando, 1 pulado como root) no Node 20 e no 22 — e a suíte inteira também no fuso de São Paulo (`TZ=America/Sao_Paulo`), além do UTC do CI. ESLint 0 problemas. **CI (commit c658277):** 972/972 nos Node 20, 22 e 24, nenhum pulado — inclusive a página no Chrome do GitHub.
+
+## 0.47.0 — redes sociais, celular e computador pela tela, sites e desafios
+
+Base: a 0.46.1 (mesmo branch, ainda sem PR).
+
+**Novo: redes sociais ao mesmo tempo, pelas APIs oficiais** (`src/redes.js`, guia `docs/REDES_SOCIAIS.md`):
+- **Redes:** Bluesky (senha de app; links e #hashtags clicáveis), Mastodon, Telegram (bot), Discord (webhook), Facebook (Página), Instagram (conta profissional) e Threads (Graph API), e X (OAuth 1.0a — a assinatura confere com o exemplo oficial da documentação).
+- **O que faz:** publica em várias de uma vez, em paralelo, com foto; lê menções no Bluesky, no Mastodon e no Telegram; agenda posts com a rotina nova `rede`.
+- **Sem conta:** WhatsApp, LinkedIn, Reddit, TikTok e outras abrem o app com o texto pronto.
+- **Credenciais:**
+  - ficam em `~/.gemini-code/redes/` (0600), pasta que as ferramentas de arquivo do agente não leem nem gravam;
+  - são perguntadas sem aparecer na tela e nunca como argumento do comando;
+  - nunca aparecem em resposta da ferramenta nem em mensagem de erro.
+- **Rede:** cada rede fala só com o endereço oficial e não segue redirecionamento.
+- **Confirmação:** publicar sempre mostra o post e pergunta. A ferramenta `redes` recusa em rotina e para convidado.
+- **Contra spam:** o mesmo texto na mesma rede só 1 vez por hora, no máximo 30 posts por rede em 24 h.
+- **O que não faz:** não entra com a sua senha, não imita o app e não segue, curte ou manda mensagem em massa.
+
+**Novo: celular e TV pela tela** (ferramenta `adb`):
+- **`ui`:** lista o que está na tela, com texto e posição de cada botão, pelo uiautomator. O conteúdo de campo de senha nunca aparece, e o texto da tela chega ao modelo marcado como conteúdo de terceiros.
+- **Tocar, deslizar, segurar:** `tocar` pelo texto do botão ou em x,y; `deslizar` por direção ou entre pontos; `segurar` é o toque longo. Perguntam antes; uma regra `adb(tocar *)` libera.
+- **Termux:** pode controlar o próprio celular via `localhost` (Depuração por Wi-Fi).
+
+**Novo: computador e notebook** (`src/computador.js`, ferramenta sob demanda `computador`, comando `gemini-code computador`):
+- **Ações:** print da tela, clicar, mover, digitar, teclas e combinações, rolar, janelas, focar e abrir (site, arquivo ou app instalado — nunca um comando).
+- **Sistemas:** Linux X11 e Wayland, macOS e Windows. Os comandos de cada sistema são montados por uma função pura, sempre por argumento.
+- **Achado na revisão:** no macOS, um texto começando com "-e" viraria outro comando AppleScript. Agora vai com prefixo.
+- **Confirmação:** cada ação pergunta, inclusive o print. Nunca roda em rotina nem para convidado.
+
+**Sites:**
+- **Ações novas no navegador:** `selecionar` (opção de lista) e `esperar` (um texto aparecer).
+- **Modo com janela:** `config set-navegador-visivel on`, para você entrar na conta ali.
+- **Verificação humana (CAPTCHA):** a leitura avisa em destaque, e o agente para e pede a você. Não tenta resolver nem contornar.
+
+**Novo: desafios** (`gemini-code desafio`, ferramenta `desafio`):
+- **Acompanhamento:** marcar o dia, sequência e melhor sequência, e um calendário.
+- **Lembrete diário:** a rotina `lembrete` ganhou data final e se encerra sozinha depois do último dia.
+- **Progresso nas redes:** postar o dia, perguntando antes.
+
+**Aliados:** presets `computador`, `desafios` e `central`. A `central` junta computador, celular/TV, sites, redes e desafios na mesma conversa, cada ação com a confirmação dela.
+
+**Corrigido:**
+- **`routines create --at`:** "04/11/2026" virava 11 de ABRIL. Agora usa o leitor de data rígido `src/datas.js`, o mesmo da saúde e dos posts agendados.
+- **Sandbox:** encerrar um comando podia deixar o bwrap de dentro órfão, vivo para sempre (visto uma vez numa suíte carregada). Agora cada execução tem uma marca única, e o encerrar varre os órfãos.
+- **Gravação de arquivos:** o arquivo temporário nascia 0644 e só depois virava 0600; agora nasce 0600. Valia para tokens e dados de saúde.
+- **Mensagens:** um alvo de adb que não era texto aparecia como "[object Object]".
+
+**Estresse:** 24.094 chamadas às ferramentas novas com argumentos ruins: 0 problemas no fim.
+
+**Testes:** 964 (963 passando, 1 pulado como root) no Node 20 e no 22, com a sandbox e o ImageMagick/ffmpeg de verdade. Novos: `redes` (17), `adbTela` (7), `computador` (9), `desafios` (7), `v047` (3), navegador (+2). ESLint 0 problemas. **CI (commit 7648c9a):** verde nos Node 20, 22 e 24 — 964/964 no Node 22, nenhum pulado.
+
+**NetoLang:** este repositório só tem o modelo em branco (`knowledge-exemplo/netolang.md`). Não há outra versão da linguagem aqui para atualizar.
+
+## 0.46.1 — polimento das novidades da 0.46.0
+
+Base: a 0.46.0 (mesmo branch, ainda sem PR).
+
+**Estresse:** 4.708 chamadas às ferramentas novas (saúde, câmera, vídeo, compras, imagem) com argumentos ruins e 1.039 comandos do terminal com argumentos vazios ou errados.
+- **Resultado:** nenhum erro solto e nada travou.
+- **O que apareceu:** dados ruins sendo gravados e mensagens que não batiam com o que acontecia.
+
+**Saúde:**
+- **Data da anotação (`quando`):** passava direto pelo `new Date()`, que adivinha:
+  - "02/11/2026" virava **11 de fevereiro** (formato americano);
+  - "2026-02-31" virava 3 de março;
+  - "-1" virava 2001, e o número -1 virava 31/12/1969.
+- **Agora:** só formatos claros: `2026-11-02 08:00`, `02/11/2026 08:00`, `02/11 8h`, `hoje 8h`, `ontem 20h30`. Testado em 8 fusos, inclusive UTC+14 e UTC-12.
+- **Valores:**
+  - sintoma, remédio ou nota com valor que não é texto virava "NaN" ou "[object Object]" no diário;
+  - "-1" de peso virava 1 kg (o sinal ficava de fora).
+  - Agora recusa.
+- **Período e listas:**
+  - `--dias -5` virava 1 dia (agora usa o padrão);
+  - "últimos 1 dias" agora é "último dia";
+  - `saude lista --tipo` com um tipo desconhecido agora avisa.
+- **Remédios e opções:**
+  - `remedio remover` com id inexistente mostrava o uso em vez de "não achei";
+  - `--dose` e `--nota` sem valor entravam como texto ("true", "tosse --nota").
+- **Permissão da página:** regravar a página de saúde por cima de um arquivo existente mantinha a permissão antiga. Agora ela fica só para o dono (0600).
+
+**Compras:**
+- **Validação:**
+  - o item "[object Object]" entrava na lista;
+  - a frequência "constructor" passava (é uma chave que todo objeto do JavaScript tem).
+- **Mensagens e opções:**
+  - `compras qtd ITEM` sem o número dizia "informe o item";
+  - `compras exportar --help` criava um arquivo chamado "--help": um `--opção` sem valor no fim virava nome.
+- **Exportar** agora recusa lista vazia, nome começando com "-" e caminho protegido, e não sobrescreve arquivo existente.
+
+**Vídeo com IA (Veo):** conferido com a documentação oficial (fluxo `predictLongRunning` → operação → `generatedSamples[0].video.uri`).
+- **Espera:** girava 10 min quando a consulta dava erro. Agora erro 4xx para na hora, e falha de rede ou 5xx tenta 5 vezes.
+- **Motivo:** uma operação com erro e o bloqueio pelo filtro de segurança do Google viravam "Resposta sem vídeo". Agora a mensagem diz o motivo.
+- **Erro em HTML:** uma página de erro em HTML virava SyntaxError.
+- **Pasta:** era criada mesmo quando não vinha vídeo.
+
+**Outros:**
+- **`criar servir`:**
+  - pasta com acento dava erro 500 no redirecionamento;
+  - "/%2Fimg" redirecionava para outro host (`//img/`);
+  - pasta inexistente dava um ENOENT cru.
+- **`imagem melhorar`:**
+  - `--modo xyz` ia para a IA;
+  - no modo auto sem ImageMagick, a IA rodava sem a trava de convidado.
+- **Ferramenta `video`:**
+  - as entradas agora têm a mesma trava de convidado da `imagem`;
+  - `saida` que não é texto vira erro claro.
+- **`camera vigiar`:**
+  - com `--intervalo 0` dizia "a cada 0 s" e usava 30;
+  - sem câmera, não sobra mais pasta vazia.
+- **Uso:**
+  - `tv xyz` procurava o adb antes de mostrar o uso;
+  - mostrar o uso por falta de argumento agora sai com código 1 em imagem, vídeo, câmera, criar e tv.
+
+**Mais rápido:** o terminal só carrega o agente (ferramentas, provedores, navegador) quando o comando usa. `--version`, `saude`, `compras` e `config` caíram de ~77 ms para ~50 ms aqui (de 78 para 31 módulos); no celular a diferença é maior.
+
+**Node 18:** nenhuma API exclusiva do Node 20+ no código (busca e análise com a gramática ES2022).
+
+**Testes:** 919 (918 passando, 1 pulado por rodar como root). Novos: `tests/polimento0461.test.js` (13). **CI:** verde nos Node 20, 22 e 24 (919/919 no Node 22).
+
+## 0.46.0 — saúde, compras do mês, imagem, vídeo, câmera, TV e criar site/app
+
+Base: o branch da 0.45.1 (ainda sem PR).
+
+**Novo: assistente de saúde** (`src/saude.js`, guia `docs/SAUDE.md`). Não é médico: não diagnostica nem receita.
+- **Diário:** pressão ("13 por 8" vira 130/80), glicemia (jejum/depois de comer), peso (com IMC), temperatura, saturação, batimentos, sintomas e remédios tomados.
+- **Faixas de referência:** cada anotação é comparada com faixas para adultos (SBC 2020, SBD, OMS), testadas nos limites.
+- **Triagem de emergência por regras fixas, antes da IA:** dor no peito, sinais de AVC, falta de ar, desmaio, convulsão, sangramento, suicídio (CVV 188), intoxicação (0800 722 6001)... O aviso aparece na hora, e o modelo é instruído a começar por ele.
+- **Remédios:** cada horário vira uma rotina nova do tipo **lembrete**.
+- **Página para a consulta:** com gráficos e sem nada carregado da internet.
+- **Aliado `saude`:** é o único que lê o diário.
+- **Dados protegidos:** os dados ficam numa pasta que as ferramentas de arquivo do agente não leem nem gravam (`SECRET_DIRS`, novo).
+
+**Novo: rotina "lembrete"** — só uma notificação no horário (`routines create --lembrete "Pagar a luz" --cron ...`), sem IA.
+
+**Novo: compras do mês + iFood** (`src/compras.js`).
+- **Lista:** separada por seção do mercado (acento não atrapalha: "maca" acha "maçã"), com frequência mensal/quinzenal/semanal, preços e orçamento.
+- **`compras ifood`:** copia a lista e abre o iFood. **O pedido e o pagamento são feitos no app:** o iFood não tem uma forma oficial para pedidos de fora, e o gemini-code não paga nem guarda senha ou cartão.
+
+**Novo: imagem** (`src/imagem.js`, ferramenta `imagem` no chat).
+- **Gerar e editar com IA:** o modelo de imagem do Gemini agora recebe a foto de entrada.
+- **Melhorar:** sem IA pelo ImageMagick (nitidez, contraste, cor, ruído; `--ampliar` até 4x) ou com IA.
+- **Descrever:** responde perguntas sobre uma imagem do disco (ex.: um print de erro).
+- **Confirmação:** gerar com IA pergunta antes (cota).
+- **Saída:** sempre um arquivo novo.
+
+**Novo: vídeo e câmera** (`src/video.js`, `src/camera.js`).
+- **Vídeo:**
+  - melhorar (menos ruído, nitidez, cor, estabilizar) e slideshow de fotos com música, pelo ffmpeg no aparelho;
+  - gerar com IA (Veo).
+- **Câmera:**
+  - foto pelo Termux:API ou webcam;
+  - analisar (foto + IA);
+  - **vigiar**: câmera de segurança que compara as fotos sem IA e avisa por notificação.
+- **No chat:** as ferramentas `camera` (pergunta **toda** vez) e `video` ficam num aliado com o preset `midia`.
+- **Corrigido:**
+  - `media video` gravava sempre `video.mp4` (o segundo vídeo apagava o primeiro);
+  - só aceitava o vídeo dentro da resposta; agora também baixa pelo endereço da API — a chave só vai para o endereço do Google.
+
+**Novo: melhorador de TV** (`gemini-code tv diagnostico|otimizar|desfazer`, ações `diagnostico`/`otimizar` da ferramenta adb).
+- **Diagnóstico (só lê):** memória, armazenamento, animações e os apps que mais pesam.
+- **Otimizar (pergunta a cada passo, sempre):** animações 0,5x, limpar cache dos apps, fechar apps em segundo plano.
+- **Nunca desinstala nada.**
+
+**Novo: criar site e app** (`gemini-code criar site|app NOME`, skill `criar-site-e-app`).
+- **Site:** responsivo e acessível, com modo escuro.
+- **App (PWA):** instala no celular e funciona offline; vem com uma lista que salva no aparelho.
+- **`criar servir`:** servidor só em 127.0.0.1, sem sair da pasta (`..`, `%2e%2e`, link), sem arquivos com ponto; pedido malformado recebe 400.
+- **Teste no Chromium:** o service worker registra, e um texto `<img onerror>` digitado no app não executa.
+
+**Ferramentas sob demanda:** `saude_*`, `camera`, `video` e `compras` só entram quando um aliado as usa (presets `saude`, `midia`, `compras`) ou com `config ferramentas-extras`. O chat comum não paga tokens por elas nem vê dados de saúde.
+
+**Corrigido: skills com descrição em bloco YAML** (`description: >`) apareciam só como ">" — a `engenharia-agente`, que vem no projeto, chegava assim ao agente.
+
+Testes: 906 no Node 20.20 e 22.22, com o bubblewrap real (905 passando, 1 pulado por rodar como root). Novos: `saude` (9), `lembrete` (3), `imagem` (6), `cameraVideo` (6), `tvOtimizar` (5), `criadorCompras` (6). ImageMagick e ffmpeg rodaram de verdade nos testes; as páginas (saúde, site, app) foram abertas num Chromium de verdade. ESLint 10.1.0: 0 problemas.
+
+**CI:**
+- **1ª rodada:** 906 testes, 903 passando, nos Node 20, 22 e 24. Os 3 pulados eram os testes de mídia, porque a máquina do GitHub não tem ImageMagick nem ffmpeg.
+- **Mudança:** agora o CI instala os dois e define `GEMINI_CODE_EXIGIR_MIDIA=1`, que faz esses testes falharem em vez de pular.
+- **2ª rodada (commit 0e76c7f):** 906/906 nos Node 20, 22 e 24, nenhum pulado; ESLint 0 problemas no Node 22.
+
+**Limites:**
+- Nada com IA de verdade foi testado aqui, porque este ambiente não tem chave nem rede para o Google: gerar/editar imagem, descrever, Veo e analisar foto.
+- A câmera foi testada com câmera simulada (não há webcam aqui); a TV, com o adb falso.
+- As faixas de saúde são para adultos.
+
+## 0.45.1 — caça aos bugs: todas as ferramentas revisadas
+
+Base: o branch da 0.45.0 (ainda sem PR). Cada ferramenta foi chamada com argumentos ruins (faltando, nulos, do tipo errado, gigantes, com byte nulo — 1.248 chamadas) e cada comando do terminal com argumentos vazios e errados (672); depois, revisão do código de cada uma. O que apareceu:
+
+**Corrigido (segurança): um pedido malformado derrubava o serviço de rotinas.** `GET http://[ HTTP/1.1`, sem token, fazia o `new URL` lançar dentro do servidor e o processo inteiro caía (reproduzido). Agora responde 400 e segue no ar.
+
+**Corrigido: um servidor MCP podia derrubar o chat.** O nome das ferramentas MCP (`mcp__servidor__ferramenta`) ia direto para a API, que exige só letras, números, `_` e `-`, até 64 caracteres — e o MCP permite ponto e até 128. Um servidor `blender.local` ou um nome comprido fazia a API recusar o pedido inteiro. Agora o nome exposto segue a regra (sem colisão) e a chamada volta ao servidor e à ferramenta certos. E o esquema dos argumentos, que os servidores mandam em JSON Schema completo (`additionalProperties`, `$ref`, `const`, `"type": ["string","null"]`...), é traduzido para o subconjunto que o Gemini aceita (`src/schemaGemini.js`); ferramenta sem argumentos não manda mais o objeto vazio que a API recusa. Os provedores compatíveis com OpenAI seguem recebendo o original.
+
+**Corrigido: `browser` declarava os tipos em maiúsculas** (`STRING`, `INTEGER`): valia no Gemini, mas não é JSON Schema para o llama.cpp/OpenAI.
+
+**`search_files`:**
+- `path` pode ser um arquivo (antes dizia "nenhuma ocorrência" sem abrir);
+- linhas `\r\n` (Windows) quebravam a âncora `$`;
+- `file_glob` aceita glob (`*.js`, `src/**/*.ts`) — o que o modelo manda; antes era só sufixo e `*.js` nunca casava;
+- respeita os `.gitignore`;
+- **regex do modelo roda numa thread com prazo** — `(a+)+$` numa linha comprida travava o processo inteiro (e o cowork junto);
+- linha longa mostra o trecho em volta da ocorrência.
+
+**`run_checks` segue a regra da sandbox** (roda scripts do projeto, que o modelo pode ter editado): só o que você aprova na hora roda fora; o resto, na sandbox. Convidado do cowork: só na sandbox, ou confirmando a cada vez. O prazo agora é o maior entre 2 min e o `shellTimeoutMs` (suíte grande era morta no meio). **Corrigido:** comando com `cwd` no `/tmp` fora do projeto falhava na sandbox ("Can't chdir"): a pasta aparece lá dentro, só leitura.
+
+**`web_fetch` respeita as regras "permitir"** (`config permitir "web_fetch(https://docs.python.org/*)"` não mudava nada; agora dispensa a pergunta, a cada redirecionamento).
+
+**Argumentos das ferramentas:**
+- vazios, nulos ou em lista viravam `TypeError` cru; agora a ferramenta responde o que falta;
+- caminho com byte nulo é recusado;
+- falha do sistema ao gravar (sem permissão, disco cheio, nome comprido, destino que é pasta) vira "Erro: não deu para gravar X: motivo";
+- **modelo local** (llama.cpp, Ollama, OpenAI-compatível): JSON quebrado nos argumentos virava `{}` em silêncio e o modelo não entendia o erro; agora vírgula sobrando e cerca ` ```json ` são consertadas, e o resto vira "argumentos em JSON inválido" com o que chegou.
+
+**`read_skill`** aceita a pasta da skill e o nome dela (antes: `EISDIR` cru), tem limite de tamanho, e um `SKILL.md` ilegível não derruba a lista (nem o prompt do sistema).
+
+**Perfis e subagentes só leitura** (`explore`, `plan`, `review`, explorador...) ganharam o `glob_files`, que também só lê; ele ganhou a trava de convidado.
+
+Testes: 871 no Node 20.20 e no 22.22, com a sandbox real (870 passando, 1 pulado por rodar como root). Novos: `tests/buscaV0451.test.js` (6), `tests/schemaGemini.test.js` (5), `tests/skillsV0451.test.js` (4), `tests/argumentos.test.js` (3) e mais em `sandbox`, `areaTrabalho`, `routineApi` e `webTools`. ESLint 10.1.0: 0 problemas. No CI (Node 20, 22 e 24, com bubblewrap, usuário comum): 871 de 871, com os testes de fuga reais rodando.
+
+**Limites:** a tradução do esquema para o Gemini foi testada contra esquemas no formato do zod e do pydantic, não contra a API do Google de verdade (este ambiente não tem chave).
+
+## 0.45.0 — sandbox do sistema para o shell
+
+Base: o branch da 0.44.1 (ainda sem PR). Até aqui a única barreira do `run_shell` era a confirmação. Sem ela — `confirmShell` desligado, regra `permitir`, rotina agendada — o comando rodava com todos os poderes do usuário: um texto de página da web que convencesse o modelo podia ler `~/.ssh`, mandar a chave para fora ou deixar algo no `~/.bashrc`.
+
+**Novo: sandbox do `run_shell`** (`src/sandbox.js`, Linux com bubblewrap; guia em `docs/SANDBOX.md`). Regra: **se o gemini-code não te perguntou, o comando roda isolado.**
+
+- Disco **só leitura** menos a pasta do projeto (e as liberadas com `config add-pasta-gravavel`); `/tmp` e `/run` vazios e descartáveis.
+- `~/.gemini-code`, os arquivos protegidos e as credenciais comuns (`~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.docker`, `~/.config/gh`, `~/.netrc`, perfis de navegador...) **invisíveis**; variáveis com cara de segredo não passam.
+- **Sem rede** (nem a própria máquina), a não ser com `config set-sandbox-rede on`.
+- O **`.git` inteiro só leitura**: um hook, o `core.fsmonitor` ou um `.git/commondir` plantado faria o próximo `git` do usuário rodar um comando fora da sandbox (testado: renomear o `.git` também falha).
+- Filtro **seccomp** (BPF montado no próprio JS) que nega socket `AF_UNIX`, io_uring e o chaveiro do kernel: com o disco só leitura ainda dava para **conectar** num socket existente (Docker, D-Bus, X11, ssh-agent) e sair por ele.
+- Sem capabilities, sem criar user namespace dentro, processos isolados e nova sessão de terminal.
+- Modos: `config set-sandbox auto` (padrão: o que roda sem aprovação na hora), `sempre` (até o que você aprova; sem sandbox, recusa) e `off`.
+- Se o comando precisar sair dela, o agente pede `fora_da_sandbox` — e isso **sempre** pergunta, mesmo com `confirmShell` desligado.
+- **Rotinas**: o `run_shell` (se estiver na lista de ferramentas) agora roda na sandbox em vez de ser recusado.
+- `gemini-code sandbox` mostra se funciona aqui e o que libera/esconde; `gemini-code sandbox testar "cmd"` roda um comando lá dentro; o `doctor` ganhou `sandbox`.
+- O `bwrap` só é usado se estiver numa pasta do sistema ou do `PATH` fora das pastas que o agente grava — senão um `bwrap` falso plantado pelo modelo seria executado.
+
+**Novo: gravar fora do projeto pergunta.** `write_file`, `edit_file` e `edit_files` perguntam antes de gravar fora da pasta do projeto, da temporária e das pastas liberadas (uma pergunta por edição; numa rotina, recusa). Aberto na HOME, os arquivos "ponto" (`~/.bashrc`, `~/.config/...`) contam como fora. Desliga com `config set-confirmar-fora off`. E o modelo **não grava nada dentro do `.git`**, nem um arquivo `.git` (`gitdir:`).
+
+**Corrigido (segurança): o autoGit rodava comando plantado.** As fotos automáticas do projeto rodam `git add -A` a cada turno, fora de qualquer sandbox, com a config do repositório — e o modelo podia gravar `.git/config` com `write_file` sem perguntar. Um `core.fsmonitor` ali virava um comando rodando a cada turno (reproduzido antes da correção). Agora o autoGit roda o git com `core.fsmonitor`, `core.hooksPath` e `commit.gpgSign` anulados e não tira foto de repositório cuja config define um filtro (`filter.*.clean`); filtro só na config global (git-lfs) continua valendo.
+
+**Também:** encerrar um comando de fundo logo que começou deixava o processo de dentro da sandbox órfão (o bwrap só liga o "morrer junto" no fim da montagem); agora a árvore inteira é derrubada. `shell_status` com `encerrar` não diz mais "rodando" para um comando que acabou de morrer. O navegador do agente tem 60 s (antes 20 s, menos que os 30 s de qualquer outro comando) para abrir pela primeira vez: no CI, a partida a frio do Chrome no Node 20 passou dos 20 s.
+
+Testes: 846 no Node 20.20 e no 22.22 com o `ws` e um bwrap compilado aqui (845 passando, 1 pulado por rodar como root); sem bwrap, os 6 testes com a sandbox de verdade pulam (e no CI são obrigatórios: `GEMINI_CODE_EXIGIR_SANDBOX=1`). Os testes de sandbox passam também rodando como usuário comum (o caminho do user namespace, como no CI). Novos: `tests/sandbox.test.js` (24: o filtro seccomp conferido num emulador de BPF; a decisão do `run_shell` com um bwrap falso; e fugas reais — gravar fora, ler segredos, rede, socket do sistema, `.git`, timeout e encerrar sem deixar órfão), `tests/areaTrabalho.test.js` (7) e mais 2 em `tests/snapshots.test.js`. ESLint 10.1.0: 0 problemas. No CI (Node 20, 22 e 24, Ubuntu 24.04 com bubblewrap 0.9.0, usuário comum): 846 de 846, com os 6 testes de fuga reais rodando.
+
+**Limites:** só Linux (x86_64 e arm64). No Android/Termux o sistema não deixa criar os namespaces; no macOS ainda não há suporte; no Windows não existe — nesses casos o modo `auto` funciona como antes (com a confirmação). Dentro da sandbox o `.git` é só leitura, então commit e checkout pedem para sair dela. Com a rede ligada, um comando ainda pode mandar para fora o que consegue ler.
+
+## 0.44.1 — a TV no dia a dia: rotinas sem IA, vídeo direto na TV e o aliado da TV
+
+Base: o branch da 0.44.0 (ainda sem PR). O controle da TV por adb passa a conversar com o resto: rotinas, navegador e Aliados.
+
+**Novo: rotinas de TV sem IA** — `gemini-code routines create --name "Dormir" --tv "tecla dormir" --cron '0 23 * * *' --alvo 192.168.0.50`. Um `--tv` por passo (`tecla`, `abrir`, `fechar`, `link`, `digitar`, `esperar N`, `estado`, `info`). Não gasta IA nem precisa de internet.
+
+- **Só o que não destrói nada**: reiniciar, desinstalar, limpar dados, instalar, configurações e o shell livre são recusados na criação **e de novo na hora de rodar** (se alguém editar o arquivo à mão).
+- Os passos rodam sem perguntar — quem criou a rotina os aprovou ali (o modelo não grava o `routines.json`). As regras `negar` continuam valendo.
+- TV por Wi-Fi: reconecta antes de cada execução (a conexão do adb cai quando a TV dorme), com a porta padrão quando só o IP foi dado.
+- **Nunca repete sozinha**: repetir um `power` desfaria o primeiro. Para por no primeiro passo que falhar e conta qual (`routines logs`); `--notificar` avisa.
+
+**Novo: `abrir_link`** (`gemini-code adb link URL [APP]`): abre um endereço no app certo do aparelho (um vídeo do YouTube abre no YouTube da TV). Com o navegador da 0.44.0, o agente acha o vídeo e manda tocar na TV. Só `http`/`https`; o endereço chega literal ao shell da TV (testado com `';reboot;'` dentro do link); pede confirmação como as outras ações que mudam o aparelho.
+
+**Teclas `dormir`/`acordar`** (e `desligar`/`ligar`): desligam e ligam a tela **sem alternar**. O `power` alterna — numa rotina das 23h, se a TV já estivesse desligada, ele a **ligaria**. **Corrigido:** a tecla `liga` era o `power` (alternava); agora acorda.
+
+**Novo: aliado da TV** — preset `tv` (adb + navegador + `web_fetch`): `gemini-code aliados criar tv --ferramentas tv --instrucoes "..."`.
+
+**Corrigido: regras do adb nunca batiam como a documentação mostrava.** O `docs/TV_ADB.md` ensinava `config permitir "adb"` (o comando recusa: "permitir" exige um padrão) e o código citava `adb(tecla*)`, que nunca batia — a regra era comparada com o JSON `{"acao":"tecla",...}`. Agora a regra olha também o comando como se escreve (`tecla ok`, `abrir_app com.netflix.ninja`): `config permitir "adb(tecla *)"` libera as teclas e só elas (`digitar` com o texto "tecla x" continua perguntando). Regras antigas, que batiam no JSON, continuam valendo. Ações sensíveis continuam perguntando mesmo com "permitir".
+
+**Também:** a leitura dos comandos de texto (`gemini-code adb ...` e `--tv`) mora num lugar só (`argsDoComando`); no navegador, se a checagem de um site der erro, a navegação é barrada (antes ficaria pendurada) e um evento mal tratado não derruba mais o processo; o adb falso dos testes virou `tests/fixtures/adbFalso.js`, usado pelos testes da ferramenta e das rotinas.
+
+Testes: 813 (812 passando, 1 pulado por rodar como root) no Node 20.20 e no 22.22, com o `ws`; no CI (Node 20, 22 e 24), 813 de 813. Novos: `tests/rotinaTv.test.js` (5, inclusive o terminal de ponta a ponta com o adb falso: o "aparelho" recebe `KEYCODE_SLEEP` e o `am start` do link) e mais 5 em `tests/adbTools.test.js` e 1 em `tests/navegador.test.js`. ESLint 10.1.0: 0 problemas.
+
+**Limites:** não testado numa TV de verdade; `KEYCODE_SLEEP`/`WAKEUP` existem desde o Android 4.4W, mas cada fabricante trata a tela/standby do seu jeito. A rotina só roda com `routines service` ativo (no PC ou no Termux).
+
+## 0.44.0 — navegador de verdade e rotinas que rodam o agente
+
+Base: `main` depois da mesclagem do PR #6. Fecha as duas lacunas apontadas na comparação com Claude Code, Codex, Antigravity e Hermes: o agente só **lia** páginas (`web_fetch`) e as rotinas só **verificavam um site** (`http-check`).
+
+**Novo: ferramenta `browser` — um navegador de verdade para o agente** (`src/navegador.js`, `src/tools/browserTools.js`). Chrome/Chromium/Edge sem janela: abre um site, lê a página já montada (inclusive as feitas em JavaScript, que o `web_fetch` não vê), lista os elementos numerados, clica, digita (campo, lista de opções, Enter para enviar), rola, volta e tira print. No chat basta pedir ("abre o site X e veja o preço", "testa o login do meu app em localhost:3000"). Segurança:
+
+- **Sem porta de depuração**: o navegador é comandado por um pipe (`--remote-debugging-pipe`), então nenhuma página fala com ele por trás do agente.
+- **Rede local bloqueada na hora de conectar**: todo o tráfego do navegador (até o de `127.0.0.1`) passa por um proxy do gemini-code que resolve o nome e confere o endereço no momento da conexão, com a mesma regra do `web_fetch` (sem a brecha de DNS rebinding). `config set-navegador-local on` libera só o loopback, para testar o próprio app.
+- **Aprovação por site**: abrir um site novo pergunta (mesmas regras do `web_fetch`: `confirmWeb`, `webDominiosPermitidos`, `negar`/`permitir` com o nome `browser`). Dentro do site aprovado o agente age sem perguntar a cada clique; ir para **outro** site por clique, formulário, redirecionamento ou script é barrado até ele pedir com "abrir". Abas novas abertas pela página são fechadas na hora.
+- **A página não engana a leitura**: os scripts do gemini-code rodam num mundo isolado (como os de uma extensão). Achado na revisão antes de fechar a versão: com eles no contexto da página, um site trocava `Element.prototype.getAttribute` e o agente lia "Cancelar pagamento" no botão que confirmava — agora há teste para isso.
+- **Perfil temporário**: sem as contas e os cookies do usuário; apagado ao fechar (e na saída do programa). Downloads recusados; alertas da página dispensados (e contados ao agente); só `http`/`https`; o modelo nunca manda JavaScript — só rodam os scripts fixos do gemini-code; valor de campo de senha não vai para o modelo.
+- `gemini-code doctor` mostra o navegador encontrado; `config set-navegador-path` aponta um. A busca prefere o Google Chrome (traz o auxiliar da sandbox; um Chromium baixado à parte pode não conseguir usá-la no Ubuntu 23.10+). Se o navegador não sobe, a mensagem mostra a linha de erro dele e, sendo a sandbox, o que fazer — ela nunca é desligada sozinha (achado no CI: o Chromium avulso do runner travava e a mensagem só mostrava registradores).
+
+**Novo: rotinas com agente** (`gemini-code routines create --prompt "TAREFA" ... --cron '0 8 * * 1-5'`). O agente faz a tarefa sozinho no horário marcado:
+
+- **Ninguém está olhando**: enquanto a rotina roda, toda confirmação vira "não" na hora, sem ler o terminal (mesmo com o serviço aberto num terminal de verdade). Conferido de ponta a ponta: o modelo pede `run_shell`, a pergunta é respondida "não" e o comando não roda.
+- Ferramentas **só de leitura** por padrão (`read_file`, `list_dir`, `search_files`, `glob_files`); `--ferramentas a,b` escolhe outras (ou `nenhuma`), `--passos N` limita os passos. Não repete sozinho em caso de falha (cada tentativa gasta tokens e refaria ações).
+- A resposta fica no histórico (`routines logs`) e num artefato (`artifacts show ID`); `--notificar` avisa pelo `termux-notification` (Android), `notify-send` (Linux) ou notificação do macOS — o texto vai sempre como argumento, nunca dentro de um comando.
+- **`routines.json` entrou em `PROTECTED_PATHS`**: se o modelo pudesse gravá-lo, agendaria a si mesmo para depois, sem ninguém olhando.
+- A API de rotinas (localhost, com token) aceita a mesma ação.
+
+**Também:** `artifacts show`/`list` e `routines logs` passam o texto pelo filtro do terminal (agora guardam respostas do modelo); o print do adb e o do navegador usam o mesmo auxiliar (`destinoPngNovo`: só `.png` novo, fora das áreas protegidas); em modelo local com contexto curto, `browser` é a primeira ferramenta a sair quando não cabem todas.
+
+Testes: 803 (802 passando, 1 pulado por rodar como root) no Node 20.20 e no 22.22, com o `ws`; no CI (Node 20, 22 e 24), 803 de 803, com os testes de navegador real rodando no Google Chrome do Ubuntu do GitHub. Novos: `tests/navegador.test.js` (11 — proxy bloqueando IP local, nome que resolve para ele, IPv6 e metadados de nuvem; e, com um **Chromium de verdade** contra servidores locais, página em JavaScript, clique, redirecionamento, formulário, lista, alerta, aba nova, outro site barrado, rede local barrada mesmo com o "sim", regra `negar`, página tentando falsificar a leitura, print e perfil apagado; a parte com navegador pula se não houver um) e `tests/rotinaAgente.test.js` (9). ESLint 10.1.0: 0 problemas.
+
+**Limites:** não testado contra sites reais da internet (este ambiente não tem saída direta), nem no Termux, nem com um modelo de verdade decidindo os cliques — os testes simulam o modelo. O navegador ignora `HTTPS_PROXY` (rede que exige proxy de saída não funciona). Aprovar um site confia nele: o JavaScript da página recebe o que o agente digitar ali. As rotinas rodam enquanto `routines service` estiver ativo (é local, não nuvem); notificação no macOS não foi testada.
+
 ## 0.43.4 — resposta longa não cai mais no tempo limite, e CI no Node 24
 
 Base: `main` depois da mesclagem do PR #5.

@@ -4,10 +4,9 @@
 
 const path = require('path');
 const crypto = require('crypto');
-const { HOME_DIR } = require('./config');
+const { HOME_DIR, ROUTINES_PATH } = require('./config');
 const { lerJson, escreverJson } = require('./jsonStore');
 
-const ROUTINES_PATH = path.join(HOME_DIR, 'routines.json');
 const EXECUTIONS_PATH = path.join(HOME_DIR, 'routine-executions.json');
 const DEFAULT_TIMEZONE = 'America/Recife';
 const STATUSES = Object.freeze({
@@ -127,10 +126,132 @@ function parseDuration(value) {
   return number * multiplier;
 }
 
+// v0.44.0: rotina "agente" — o agente faz uma tarefa sozinho no horário marcado. Ninguém está olhando: toda
+// confirmação vira "não" (src/ui/prompt.js), então o que roda sem perguntar é só o que já roda sem perguntar no
+// chat (leitura, ou o que o usuário liberou com regras "permitir"). Por padrão, só ferramentas de leitura.
+const FERRAMENTAS_ROTINA_PADRAO = Object.freeze(['read_file', 'list_dir', 'search_files', 'glob_files']);
+
+function validarAcaoAgente(action) {
+  const { semControlesInvisiveis } = require('./ui/textoSeguro');
+  const prompt = typeof action.prompt === 'string' ? semControlesInvisiveis(action.prompt).trim() : '';
+  if (!prompt || prompt.length > 8000) throw new Error('A rotina de agente precisa de um pedido (prompt) com até 8000 caracteres.');
+  const ferramentas = action.ferramentas === undefined ? [...FERRAMENTAS_ROTINA_PADRAO] : action.ferramentas;
+  if (!Array.isArray(ferramentas) || ferramentas.length > 40 || ferramentas.some((t) => typeof t !== 'string')) {
+    throw new Error('ferramentas precisa ser uma lista de nomes (vazia = nenhuma ferramenta).');
+  }
+  const nativas = require('./tools').nomesNativos();
+  const desconhecida = ferramentas.find((t) => !nativas.includes(t) && !/^mcp__[\w-]+__[\w-]+$/.test(t));
+  if (desconhecida) throw new Error(`Ferramenta desconhecida: ${desconhecida}. Disponíveis: ${nativas.join(', ')} (e as mcp__servidor__ferramenta).`);
+  const maxPassos = action.maxPassos === undefined ? 20 : Number(action.maxPassos);
+  if (!Number.isInteger(maxPassos) || maxPassos < 1 || maxPassos > 60) throw new Error('maxPassos precisa ser um inteiro entre 1 e 60.');
+  return { type: 'agente', prompt, ferramentas: [...new Set(ferramentas)], maxPassos, notificar: action.notificar === true };
+}
+
+// v0.44.1: rotina "adb" — controla a TV/celular no horário marcado, SEM IA (sem custo, funciona offline). Quem
+// cria a rotina (o usuário, pelo terminal ou pela API com token; o modelo não grava o routines.json) aprova os
+// passos ali; por isso eles rodam sem perguntar. Só ações que não destroem nada: nunca reiniciar, desinstalar,
+// limpar dados, instalar, config nem o shell livre.
+const ACOES_ROTINA_ADB = Object.freeze(['tecla', 'abrir_app', 'fechar_app', 'abrir_link', 'digitar', 'estado', 'info', 'esperar']);
+const MAX_PASSOS_ADB = 20;
+
+function validarPassoAdb(passo, i) {
+  const adb = require('./tools/adbTools');
+  const onde = `passo ${i + 1}`;
+  if (!passo || typeof passo !== 'object' || Array.isArray(passo)) throw new Error(`${onde}: inválido.`);
+  const acao = String(passo.acao || '').trim();
+  if (!ACOES_ROTINA_ADB.includes(acao)) {
+    throw new Error(`${onde}: "${acao}" não pode rodar sozinho numa rotina. Use: ${ACOES_ROTINA_ADB.join(', ')}.`);
+  }
+  if (acao === 'esperar') {
+    const segundos = Number(passo.segundos);
+    if (!Number.isInteger(segundos) || segundos < 1 || segundos > 60) throw new Error(`${onde}: esperar precisa de 1 a 60 segundos.`);
+    return { acao, segundos };
+  }
+  if (acao === 'tecla') {
+    if (!adb.teclaValida(passo.tecla)) throw new Error(`${onde}: tecla desconhecida "${passo.tecla}". Use: ${Object.keys(adb.TECLAS).join(', ')}.`);
+    return { acao, tecla: String(passo.tecla).trim() };
+  }
+  if (acao === 'abrir_app' || acao === 'fechar_app') {
+    if (!adb.PACOTE_OK.test(String(passo.app || ''))) throw new Error(`${onde}: informe o pacote do app (ex.: com.netflix.ninja).`);
+    return { acao, app: passo.app };
+  }
+  if (acao === 'abrir_link') {
+    const link = adb.validarLink(passo.link);
+    if (passo.app !== undefined && !adb.PACOTE_OK.test(String(passo.app))) throw new Error(`${onde}: pacote do app inválido.`);
+    return { acao, link, ...(passo.app ? { app: passo.app } : {}) };
+  }
+  if (acao === 'digitar') {
+    const texto = typeof passo.texto === 'string' ? passo.texto : '';
+    if (!texto || texto.length > adb.MAX_TEXTO) throw new Error(`${onde}: digitar precisa de um texto de até ${adb.MAX_TEXTO} caracteres.`);
+    return { acao, texto };
+  }
+  return { acao }; // estado, info: só leem
+}
+
+function validarAcaoAdb(action) {
+  const adb = require('./tools/adbTools');
+  const alvo = adb.validarAlvo(action.alvo);
+  if (!Array.isArray(action.passos) || !action.passos.length || action.passos.length > MAX_PASSOS_ADB) {
+    throw new Error(`A rotina de aparelho precisa de 1 a ${MAX_PASSOS_ADB} passos.`);
+  }
+  const passos = action.passos.map(validarPassoAdb);
+  if (passos.every((p) => p.acao === 'esperar')) throw new Error('A rotina de aparelho precisa de pelo menos um passo além de esperar.');
+  return { type: 'adb', ...(alvo ? { alvo } : {}), passos, notificar: action.notificar === true };
+}
+
+// v0.46.0: rotina "lembrete" — só uma notificação no horário (remédio, conta, compromisso). Sem IA, sem rede, sem
+// nada rodando no aparelho: o texto vai como argumento para o termux-notification/notify-send/osascript.
+const MAX_TITULO_LEMBRETE = 80;
+const MAX_TEXTO_LEMBRETE = 500;
+
+function validarAcaoLembrete(action) {
+  const { semControlesInvisiveis } = require('./ui/textoSeguro');
+  const texto = typeof action.texto === 'string' ? semControlesInvisiveis(action.texto).trim() : '';
+  if (!texto || texto.length > MAX_TEXTO_LEMBRETE) throw new Error(`O lembrete precisa de um texto com até ${MAX_TEXTO_LEMBRETE} caracteres.`);
+  const titulo = typeof action.titulo === 'string' ? semControlesInvisiveis(action.titulo).trim().slice(0, MAX_TITULO_LEMBRETE) : '';
+  const out = { type: 'lembrete', titulo: titulo || 'Lembrete', texto };
+  // v0.47.0: último dia (local, AAAA-MM-DD) — depois dele o lembrete se encerra sozinho (ex.: desafio de 30 dias)
+  if (action.ate !== undefined && action.ate !== null && action.ate !== '') {
+    if (typeof action.ate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(action.ate)) throw new Error('"ate" do lembrete é uma data AAAA-MM-DD.');
+    out.ate = action.ate;
+  }
+  return out;
+}
+
+// v0.47.0: rotina "rede" — um post agendado nas redes sociais (src/redes.js). Quem cria aprova o texto, as redes e a
+// foto (o terminal mostra e pergunta); na hora, publica sem perguntar, UMA vez (nunca repete: sairia duplicado), com as
+// mesmas travas do terminal (limite de cada rede, anti-repetição, teto diário).
+const MAX_TEXTO_REDE = 5000;
+
+function validarAcaoRede(action) {
+  const { REDES, limparTexto } = require('./redes');
+  const lista = Array.isArray(action.redes) ? action.redes : [];
+  const redes = [...new Set(lista.map((r) => String(r || '').trim().toLowerCase()).filter(Boolean))];
+  if (!redes.length || redes.some((r) => !Object.prototype.hasOwnProperty.call(REDES, r))) {
+    throw new Error(`O post agendado precisa das redes onde publicar (com conta): ${Object.keys(REDES).join(', ')}.`);
+  }
+  const texto = limparTexto(action.texto);
+  const foto = typeof action.foto === 'string' && action.foto.trim() ? path.resolve(action.foto.trim()) : '';
+  const fotoUrl = typeof action.fotoUrl === 'string' ? action.fotoUrl.trim() : '';
+  if ((!texto && !foto && !fotoUrl) || texto.length > MAX_TEXTO_REDE) {
+    throw new Error(`O post agendado precisa de um texto com até ${MAX_TEXTO_REDE} caracteres (ou de uma foto).`);
+  }
+  const out = { type: 'rede', redes, texto };
+  if (foto) out.foto = foto;
+  if (fotoUrl) out.fotoUrl = fotoUrl;
+  const alt = limparTexto(action.alt).slice(0, 1000);
+  if (alt) out.alt = alt;
+  return out;
+}
+
 function validarAcao(action) {
   if (!action || typeof action !== 'object' || Array.isArray(action)) throw new Error('A rotina precisa de uma ação válida.');
+  if (action.type === 'agente') return validarAcaoAgente(action);
+  if (action.type === 'adb') return validarAcaoAdb(action);
+  if (action.type === 'lembrete') return validarAcaoLembrete(action);
+  if (action.type === 'rede') return validarAcaoRede(action);
   if (action.type !== 'http-check') {
-    throw new Error('Nesta versão, a ação automática disponível é http-check. Outras ações precisam de executor próprio e revisão de permissões.');
+    throw new Error('Ação inválida. Use http-check (verificar um site), agente (o agente faz uma tarefa sozinho), adb (comandos para a TV/celular), lembrete (uma notificação no horário) ou rede (um post agendado nas redes sociais).');
   }
   let url;
   try { url = new URL(action.url); } catch { throw new Error('URL inválida para a ação http-check.'); }
@@ -204,7 +325,7 @@ function createRoutineStore({ dataPath = ROUTINES_PATH, executionsPath = EXECUTI
     if (trigger.type === 'cron') nextRunAt = nextCronDate(trigger.expression, now, trigger.timezone);
     const routine = {
       id, name, description: String(input.description || '').trim().slice(0, 1000),
-      category: String(input.category || 'monitoramento').trim().slice(0, 60) || 'monitoramento',
+      category: String(input.category || ({ agente: 'agente', adb: 'aparelho', lembrete: 'lembrete', rede: 'redes' }[action.type] || 'monitoramento')).trim().slice(0, 60) || 'monitoramento',
       priority: ['baixa', 'normal', 'alta', 'critica'].includes(input.priority) ? input.priority : 'normal',
       trigger, action, status: STATUSES.DRAFT, createdAt: nowIso, updatedAt: nowIso,
       nextRunAt, lastRunAt: null, lastResult: null, lastCronSlotKey: null,
@@ -352,6 +473,7 @@ function createRoutineStore({ dataPath = ROUTINES_PATH, executionsPath = EXECUTI
 const defaultStore = createRoutineStore();
 module.exports = {
   ROUTINES_PATH, EXECUTIONS_PATH, DEFAULT_TIMEZONE, STATUSES, VALID_STATUSES,
-  parseDuration, parseCron, cronMatches, nextCronDate, validarGatilho, validarAcao, createRoutineStore,
+  parseDuration, parseCron, cronMatches, nextCronDate, validarGatilho, validarAcao, createRoutineStore, FERRAMENTAS_ROTINA_PADRAO,
+  ACOES_ROTINA_ADB,
   ...defaultStore,
 };

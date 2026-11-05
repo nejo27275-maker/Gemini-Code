@@ -36,12 +36,43 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
+      - name: Install bubblewrap (sandbox do run_shell)
+        # v0.45.0: os testes de fuga da sandbox (tests/sandbox.test.js) rodam com o bwrap de verdade. O Ubuntu 24.04
+        # restringe user namespaces sem privilégio pelo AppArmor; o pacote traz um perfil que libera o bwrap — e,
+        # se não bastar, a restrição é desligada só nesta máquina descartável do CI.
+        # v0.49.2: o apt travou duas vezes no runner (até o limite do job): sem pergunta, sem os "recomendados", sem
+        # atualizar o man-db, com prazo de rede e por comando, e uma nova tentativa — falha rápido em vez de pendurar.
+        timeout-minutes: 6
+        run: |
+          sudo rm -f /var/lib/man-db/auto-update
+          apt() { sudo DEBIAN_FRONTEND=noninteractive timeout 240 apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 "$@"; }
+          apt update -qq || apt update -qq
+          apt install -y -qq --no-install-recommends bubblewrap || { sudo dpkg --configure -a; apt install -y -qq --no-install-recommends bubblewrap; }
+          bwrap --ro-bind / / --unshare-all --unshare-user -- true \
+            || sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          bwrap --version
+      - name: Install ImageMagick e ffmpeg (testes de mídia)
+        # v0.46.0: melhorar foto, câmera-vigia e vídeo rodam com os programas de verdade (tests/imagem.test.js,
+        # tests/cameraVideo.test.js); com GEMINI_CODE_EXIGIR_MIDIA=1 esses testes falham em vez de pular.
+        # v0.49.2: o mesmo cuidado do passo acima; sem os "recomendados" (os testes só usam jpg, png, gif e mp4).
+        timeout-minutes: 8
+        run: |
+          apt() { sudo DEBIAN_FRONTEND=noninteractive timeout 300 apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 "$@"; }
+          apt install -y -qq --no-install-recommends imagemagick ffmpeg \
+            || { sudo dpkg --configure -a; apt update -qq; apt install -y -qq --no-install-recommends imagemagick ffmpeg; }
+          (magick -version || convert -version) | head -1
+          ffmpeg -version | head -1
       - name: Syntax checks
         run: |
           find src bin tests -type f -name '*.js' -print0 | xargs -0 -n1 node --check
       - name: Unit tests
         # inclui o cowork por WebSocket real (tests/coworkWebSocket.test.js), que precisa do "ws" do npm ci
         run: npm test
+        env:
+          # com o bubblewrap instalado, os testes de fuga da sandbox não podem ser pulados
+          GEMINI_CODE_EXIGIR_SANDBOX: '1'
+          # idem para os testes com ImageMagick e ffmpeg de verdade
+          GEMINI_CODE_EXIGIR_MIDIA: '1'
       - name: Install ESLint (versão fixa, só para a checagem; não entra no package.json)
         if: matrix.node-version == 22
         run: npm install --no-save --no-audit --no-fund eslint@10.1.0

@@ -21,7 +21,8 @@ const { runOnce } = require('../src/agent');
 // falhar contra uma versão que nem conhece a constante.
 const { CONFIG_PATH, HOME_DIR } = config;
 const HOOKS_PATH = path.join(HOME_DIR, 'hooks.json');
-const PROTECTED_PATHS = ['config.json', 'config.json.bak', 'config.json.tmp', 'mcp.json', 'mcp.json.bak', 'mcp.json.tmp', 'hooks.json', 'cowork-token.txt', 'routine-api-token.txt', 'confianca.json']
+// routines.json (v0.44.0): uma rotina pode rodar o agente sozinho com o pedido escrito nela.
+const PROTECTED_PATHS = ['config.json', 'config.json.bak', 'config.json.tmp', 'mcp.json', 'mcp.json.bak', 'mcp.json.tmp', 'hooks.json', 'cowork-token.txt', 'routine-api-token.txt', 'confianca.json', 'routines.json']
   .map((nome) => path.join(HOME_DIR, nome));
 const semSymlink = process.platform === 'win32';
 const projeto = () => fs.mkdtempSync(path.join(HOME_FALSO, 'projeto-'));

@@ -1,0 +1,225 @@
+/* modo voz do gemini-code (v0.48.0) — HUD escuro, ciano, com a esfera no centro */
+:root {
+  --fundo-1: #061525;
+  --fundo-2: #02070f;
+  --fundo-3: #000206;
+  --ciano: #3ee6ff;
+  --ciano-forte: #8ff4ff;
+  --ciano-fraco: rgba(62, 230, 255, 0.18);
+  --texto: #d8f6ff;
+  --texto-fraco: rgba(216, 246, 255, 0.62);
+  --vidro: rgba(8, 28, 44, 0.62);
+  --borda: rgba(62, 230, 255, 0.28);
+  --ambar: #ffb547;
+  --vermelho: #ff5a6e;
+  --violeta: #9d8bff;
+  --raio: 18px;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background:
+    radial-gradient(ellipse at 50% 38%, var(--fundo-1) 0%, var(--fundo-2) 52%, var(--fundo-3) 100%);
+  color: var(--texto);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  overflow: hidden;
+}
+/* grade bem fraquinha e "linhas de varredura" de painel */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(0deg, rgba(62, 230, 255, 0.025) 0 1px, transparent 1px 4px),
+    linear-gradient(90deg, rgba(62, 230, 255, 0.05) 1px, transparent 1px) 0 0 / 48px 48px,
+    linear-gradient(0deg, rgba(62, 230, 255, 0.05) 1px, transparent 1px) 0 0 / 48px 48px;
+  mask-image: radial-gradient(ellipse at 50% 42%, #000 0%, transparent 72%);
+  -webkit-mask-image: radial-gradient(ellipse at 50% 42%, #000 0%, transparent 72%);
+}
+
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--ciano-forte); outline-offset: 2px; }
+[hidden] { display: none !important; }
+
+.app {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  height: 100dvh;
+  padding: max(12px, env(safe-area-inset-top)) 16px max(14px, env(safe-area-inset-bottom));
+}
+
+/* ---- topo ---- */
+.topo { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; z-index: 2; }
+.marca { display: flex; align-items: center; gap: 10px; letter-spacing: 0.32em; font-size: 12px; text-transform: uppercase; }
+.marca-ponto {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--ciano); box-shadow: 0 0 10px var(--ciano), 0 0 22px var(--ciano);
+  animation: piscar 2.4s ease-in-out infinite;
+}
+.marca-nome { color: var(--ciano-forte); font-weight: 600; }
+.marca-modo { color: var(--texto-fraco); letter-spacing: 0.2em; }
+.topo-acoes { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip {
+  border: 1px solid var(--borda); background: rgba(6, 22, 36, 0.55); border-radius: 999px;
+  padding: 6px 12px; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--texto-fraco);
+  transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+}
+.chip:hover { color: var(--texto); }
+a.chip { text-decoration: none; display: inline-block; } /* v0.53.0: "Chat" é um link para a outra página do site */
+.chip[aria-pressed="true"], .chip[aria-expanded="true"] {
+  color: #001018; background: var(--ciano); border-color: var(--ciano); box-shadow: 0 0 14px rgba(62, 230, 255, 0.55);
+}
+
+/* ---- palco: a esfera ---- */
+.palco { position: relative; flex: 1 1 auto; min-height: 220px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.orbe { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.hud { position: absolute; left: 0; right: 0; bottom: 4%; text-align: center; padding: 0 12px; pointer-events: none; }
+.estado {
+  margin: 0; font-size: 13px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--ciano-forte);
+  text-shadow: 0 0 12px rgba(62, 230, 255, 0.7);
+}
+.ouvido { margin: 6px auto 0; max-width: 680px; min-height: 1.5em; color: var(--texto-fraco); font-size: 16px; }
+.app[data-estado="pensando"] .estado { color: #cfc7ff; text-shadow: 0 0 12px rgba(157, 139, 255, 0.8); }
+.app[data-estado="alerta"] .estado, .app[data-estado="erro"] .estado { color: var(--ambar); text-shadow: 0 0 12px rgba(255, 181, 71, 0.7); }
+
+/* ---- resposta ---- */
+.painel {
+  align-self: center; width: min(760px, 100%); max-height: 30vh; overflow: auto; margin: 6px 0 12px;
+  background: var(--vidro); border: 1px solid var(--borda); border-radius: var(--raio);
+  padding: 14px 18px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 0 0 1px rgba(62, 230, 255, 0.05) inset, 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+.resposta { overflow-wrap: anywhere; }
+/* v0.49.0: o Markdown das respostas (montado por comum.js), no visual do painel */
+.resposta > :first-child { margin-top: 0; }
+.resposta > :last-child { margin-bottom: 0; }
+.resposta p { margin: 0 0 0.6em; }
+.resposta .md-titulo { margin: 0.8em 0 0.3em; font-size: 1.05em; color: var(--ciano-forte); }
+.resposta ul, .resposta ol { margin: 0 0 0.6em; padding-left: 1.4em; }
+.resposta li { margin: 0.15em 0; }
+.resposta .md-tarefa { list-style: none; margin-left: -1.2em; }
+.resposta blockquote { margin: 0 0 0.6em; padding-left: 10px; border-left: 2px solid var(--borda); color: var(--texto-fraco); }
+.resposta hr { border: 0; border-top: 1px solid var(--borda); margin: 0.8em 0; }
+.resposta a { color: var(--ciano-forte); }
+.resposta .md-host { color: var(--texto-fraco); font-size: 0.85em; }
+.resposta code { font: 0.9em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: rgba(62, 230, 255, 0.1); border-radius: 5px; padding: 0.1em 0.35em; }
+.resposta .md-codigo { margin: 0 0 0.6em; border: 1px solid var(--borda); border-radius: 10px; overflow: hidden; background: rgba(0, 0, 0, 0.45); }
+.resposta .md-codigo-topo { display: flex; justify-content: space-between; align-items: center; padding: 3px 6px 3px 10px; font: 11px ui-monospace, Menlo, Consolas, monospace; color: var(--texto-fraco); border-bottom: 1px solid var(--borda); }
+.resposta .md-copiar { border: 0; background: transparent; color: var(--ciano-forte); font-size: 11px; border-radius: 6px; padding: 2px 8px; }
+.resposta pre { margin: 0; padding: 10px 12px; overflow-x: auto; }
+.resposta pre code { background: none; padding: 0; white-space: pre; }
+.resposta .md-tabela { margin: 0 0 0.6em; overflow-x: auto; }
+.resposta table { border-collapse: collapse; width: 100%; font-size: 14px; }
+.resposta th, .resposta td { border: 1px solid var(--borda); padding: 5px 8px; text-align: left; }
+.resposta .md-centro { text-align: center; }
+.resposta .md-direita { text-align: right; }
+.alerta {
+  margin: 0 0 10px; padding: 10px 12px; border-radius: 12px; white-space: pre-wrap;
+  background: rgba(255, 90, 110, 0.14); border: 1px solid rgba(255, 90, 110, 0.55); color: #ffd2d8; font-weight: 600;
+}
+
+/* ---- confirmação ---- */
+.pergunta {
+  position: absolute; z-index: 5; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: min(560px, calc(100% - 32px)); max-height: calc(100% - 32px); overflow: auto;
+  background: rgba(20, 14, 2, 0.92); border: 1px solid rgba(255, 181, 71, 0.6); border-radius: var(--raio);
+  padding: 18px 20px; box-shadow: 0 0 40px rgba(255, 181, 71, 0.25), 0 20px 60px rgba(0, 0, 0, 0.6);
+}
+.pergunta h2 { margin: 0 0 8px; font-size: 13px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--ambar); }
+.pergunta-texto { margin: 0 0 14px; white-space: pre-wrap; overflow-wrap: anywhere; font: 14px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: #fff2dc; }
+.pergunta-botoes { display: flex; gap: 10px; flex-wrap: wrap; }
+.botao { border-radius: 12px; padding: 10px 16px; border: 1px solid var(--borda); background: rgba(6, 22, 36, 0.8); font-weight: 600; }
+.botao-sim { background: var(--ambar); color: #1a1000; border-color: var(--ambar); }
+.botao-nao { background: transparent; }
+.pergunta-outra { display: flex; gap: 8px; margin-top: 12px; }
+.pergunta-outra input { flex: 1; min-width: 0; border-radius: 12px; border: 1px solid var(--borda); background: rgba(0, 0, 0, 0.35); padding: 9px 12px; }
+
+/* ---- controles ---- */
+.controles { display: flex; align-items: center; gap: 12px; width: min(760px, 100%); align-self: center; }
+.entrada {
+  flex: 1; display: flex; align-items: center; min-width: 0;
+  background: var(--vidro); border: 1px solid var(--borda); border-radius: 999px; padding: 4px 4px 4px 18px;
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+}
+.entrada input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; padding: 10px 0; }
+.entrada input::placeholder { color: var(--texto-fraco); }
+.enviar { width: 40px; height: 40px; border-radius: 50%; border: 0; background: var(--ciano-fraco); display: grid; place-items: center; }
+.enviar svg { width: 18px; height: 18px; fill: var(--ciano-forte); }
+.mic {
+  flex: 0 0 auto; width: 68px; height: 68px; border-radius: 50%; display: grid; place-items: center;
+  border: 2px solid var(--ciano); background: radial-gradient(circle at 50% 40%, rgba(62, 230, 255, 0.35), rgba(4, 18, 30, 0.9) 70%);
+  box-shadow: 0 0 18px rgba(62, 230, 255, 0.55), inset 0 0 18px rgba(62, 230, 255, 0.35);
+  transition: transform 0.15s, box-shadow 0.2s;
+}
+.mic svg { width: 28px; height: 28px; fill: none; stroke: var(--ciano-forte); stroke-width: 1.8; stroke-linecap: round; }
+.mic svg rect { fill: var(--ciano-forte); stroke: none; }
+.mic:active { transform: scale(0.96); }
+.app[data-estado="ouvindo"] .mic { animation: pulsar 1.2s ease-in-out infinite; background: radial-gradient(circle at 50% 40%, rgba(143, 244, 255, 0.7), rgba(4, 30, 46, 0.9) 70%); }
+.app[data-estado="falando"] .mic { border-color: var(--texto-fraco); }
+/* enquanto o agente trabalha, o botão do microfone vira "Parar" (quadrado) */
+.mic .icone-parar { display: none; }
+.mic .icone-parar rect { fill: #ffd2d8; }
+.app[data-ocupado="true"] .mic .icone-mic { display: none; }
+.app[data-ocupado="true"] .mic .icone-parar { display: block; }
+.app[data-ocupado="true"] .mic {
+  border-color: rgba(255, 90, 110, 0.85);
+  background: radial-gradient(circle at 50% 40%, rgba(255, 90, 110, 0.28), rgba(30, 6, 12, 0.9) 70%);
+  box-shadow: 0 0 18px rgba(255, 90, 110, 0.45), inset 0 0 14px rgba(255, 90, 110, 0.25);
+}
+
+/* ---- histórico ---- */
+.historico {
+  position: absolute; z-index: 4; top: 56px; right: 12px; bottom: 100px; width: min(380px, calc(100% - 24px));
+  display: flex; flex-direction: column; background: rgba(3, 14, 24, 0.94); border: 1px solid var(--borda); border-radius: var(--raio);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+}
+.historico-topo { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--borda); }
+.historico-topo h2 { margin: 0; font-size: 12px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--ciano-forte); }
+.historico-lista { list-style: none; margin: 0; padding: 12px 14px; overflow: auto; display: flex; flex-direction: column; gap: 10px; }
+.historico-lista li { white-space: pre-wrap; overflow-wrap: anywhere; padding: 8px 10px; border-radius: 12px; }
+.historico-lista .voce { align-self: flex-end; background: rgba(62, 230, 255, 0.14); max-width: 88%; }
+.historico-lista .agente { background: rgba(255, 255, 255, 0.05); }
+.historico-lista .rotulo { display: block; font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--texto-fraco); margin-bottom: 2px; }
+
+@keyframes piscar { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+@keyframes pulsar { 0%, 100% { box-shadow: 0 0 18px rgba(62, 230, 255, 0.55), inset 0 0 18px rgba(62, 230, 255, 0.35); } 50% { box-shadow: 0 0 34px rgba(143, 244, 255, 0.95), inset 0 0 22px rgba(143, 244, 255, 0.6); } }
+
+@media (max-width: 560px) {
+  .marca-modo { display: none; }
+  .estado { letter-spacing: 0.16em; font-size: 12px; }
+  .chip { padding: 5px 10px; font-size: 11px; }
+  .painel { max-height: 26vh; }
+  .mic { width: 60px; height: 60px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .marca-ponto, .app[data-estado="ouvindo"] .mic { animation: none; }
+}
+
+/* v0.51.0: o que o agente criou (foto editada, vídeo, áudio), embaixo da resposta */
+.midias { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+.midia { margin: 0; max-width: min(100%, 360px); border: 1px solid var(--borda); border-radius: 12px; overflow: hidden; background: rgba(2, 7, 15, 0.6); }
+.midia-area { display: grid; place-items: center; min-height: 56px; }
+.midia-conteudo { display: block; max-width: 100%; max-height: 42vh; }
+.midia-audio .midia-area { padding: 8px; }
+.midia-audio .midia-conteudo { width: 100%; }
+.midia-estado { margin: 0; padding: 14px; font-size: 13px; color: var(--texto-fraco); }
+.midia-mostrar { margin: 12px; }
+.midia-legenda { display: flex; align-items: center; gap: 8px; padding: 6px 10px; font-size: 12px; color: var(--texto-fraco); }
+.midia-nome { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--texto); }
+.midia-baixar { color: var(--fundo-3); background: var(--ciano); border-radius: 8px; padding: 2px 10px; font-weight: 600; text-decoration: none; }
+.midia-baixar:hover { background: var(--ciano-forte); }
+
+/* v0.52.0: o pedido da chave do Gemini e o selo do modo até terminar */
+.chave { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; padding: 12px; border: 1px solid var(--ambar); border-radius: 12px; background: rgba(2, 7, 15, 0.7); }
+.chave-titulo { margin: 0; font-weight: 700; color: var(--ambar); }
+.chave-texto { margin: 0; font-size: 13px; color: var(--texto-fraco); }
+.chave-link { color: var(--ciano-forte); }
+.chave-campo { border: 1px solid var(--borda); border-radius: 10px; padding: 9px 11px; background: rgba(0, 0, 0, 0.4); color: var(--texto); font-family: ui-monospace, monospace; }
+.chave-estado { margin: 0; min-height: 1.2em; font-size: 13px; color: var(--texto-fraco); }
+.selo { display: inline-block; margin: 8px 0 0; padding: 2px 10px; border: 1px solid var(--borda); border-radius: 999px; font-size: 12px; color: var(--ciano-forte); }
+.chave .botao-primario { background: var(--ciano); border-color: var(--ciano); color: #001018; }

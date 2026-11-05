@@ -75,6 +75,8 @@ async function fetchComRetry(url, init, opts = {}) {
       motivo = `HTTP ${res.status}`;
       try { await res.body?.cancel?.(); } catch { /* ignora */ }
     } catch (err) {
+      // v0.48.1: parado pelo usuário (signal) não é falha de rede: nada de tentar de novo
+      if (init && init.signal && init.signal.aborted) throw err;
       // erro de rede (sem internet, DNS...): só 1 nova tentativa, pra não
       // deixar o usuário esperando à toa quando está offline de verdade.
       if (i >= Math.min(1, esperas.length)) throw err;
@@ -82,6 +84,7 @@ async function fetchComRetry(url, init, opts = {}) {
     }
     aviso(`[gemini] servidor indisponível (${motivo}). Tentando de novo em ${esperas[i] / 1000}s (${i + 1}/${esperas.length})...`);
     await dormir(esperas[i]);
+    if (init && init.signal && init.signal.aborted) throw Object.assign(new Error('[gemini] parado pelo usuário.'), { name: 'AbortError' });
   }
 }
 
@@ -141,7 +144,12 @@ function erroDaApi({ status, data, statusText, model, contexto, retryAfter }) {
     const waitSeconds = retrySeconds == null ? null : Math.ceil(retrySeconds);
     let orientacao;
 
-    if (limiteZero) {
+    if (limiteZero && /imagem/i.test(contexto)) {
+      // v0.52.0: no caso da imagem, o comando certo é outro (o modelo de imagem é separado do modelo do chat)
+      orientacao =
+        `O Google informou limit: 0: o modelo de imagem ${model} não tem cota liberada para a sua chave (no plano grátis, alguns modelos de imagem exigem faturamento ativo no projeto).\n` +
+        `Não adianta repetir. Ative o faturamento no Google AI Studio ou troque o modelo de imagem: gemini-code config set-image-model NOME_DO_MODELO\n`;
+    } else if (limiteZero) {
       orientacao =
         `O Google informou limit: 0 para esta cota; esse modelo/operação não tem requisições liberadas nessa métrica para o projeto atual.\n` +
         `Não adianta repetir imediatamente. Para continuar usando somente a API Gemini, consulte os modelos e as cotas da sua chave; se escolher outro modelo Gemini, configure-o com: gemini-code config set-model NOME_DO_MODELO\n`;
@@ -261,7 +269,8 @@ function respostaDePartes(parts) {
 function montarBody({ history, tools, systemInstruction }) {
   return {
     contents: history,
-    ...(tools && tools.length ? { tools: [{ functionDeclarations: tools }] } : {}),
+    // v0.45.1: esquema JSON completo (MCP) traduzido para o subconjunto que a API aceita — src/schemaGemini.js
+    ...(tools && tools.length ? { tools: [{ functionDeclarations: require('./schemaGemini').declaracoesParaGemini(tools) }] } : {}),
     ...(systemInstruction
       ? { systemInstruction: { parts: [{ text: systemInstruction }] } }
       : {}),
@@ -296,7 +305,7 @@ async function chatWithTools(args) {
     return await chatUmModelo({ ...args, modelName: modelo, onText }, cfg);
   } catch (err) {
     const reserva = cfg.fallbackModel;
-    if (err && err.transitorio && reserva && reserva !== modelo && !emitiu) {
+    if (err && err.transitorio && reserva && reserva !== modelo && !emitiu && !(args.signal && args.signal.aborted)) {
       console.error(`[gemini] ${modelo} continua indisponível; tentando o modelo reserva ${reserva}.`);
       return chatUmModelo({ ...args, modelName: reserva, onText }, cfg);
     }
@@ -304,7 +313,7 @@ async function chatWithTools(args) {
   }
 }
 
-async function chatUmModelo({ modelName, systemInstruction, history, tools, onText }, cfg) {
+async function chatUmModelo({ modelName, systemInstruction, history, tools, onText, signal }, cfg) {
   if (!cfg.apiKey) {
     throw new Error(
       'Nenhuma API key configurada. Rode: gemini-code config set-key SUA_CHAVE\n' +
@@ -316,7 +325,7 @@ async function chatUmModelo({ modelName, systemInstruction, history, tools, onTe
   const body = montarBody({ history, tools, systemInstruction });
 
   if (onText && cfg.enableStreaming !== false) {
-    return chatWithToolsStream({ model, body, apiKey: cfg.apiKey, onText });
+    return chatWithToolsStream({ model, body, apiKey: cfg.apiKey, onText, signal });
   }
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
@@ -327,6 +336,7 @@ async function chatUmModelo({ modelName, systemInstruction, history, tools, onTe
       'x-goog-api-key': cfg.apiKey,
     },
     body: JSON.stringify(body),
+    ...(signal ? { signal } : {}),
   });
 
   const data = await res.json().catch(() => ({}));
@@ -354,7 +364,7 @@ async function chatUmModelo({ modelName, systemInstruction, history, tools, onTe
  * pedaço chamando `onText` incrementalmente, e juntamos as `functionCall`
  * (que vêm inteiras num único pedaço, nunca fatiadas) para o final.
  */
-async function chatWithToolsStream({ model, body, apiKey, onText }) {
+async function chatWithToolsStream({ model, body, apiKey, onText, signal }) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
   const res = await fetchComRetry(url, {
     method: 'POST',
@@ -363,6 +373,7 @@ async function chatWithToolsStream({ model, body, apiKey, onText }) {
       'x-goog-api-key': apiKey,
     },
     body: JSON.stringify(body),
+    ...(signal ? { signal } : {}),
   });
 
   if (!res.ok) {
@@ -479,19 +490,24 @@ async function generateText({ prompt, modelName }) {
  * retorna erro claro — trate isso na camada de cima. Migrada para `fetch`
  * pelo mesmo motivo de generateText (item 14 da revisão).
  */
-async function generateImage({ prompt, modelName }) {
+async function generateImage({ prompt, modelName, imagens = [], aspecto }) {
   const cfg = loadConfig();
   exigirApiKey(cfg);
   const model = modelName || cfg.imageModel;
+  // v0.52.0: a proporção (feed 4:5, stories 9:16...) vai no imageConfig — sem ela, o modelo escolhe (quase sempre 1:1)
+  const generationConfig = { responseModalities: ['TEXT', 'IMAGE'], ...(aspecto ? { imageConfig: { aspectRatio: aspecto } } : {}) };
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
+  // v0.46.0: `imagens` ([{ inlineData }], de src/imagens.js) entram antes do texto: é assim que se pede para
+  // EDITAR uma foto ("melhore a nitidez", "tire o fundo") no modelo de imagem do Gemini.
+  const partesPedido = [...imagens.map((i) => ({ inlineData: i.inlineData })), { text: prompt }];
   const res = await fetchComRetry(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'x-goog-api-key': cfg.apiKey,
     },
-    body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }] }),
+    body: JSON.stringify({ contents: [{ role: 'user', parts: partesPedido }], generationConfig }),
   });
 
   const data = await res.json().catch(() => ({}));
@@ -502,9 +518,11 @@ async function generateImage({ prompt, modelName }) {
   const parts = data?.candidates?.[0]?.content?.parts || [];
   const imagePart = parts.find((p) => p.inlineData);
   if (!imagePart) {
+    // v0.46.0: quando o modelo recusa ou só comenta, o motivo vem em texto — mostra (antes sumia)
+    const explicacao = parts.filter((p) => typeof p.text === 'string').map((p) => p.text).join(' ').replace(/\s+/g, ' ').trim().slice(0, 400);
     throw new Error(
-      'O modelo não retornou imagem. Verifique se sua conta tem acesso a geração ' +
-      'de imagem (Imagen/Gemini image) no Google AI Studio.'
+      'O modelo não retornou imagem.' + (explicacao ? ` Ele disse: "${explicacao}"` : ' Verifique se sua conta tem acesso a geração ' +
+      'de imagem (Imagen/Gemini image) no Google AI Studio.')
     );
   }
   return imagePart.inlineData; // { mimeType, data (base64) }

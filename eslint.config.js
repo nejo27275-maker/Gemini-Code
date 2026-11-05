@@ -19,6 +19,15 @@ const GLOBAIS_NODE = [
   'fetch', 'Headers', 'Request', 'Response', 'FormData', 'Blob', 'WebSocket', 'performance',
 ];
 
+// v0.48.0: a página do modo site roda no navegador (src/site/publico/), não no Node
+const GLOBAIS_NAVEGADOR = [
+  'window', 'document', 'navigator', 'location', 'history', 'sessionStorage', 'localStorage', 'performance', 'console',
+  'requestAnimationFrame', 'cancelAnimationFrame', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval',
+  'fetch', 'TextDecoder', 'TextEncoder', 'URL', 'Element', 'HTMLElement', 'HTMLInputElement', 'Event',
+  'SpeechSynthesisUtterance', 'AudioContext',
+  'XMLHttpRequest', // v0.51.0: o envio de foto/vídeo com a barra de progresso (o fetch não informa o progresso do envio)
+];
+
 module.exports = [
   { ignores: ['node_modules/', 'teste-design/', '**/*.min.js'] },
   {
@@ -33,6 +42,13 @@ module.exports = [
       'no-unused-vars': ['warn', { args: 'none' }],
       'no-console': 'off',
       'no-empty': ['error', { allowEmptyCatch: true }],
+    },
+  },
+  {
+    files: ['src/site/publico/**/*.js'],
+    languageOptions: {
+      sourceType: 'script',
+      globals: Object.fromEntries(GLOBAIS_NAVEGADOR.map((g) => [g, 'readonly'])),
     },
   },
 ];

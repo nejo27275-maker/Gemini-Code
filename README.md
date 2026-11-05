@@ -1,32 +1,14 @@
 # gemini-code
 
-## Limite de uso da API Gemini (HTTP 429)
-
-Se a API responder `429 RESOURCE_EXHAUSTED`, a aplicação não troca automaticamente de provedor nem repete a chamada quando você selecionou explicitamente o provedor `gemini`. Se o Google informar um tempo como `Please retry in 52s`, aguarde esse período e envie a mensagem novamente. Quando a resposta não indicar espera, confira a métrica, o limite e o projeto em [AI Studio](https://aistudio.google.com/) e a [documentação de limites](https://ai.google.dev/gemini-api/docs/rate-limits). Um limite `0` significa que a métrica daquela operação não permite chamadas no projeto atual; trocar para o mesmo modelo não resolve. Para usar apenas a API Gemini, confirme com `gemini-code config set-provider gemini`. **Opcional (v0.30.0):** `gemini-code config set-wait-quota 60` faz o programa esperar sozinho (até 60 s) quando o Google pedir um tempo curto e repetir uma vez; vem desligado.
-
 Um agente de terminal no espírito do **Claude Code** / **Codex**, só que usando a
 **API do Gemini** do Google — feito para rodar no **Termux** (Android) ou em
 qualquer PC/Linux com Node.js.
 
-## MinhaIA Android integrada (primeira versão)
-
-O projeto agora inclui o aplicativo nativo **MinhaIA** em `mobile/MinhaIA/`, com Kotlin, Jetpack Compose, histórico e memórias locais e um motor Android baseado em `llama.cpp`. É um subprojeto Android separado do agente de terminal: ele não exige API Gemini para o chat local.
-
-Para configurar o Gemini Code para usar o mesmo modelo Qwen3-1.7B Q4_K_M, com download validado por SHA-256 e compartilhado em Downloads com o app Android, rode no Termux:
-
-```bash
-bash android/install-minhaia-model.sh
-node bin/gemini-code.js chat
-```
-
-O script pede que `termux-setup-storage` já tenha sido executado e usa o armazenamento compartilhado `Download`. Para usar o arquivo no app Android, compile/instale `mobile/MinhaIA` e escolha **Modelo → Importar outro GGUF**; por segurança, o app copia o modelo para o armazenamento privado, então é necessário espaço adicional.
-
-O modelo GGUF é o mesmo, mas os históricos e as memórias do CLI e do app ainda são independentes. A integração não compila o APK automaticamente nem afirma funcionamento no Galaxy A55 sem build e teste no aparelho. Veja `docs/MINHAIA_INTEGRACAO.md`.
-
 ## O que tem aqui
 
 - **Agente de terminal** (`gemini-code chat` / `gemini-code run`): conversa,
-  lê e escreve arquivos, roda comandos de shell (com confirmação), e usa
+  lê e escreve arquivos, roda comandos de shell (com confirmação, ou numa
+  sandbox no Linux), e usa
   ferramentas MCP conectadas — igual ao fluxo do Claude Code.
 - **Gemini Design** (`gemini-code design ...`): gera slides (HTML navegável +
   Markdown), documentos e imagens.
@@ -52,6 +34,281 @@ O modelo GGUF é o mesmo, mas os históricos e as memórias do CLI e do app aind
 - **ADB** (`gemini-code adb ...`): controla uma Android TV, celular ou tablet SEUS
   por USB ou Wi-Fi — ver/abrir/instalar apps, navegar na TV pelo controle, ajustar
   configurações, print e logs. Veja `docs/TV_ADB.md`.
+- **Navegador** (ferramenta `browser`): o agente usa um Chrome/Chromium de verdade,
+  sem janela — abre sites, lê páginas feitas em JavaScript, clica, preenche
+  formulários e tira print.
+- **Rotinas com agente** (`gemini-code routines create --prompt ...`): o agente
+  faz uma tarefa sozinho no horário marcado e avisa por notificação.
+- **Modo site** (v0.48.0; um site só desde a v0.53.0): converse pelo navegador, só neste aparelho.
+  `gemini-code site --abrir` abre o site com tudo junto: a conversa com respostas formatadas, o microfone (a resposta
+  vem falada), "Ouvir" em cada resposta, foto e vídeo pelo clipe, os seus aliados no topo e o botão "Modo voz" (a esfera
+  animada). Veja `docs/MODO_SITE.md`.
+  - **Foto e vídeo pela página** (v0.51.0): toque no clipe (ou arraste/cole) para mandar uma foto, um vídeo ou um
+    áudio. O agente edita, e o resultado aparece na conversa com o botão Baixar.
+  - **Só com a chave do Gemini** (v0.52.0): sem chave, a própria página pede uma, e o site funciona só com ela. Ele
+    também cria imagens no formato das redes.
+- **Modo até terminar** (v0.52.0): o agente trabalha sozinho até a tarefa estar pronta, sem parar para perguntar "posso
+  continuar?". Liga pelo botão do site, por `/ate-terminar` no chat ou por `run --ate-terminar`.
+- **Treinador de futebol** (v0.52.0): `gemini-code futebol aliado` cria o aliado "treinador". Ele monta treinos por
+  categoria, planeja a semana até o jogo, controla a carga, desenha a formação e corta os lances do vídeo. Veja
+  `docs/FUTEBOL.md`.
+- **Saúde, compras, imagem, vídeo, câmera, TV e criar site/app** (v0.46.0): veja abaixo.
+- **Redes sociais, controle do celular/computador/sites e desafios** (v0.47.0): veja abaixo, `docs/REDES_SOCIAIS.md` e `docs/CONTROLE.md`.
+- **Ctrl+C no chat do terminal** (v0.49.1): para só a resposta (e o comando que ela estiver rodando). O chat continua.
+  No `você>`, Ctrl+C apaga o que você digitou e, com a linha vazia, sai. Ctrl+D também sai. Nenhum comando fica rodando
+  sozinho depois de sair.
+- **Editar como um profissional** (v0.50.0):
+  - **código:** o agente lê antes de sobrescrever, mostra o diff de cada edição e confere a sintaxe;
+  - **vídeo** (`gemini-code video editar`): cortar, formato do Reels/feed/YouTube, cor, textos, legenda, música e
+    marca d'água;
+  - **foto** (`gemini-code imagem ajustar`).
+  
+  Tudo no aparelho, sem IA. Veja `docs/EDICAO.md`.
+  
+  v0.51.0: foto de iPhone (Display P3) com as cores certas, vídeo HDR no "melhorar", e o volume das redes medido de
+  verdade (duas passadas).
+
+## Treinador de futebol, site só com a chave e modo até terminar — v0.52.0
+
+```bash
+gemini-code futebol aliado                     # cria o aliado "treinador"
+gemini-code site --aliado treinador --abrir    # o site já com o treinador (v0.53.0: dá para trocar no topo)
+gemini-code futebol treino --tema pressao --categoria sub-15 --jogadores 18
+gemini-code futebol semana --jogo sabado --dias segunda,terca,quinta,sexta
+gemini-code futebol prancheta 4-3-3 --nomes "Marcos,Rafa,Thiago,..."
+gemini-code run --ate-terminar "corrige os testes que estão falhando"
+```
+
+- **O treinador:**
+  - **Treino:** a sessão para a categoria, o número de jogadores e o tema, com exercícios de verdade (organização,
+    regras, pontos de correção, progressão).
+  - **Semana:** o microciclo até o jogo (MD-4 tensão, MD-3 duração, MD-2 velocidade, MD-1 ativação; também com 2
+    jogos na semana).
+  - **Carga:** PSE x minutos, ACWR e monotonia.
+  - **Prancheta:** a formação em PNG e SVG.
+  - **No chat:** o aliado usa tudo isso, ajusta ao seu time e corta os lances do vídeo do jogo.
+  - **A idade conta:** criança brinca de jogar, e a segurança (pancada na cabeça: na dúvida, fora) vale em todo plano.
+  - Guia: `docs/FUTEBOL.md`.
+- **Site só com a chave:**
+  - sem chave, a página pede a chave do Gemini, confere com o Google e salva;
+  - com ela, a conversa vai direto para a nuvem;
+  - "crie uma imagem para o feed" sai no formato da rede e aparece na conversa.
+- **Até terminar:** o agente só para quando a tarefa estiver feita ou quando precisar de você. No site, ele continua
+  mesmo com a página fechada, e você acompanha ao voltar. O Parar e as permissões continuam valendo. Veja
+  `docs/MODO_SITE.md`.
+
+## MinhaIA Android integrada (primeira versão)
+
+O projeto agora inclui o aplicativo nativo **MinhaIA** em `mobile/MinhaIA/`, com Kotlin, Jetpack Compose, histórico e memórias locais e um motor Android baseado em `llama.cpp`. É um subprojeto Android separado do agente de terminal: ele não exige API Gemini para o chat local.
+
+Para configurar o Gemini Code para usar o mesmo modelo Qwen3-1.7B Q4_K_M, com download validado por SHA-256 e compartilhado em Downloads com o app Android, rode no Termux:
+
+```bash
+bash android/install-minhaia-model.sh
+node bin/gemini-code.js chat
+```
+
+O script pede que `termux-setup-storage` já tenha sido executado e usa o armazenamento compartilhado `Download`. Para usar o arquivo no app Android, compile/instale `mobile/MinhaIA` e escolha **Modelo → Importar outro GGUF**; por segurança, o app copia o modelo para o armazenamento privado, então é necessário espaço adicional.
+
+O modelo GGUF é o mesmo, mas os históricos e as memórias do CLI e do app ainda são independentes. A integração não compila o APK automaticamente nem afirma funcionamento no Galaxy A55 sem build e teste no aparelho. Veja `docs/MINHAIA_INTEGRACAO.md`.
+
+## Editar como um profissional: código, vídeo e foto — v0.50.0
+
+```bash
+# vídeo: a receita inteira numa passada só (ffmpeg, no aparelho)
+gemini-code video editar viagem.mp4 --cortar 0:05-0:35 --formato reels --cor quente \
+  --texto "Fim de semana na praia" --legenda falas.srt --musica fundo.mp3 --marca logo.png
+gemini-code video juntar a.mp4 b.mp4 c.mp4 --transicao suave
+gemini-code video capa viagem.mp4
+
+# foto: formato de cada rede, cor, texto, marca d'água; tira a localização (EXIF)
+gemini-code imagem ajustar loja.jpg --formato feed --cor vivo --texto "50% OFF só hoje" --fundo
+```
+
+- **Código:**
+  - o `write_file` não sobrescreve o que o agente não leu (nem o que mudou depois da leitura);
+  - cada edição volta com o diff e os números de linha;
+  - a sintaxe de `.js`, `.json`, `.py` e `.sh` é conferida depois de editar;
+  - o fim de linha (CRLF) e o BOM do arquivo são mantidos.
+- **No chat:** é só pedir ("corta do 0:05 ao 0:35 e deixa no formato do Reels"). O `video` é uma ferramenta sob
+  demanda; liga com `gemini-code config ferramentas-extras video`.
+
+Tudo explicado em `docs/EDICAO.md`.
+
+## Modo site: um site só, com conversa, voz e aliados — v0.48.0 (um site só desde a v0.53.0)
+
+```bash
+gemini-code site --abrir                    # abre o site no navegador (só neste aparelho)
+gemini-code site --aliado central --abrir   # já começa com um aliado (computador, celular/TV, sites, redes e desafios)
+gemini-code site --voz --abrir              # abre direto no modo voz (a esfera)
+```
+
+**Um site só (v0.53.0):**
+- **No topo:** você escolhe com quem conversar (o agente geral ou um aliado) e abre o modo voz, com a mesma conversa.
+- **Na caixa de mensagem:** o microfone dita, e a resposta de uma mensagem falada vem falada.
+- **Em cada resposta:** o botão "Ouvir".
+- **O microfone (v0.53.2):** o site faz o pedido padrão do navegador, que faz o Chrome perguntar. Se ele recusar, o
+  aviso diz onde está o bloqueio (o site, o Chrome inteiro, o Android ou o app Google). No celular, o site passa a ouvir
+  pelo app **Termux:API** (`pkg install termux-api` e o app da mesma loja do Termux).
+
+O terminal mostra um link só.
+
+**O modo voz:** uma esfera brilhante com anéis e um círculo de risquinhos que reagem à sua voz (ouvindo), giram em violeta (pensando),
+pulsam com a fala (respondendo) e ficam âmbar quando o agente precisa da sua permissão — que você dá **na própria
+página**. Microfone com **espaço**; enquanto ele trabalha, o botão vira **Parar** (ou **Esc**) e para o agente de verdade
+(v0.48.1). Modo **contínuo** para conversar sem as mãos. Voz pelo Chrome ou Edge (PC ou Android).
+
+**A conversa** (a versão chat, v0.49.0; é onde o site abre desde a v0.53.0): é uma conversa comum, clara ou
+escura, sem a esfera. As respostas vêm formatadas (listas, tabelas, código com "Copiar"), e as permissões aparecem no meio
+da conversa. Tem também o botão Parar, a nova conversa, e a conversa volta ao recarregar a página. O servidor só atende em `127.0.0.1`, com uma chave nova a cada vez. Guia: `docs/MODO_SITE.md`.
+
+No chat dá para **mandar foto, vídeo e áudio** (v0.51.0) pelo clipe, arrastando ou colando:
+
+- o arquivo sobe com a barra de progresso e fica em `midia-recebida/`, na pasta do projeto;
+- o agente vê a foto e edita com as ferramentas de sempre;
+- a foto editada, o vídeo e a capa aparecem na resposta, com o botão **Baixar**.
+
+## Redes sociais, celular, computador, sites e desafios — v0.47.0
+
+**Redes sociais ao mesmo tempo, pelas APIs oficiais** (com tokens seus — nunca a sua senha): Bluesky, Mastodon,
+Telegram, Discord, Facebook (Página), Instagram (conta profissional), Threads e X. Publica em várias de uma vez (em
+paralelo), com foto, lê menções e agenda posts; para WhatsApp, LinkedIn, Reddit, TikTok... abre o app com o texto pronto.
+Mostra o post e pergunta antes de sair; trava contra repetir o mesmo texto e um teto diário. Guia: `docs/REDES_SOCIAIS.md`.
+
+```bash
+gemini-code redes conectar bluesky                 # senha de APP, perguntada sem aparecer na tela
+gemini-code redes postar "Promoção de sábado! #pães" --em bluesky,mastodon,telegram --foto pao.jpg
+gemini-code redes compartilhar "Chegou pão!" --em whatsapp
+gemini-code redes notificacoes
+gemini-code redes agendar "Bom dia!" --em bluesky --at "amanhã 9h"
+```
+
+**Controlar o celular, o computador e sites** (guia: `docs/CONTROLE.md`) — cada ação pergunta antes:
+
+```bash
+gemini-code adb ui                                 # o que está na tela do celular/TV, com a posição de cada botão
+gemini-code adb tocar Enviar                       # toca pelo texto do botão; também deslizar e segurar
+gemini-code computador tela                        # print do computador (Linux, Mac, Windows); clicar, digitar, tecla, rolar...
+gemini-code computador tecla ctrl+s
+gemini-code config set-navegador-visivel on        # o navegador do agente com janela (você entra na conta ali)
+```
+
+O navegador do agente ganhou "selecionar" (lista) e "esperar" (um texto aparecer). Quando um site pede **verificação
+humana (CAPTCHA)**, o agente para e pede para você resolver — não tenta burlar.
+
+**Desafios** ("30 dias de caminhada", "21 dias sem açúcar"): lembrete diário que se encerra no fim, marcar o dia,
+sequência, calendário e postar o progresso nas redes.
+
+```bash
+gemini-code desafio criar "30 dias de caminhada" --hora 07:00 --redes bluesky --hashtag desafio30dias
+gemini-code desafio feito --nota "5 km"            # marca hoje e oferece postar "Dia 5/30 ✅" (pergunta antes)
+gemini-code desafio ver
+```
+
+**Tudo numa conversa:** `gemini-code aliados criar central --ferramentas central` → `gemini-code aliados chat central`
+(computador, celular/TV, sites, redes e desafios; cada ação com a confirmação dela). Outros aliados prontos:
+`gemini-code redes aliado`, `gemini-code desafio aliado`, `--ferramentas computador`.
+
+## Saúde, compras, imagem, vídeo, câmera, TV e sites — v0.46.0
+
+**Assistente de saúde** (não é médico; guia: [`docs/SAUDE.md`](docs/SAUDE.md)): diário de pressão, glicemia, peso, temperatura, saturação, batimentos, sintomas e remédios, com as faixas de referência; **triagem de emergência por regras fixas**, antes da IA (dor no peito, AVC, falta de ar... → SAMU 192); lembrete dos remédios no horário; página com gráficos para levar à consulta; e o aliado `saude` — o único que lê o diário.
+
+```bash
+gemini-code saude anotar pressao 13x8
+gemini-code saude remedio add "Losartana" --horarios 08:00,20:00 --dose 50mg
+gemini-code saude pagina --abrir
+gemini-code saude aliado && gemini-code aliados chat saude
+```
+
+**Compras do mês + iFood**: a lista por seção do mercado, com frequência (mensal, quinzenal, semanal), gasto estimado e orçamento. `compras ifood` copia a lista e abre o iFood — **o pedido e o pagamento você confirma no app**: o iFood não tem uma forma oficial para fazer pedidos de fora, e o gemini-code nunca paga nada sozinho nem guarda senha ou cartão.
+
+```bash
+gemini-code compras add "arroz 5kg" --qtd 2 --preco 27,90
+gemini-code compras add "maçã" --qtd 6 --freq semanal
+gemini-code compras orcamento 800
+gemini-code compras mes
+gemini-code compras ifood
+```
+
+**Imagem, vídeo e câmera**:
+
+```bash
+gemini-code imagem melhorar foto.jpg                  # sem IA (ImageMagick): mais nítida, cores e contraste; --ampliar 2
+gemini-code imagem melhorar foto.jpg --modo ia        # com o modelo de imagem do Gemini
+gemini-code imagem editar foto.jpg "tire o fundo"     # com IA
+gemini-code imagem gerar "um gato astronauta"         # com IA
+gemini-code video melhorar video.mp4 --estabilizar    # ffmpeg, no aparelho
+gemini-code video slideshow f1.jpg f2.jpg --musica m.mp3
+gemini-code camera analisar "tem leite na geladeira?" # foto + IA
+gemini-code camera vigiar --notificar                 # câmera de segurança: avisa quando algo muda (compara sem IA)
+```
+
+No chat, a ferramenta `imagem` cria, edita, melhora e descreve imagens (gerar com IA pergunta antes, porque gasta a cota da sua chave). Câmera e vídeo ficam num aliado criador: `gemini-code aliados criar criador --ferramentas midia --instrucoes "..."` — a câmera **pergunta toda vez**.
+
+**Melhorador de TV** (por adb, pergunta a cada passo; nada é desinstalado sozinho):
+
+```bash
+gemini-code tv diagnostico      # memória, armazenamento, animações e os apps que mais pesam
+gemini-code tv otimizar         # animações em 0,5x, limpar cache dos apps, fechar apps em segundo plano
+gemini-code tv desfazer         # animações de volta em 1x
+```
+
+**Criar site e app** (pontos de partida prontos, sem IA; depois o agente personaliza):
+
+```bash
+gemini-code criar site padaria --titulo "Padaria do Zé"
+gemini-code criar app meus-gastos --titulo "Meus Gastos"   # PWA: instala no celular e funciona offline
+gemini-code criar servir meus-gastos                       # http://127.0.0.1:8080 (só neste aparelho)
+```
+
+No Termux: `pkg install imagemagick ffmpeg termux-api` (e o app Termux:API) para tudo isso funcionar no celular.
+
+## Sandbox do shell — v0.45.0
+
+Comando que roda **sem você aprovar na hora** (confirmação do shell desligada, regra `permitir`, rotina agendada) agora roda numa **sandbox do sistema** (Linux + bubblewrap): disco só leitura menos a pasta do projeto, sem rede, `~/.gemini-code` e credenciais (`~/.ssh`, `~/.aws`...) invisíveis, `.git` só leitura e sockets do sistema bloqueados. Se o comando precisar sair dela, o agente pede — e isso **sempre** pergunta. Guia completo: [`docs/SANDBOX.md`](docs/SANDBOX.md).
+
+```bash
+sudo apt install bubblewrap                 # Debian/Ubuntu
+gemini-code sandbox                         # funciona aqui? o que libera e o que esconde
+gemini-code sandbox testar "ls ~/.ssh; touch /etc/x"   # veja por você
+gemini-code config set-sandbox auto|sempre|off          # sempre: até o que você aprova roda isolado
+gemini-code config set-sandbox-rede on      # internet dentro dela (padrão: sem rede)
+```
+
+- **Rotinas** com `run_shell` na lista de ferramentas passam a rodar comandos (na sandbox) em vez de tê-los recusados.
+- **Gravar fora do projeto** com `write_file`/`edit_file` agora **pergunta** (uma vez por edição; numa rotina, recusa). Dentro do `.git` (hooks, config...) o modelo nunca grava. Libere pastas com `config add-pasta-gravavel DIR`.
+- **Corrigido:** as fotos automáticas do projeto (`autoGit`) rodavam o git com a config do repositório — um `core.fsmonitor` plantado ali virava um comando rodando a cada turno, sem perguntar. Agora fsmonitor, hooks e assinatura ficam anulados, e repositório com filtro na config não ganha foto.
+- No Android/Termux, macOS e Windows não há sandbox: tudo continua como antes (com a confirmação).
+
+## Navegador e rotinas com agente — v0.44.0
+
+**Navegador.** No chat, peça normalmente ("abre o site X e veja o preço", "testa o login do meu app em localhost:3000"). O agente usa a ferramenta `browser`: abre a página num Chrome/Chromium/Edge sem janela, recebe o texto e os elementos numerados (`[3] campo "Buscar"`), clica e digita pelo número, e pode salvar um print. Diferente do `web_fetch`, enxerga páginas montadas por JavaScript.
+
+```bash
+gemini-code doctor                          # "navegador": encontrado e caminho
+gemini-code config set-navegador-path /caminho/do/chrome   # se não achar sozinho
+gemini-code config set-navegador-local on   # deixa abrir 127.0.0.1/localhost (testar seu app)
+```
+
+- Abrir um site novo **pergunta** (como o `web_fetch`; `webDominiosPermitidos` e as regras `negar`/`permitir` valem com o nome `browser`, ex.: `config negar "browser(*banco*)"`). Dentro de um site aprovado, o agente clica sem perguntar a cada passo; ir para **outro** site por clique, formulário ou redirecionamento é barrado até ele pedir com "abrir".
+- **Rede local bloqueada**: todo o tráfego do navegador passa por um proxy do gemini-code que confere o endereço na hora de conectar (sem a brecha de DNS rebinding). `set-navegador-local on` libera só o loopback.
+- **Perfil temporário**: o agente não usa as suas contas nem os seus cookies, e o perfil é apagado ao fechar. Downloads recusados; alertas da página dispensados; só `http`/`https` (nada de `file://`).
+- O navegador é controlado por um pipe, sem porta de depuração aberta. Instalação: Debian/Ubuntu `apt install chromium`, macOS `brew install --cask chromium`, Windows: Chrome ou Edge.
+
+**Rotinas com agente.** Além de verificar um site (`--url`), uma rotina pode mandar o agente fazer uma tarefa:
+
+```bash
+gemini-code routines create --name "TODOs" --prompt "liste os TODO do projeto ~/app e resuma" \
+  --cron '0 8 * * 1-5' --notificar            # dias úteis às 8h, com notificação
+gemini-code routines activate ID              # rascunho só roda depois de ativado
+gemini-code routines service                  # o agendador (precisa ficar rodando)
+gemini-code routines logs                     # resultado de cada execução
+```
+
+- **Ninguém está olhando**: toda confirmação vira "não" na hora, mesmo com o serviço aberto num terminal. Só roda sozinho o que já roda sem perguntar no chat — e, desde a v0.45.0, os comandos do `run_shell` (se estiver na lista), dentro da sandbox do Linux.
+- Ferramentas: por padrão **só leitura** (`read_file`, `list_dir`, `search_files`, `glob_files`); escolha outras com `--ferramentas a,b` (ou `nenhuma`). `--passos N` limita os passos (padrão 20). O agente não repete sozinho se falhar.
+- A resposta fica no histórico e num artefato (`gemini-code artifacts show ID`); `--notificar` avisa pelo Termux:API (`termux-notification`), `notify-send` (Linux) ou notificação do macOS.
+- O `~/.gemini-code/routines.json` é protegido: o modelo não consegue agendar a si mesmo.
 
 ## Controlar a TV e outros aparelhos (ADB) — v0.43.0
 
@@ -65,7 +322,13 @@ gemini-code adb abrir com.google.android.youtube.tv
 gemini-code adb tecla baixo                # cima/baixo/ok/voltar/home/play/volume+...
 gemini-code adb descobrir                  # Android 11+ (Google TV): acha a TV na rede
 gemini-code adb parear 192.168.0.50:37099 482915   # ...e pareia com o código mostrado na tela
+gemini-code adb tecla dormir               # desliga a tela ("acordar" liga; o "power" alterna)
+gemini-code adb link https://www.youtube.com/watch?v=XXXX   # abre o vídeo no app da TV
+gemini-code routines create --name "Dormir" --tv "tecla dormir" --cron '0 23 * * *' --alvo 192.168.0.50
+gemini-code aliados criar tv --ferramentas tv --instrucoes "Você controla a TV da sala."   # um aliado só da TV
 ```
+
+**v0.44.1:** rotinas de TV sem IA (`--tv`, um passo por vez, só ações que não destroem nada), `abrir_link` (o agente acha o vídeo com o navegador e manda tocar na TV), teclas `dormir`/`acordar` (não invertem como o `power`), o aliado `tv` e regras escritas como o comando (`config permitir "adb(tecla *)"`).
 
 Só funciona nos aparelhos onde você ligou a depuração e confiou nesta máquina (a TV pede confirmação). Toda ação que muda o aparelho pede sua confirmação; leitura (listar, info, print, log) não; reiniciar, desinstalar, limpar dados, configurações `secure`/`global` e o `shell` livre perguntam sempre. Texto digitado, valores e nomes de app chegam literais ao aparelho (entre aspas para o shell da TV), então não viram comandos. Isso não "turbina" a TV: o que dá para fazer é fechar/limpar/desinstalar apps e ajustar configurações, sempre com a sua confirmação. Ferramenta em `src/tools/adbTools.js`; o gemini-code também roda *dentro* da TV via Termux (sideload), mas na prática controlar de fora é mais confortável.
 
@@ -427,6 +690,10 @@ gemini-code/
   install.sh                instalador para Termux
 ```
 
+## Limite de uso da API Gemini (HTTP 429)
+
+Se a API responder `429 RESOURCE_EXHAUSTED`, a aplicação não troca automaticamente de provedor nem repete a chamada quando você selecionou explicitamente o provedor `gemini`. Se o Google informar um tempo como `Please retry in 52s`, aguarde esse período e envie a mensagem novamente. Quando a resposta não indicar espera, confira a métrica, o limite e o projeto em [AI Studio](https://aistudio.google.com/) e a [documentação de limites](https://ai.google.dev/gemini-api/docs/rate-limits). Um limite `0` significa que a métrica daquela operação não permite chamadas no projeto atual; trocar para o mesmo modelo não resolve. Para usar apenas a API Gemini, confirme com `gemini-code config set-provider gemini`. **Opcional (v0.30.0):** `gemini-code config set-wait-quota 60` faz o programa esperar sozinho (até 60 s) quando o Google pedir um tempo curto e repetir uma vez; vem desligado.
+
 ## Observações importantes
 
 - Geração de vídeo/música depende de modelos (Veo/Lyria) que **nem toda
@@ -468,11 +735,11 @@ gemini-code routines create --name "Site" --url https://example.com --every 5m -
 ```
 
 Comandos de gerenciamento: `routines list`, `show ID`, `activate ID`, `pause ID`,
-`resume ID`, `run ID`, `logs [ID]`, `status` e `remove ID --yes`. No estado atual,
-o executor automático implementado é `http-check` (GET com timeout, status HTTP,
-retentativas limitadas e histórico). Não há execução genérica de shell ou de
-prompts de IA por rotina, para evitar transformar uma definição de rotina em
-execução privilegiada não revisada.
+`resume ID`, `run ID`, `logs [ID]`, `status` e `remove ID --yes`. Há dois executores:
+`http-check` (GET com timeout, status HTTP, retentativas limitadas e histórico) e,
+desde a v0.44.0, `agente` (`--prompt`: o agente faz a tarefa sozinho, sem nenhuma
+confirmação — o que pediria uma é recusado —, com ferramentas de leitura por padrão;
+veja "Navegador e rotinas com agente"). Não há execução de shell direta por rotina.
 
 ### API HTTP autenticada
 
@@ -535,9 +802,10 @@ rede interna confiável, `ROUTINE_ALLOW_PRIVATE_TARGETS=1` desativa essa barreir
 e deve ser usado somente de forma consciente. O
 processo deve ficar ativo; a persistência do JSON, sozinha, não executa tarefas.
 
-A implantação cloud, alertas via mensagem, webhooks com assinatura, eventos de
-GitHub, workers externos, painel visual, rotinas genéricas de IA/shell e um modo
-offline híbrido ainda não estão conectados neste módulo. O projeto original
+A implantação cloud, alertas via mensageiros (Telegram etc.), webhooks com assinatura,
+eventos de GitHub, workers externos, painel visual, shell direto por rotina e um modo
+offline híbrido ainda não estão conectados neste módulo (a notificação do sistema,
+v0.44.0, é local). O projeto original
 continua oferecendo Ollama offline e Cowork em rede local, mas essas capacidades
 não equivalem a um serviço cloud permanente.
 

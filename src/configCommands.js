@@ -24,6 +24,8 @@ const SETTERS = {
   // v0.43.0: ADB (controlar TV/celular do usuário).
   'set-adb-path': { campo: 'adbPath', ok: (v) => `Caminho do adb definido: ${v}`, uso: 'gemini-code config set-adb-path /caminho/do/adb' },
   'set-adb-serial': { campo: 'adbSerial', ok: (v) => `Aparelho adb padrão definido: ${v}`, uso: 'gemini-code config set-adb-serial SERIAL_OU_IP[:PORTA]' },
+  // v0.44.0: navegador do agente.
+  'set-navegador-path': { campo: 'navegadorPath', ok: (v) => `Navegador do agente: ${v}`, uso: 'gemini-code config set-navegador-path /caminho/do/chrome' },
 };
 
 /** @returns {string|null} texto para mostrar, ou null se `sub` não é daqui. */
@@ -35,6 +37,98 @@ function aplicar(sub, args, saveConfig) {
     if (s.url && !urlValida(a[0])) return `Endereço inválido: "${a[0]}" (precisa começar com http:// ou https://).\nUso: ${s.uso}`;
     saveConfig({ [s.campo]: a[0] });
     return s.ok(a[0]);
+  }
+  if (sub === 'set-navegador-local') {
+    if (!['on', 'off'].includes(a[0])) return 'Uso: gemini-code config set-navegador-local on|off   (on: o navegador do agente abre 127.0.0.1/localhost; o resto da rede local continua bloqueado)';
+    saveConfig({ navegadorPermitirLocal: a[0] === 'on' });
+    return a[0] === 'on' ? 'O navegador do agente agora abre 127.0.0.1/localhost (para testar o seu app). O resto da rede local continua bloqueado.' : 'O navegador do agente voltou a bloquear 127.0.0.1/localhost.';
+  }
+  // v0.47.0: navegador do agente com janela (a pessoa vê, entra na conta, resolve uma verificação humana)
+  if (sub === 'set-navegador-visivel') {
+    if (!['on', 'off'].includes(a[0])) return 'Uso: gemini-code config set-navegador-visivel on|off   (on: o Chrome do agente abre com janela — você acompanha, entra na conta ou resolve um CAPTCHA ali)';
+    saveConfig({ navegadorVisivel: a[0] === 'on' });
+    return a[0] === 'on' ? 'O navegador do agente agora abre com janela (precisa de tela; as mesmas regras de sites aprovados e de rede valem).' : 'O navegador do agente voltou a rodar sem janela.';
+  }
+  // v0.50.0: conferir a sintaxe depois de cada edição (src/tools/sintaxe.js; só analisa, nunca roda o código)
+  if (sub === 'set-conferir-sintaxe') {
+    if (!['on', 'off'].includes(a[0])) return 'Uso: gemini-code config set-conferir-sintaxe on|off   (on: depois de editar .js/.json/.py/.sh, avisa o agente se a edição quebrou a sintaxe)';
+    saveConfig({ conferirSintaxe: a[0] === 'on' });
+    return a[0] === 'on' ? 'Depois de cada edição, a sintaxe de .js, .json, .py e .sh é conferida (só análise, o código não roda).' : 'A conferência de sintaxe depois das edições foi desligada.';
+  }
+  // v0.52.0: o modelo de imagem (criar/editar imagem com IA) é separado do modelo do chat
+  if (sub === 'set-image-model') {
+    const nome = String(a[0] || '').trim();
+    if (!/^[a-z0-9][a-z0-9._-]{2,80}$/i.test(nome)) return 'Uso: gemini-code config set-image-model NOME   (ex.: gemini-2.5-flash-image; veja os seus com: gemini-code models)';
+    saveConfig({ imageModel: nome });
+    return `Modelo de imagem: ${nome} (vale para criar e editar imagem com IA).`;
+  }
+  // v0.52.0: modo até terminar (src/agent.js): o agente continua sozinho até a tarefa estar feita
+  if (sub === 'set-ate-terminar') {
+    if (!['on', 'off'].includes(a[0])) return 'Uso: gemini-code config set-ate-terminar on|off   (on: o chat e o modo site começam no modo até terminar — o agente só para quando a tarefa estiver feita)';
+    saveConfig({ modoAteTerminar: a[0] === 'on' });
+    return a[0] === 'on'
+      ? 'Modo até terminar ligado por padrão: o agente continua sozinho até a tarefa estar feita (o Parar e as permissões continuam valendo). No chat: /ate-terminar off desliga só na conversa.'
+      : 'Modo até terminar desligado por padrão (no chat: /ate-terminar liga na conversa).';
+  }
+  // v0.45.0: sandbox do run_shell (src/sandbox.js) e pastas onde o agente grava sem perguntar.
+  if (sub === 'set-sandbox') {
+    if (!['auto', 'sempre', 'off'].includes(a[0])) {
+      return 'Uso: gemini-code config set-sandbox auto|sempre|off\n' +
+        '  auto   (padrão) comando que roda sem você aprovar na hora (confirmShell desligado, regra "permitir", rotinas) vai para a sandbox\n' +
+        '  sempre todo comando roda na sandbox, mesmo os que você aprova\n' +
+        '  off    sem sandbox (como antes da v0.45.0)';
+    }
+    saveConfig({ shellSandbox: a[0] });
+    return a[0] === 'off' ? 'Sandbox do run_shell desligada: os comandos rodam com todos os seus poderes (a confirmação continua valendo).'
+      : `Sandbox do run_shell: ${a[0]}. Veja se funciona nesta máquina com: gemini-code sandbox`;
+  }
+  if (sub === 'set-sandbox-rede') {
+    if (!['on', 'off'].includes(a[0])) return 'Uso: gemini-code config set-sandbox-rede on|off   (on: comandos na sandbox acessam a internet — mais útil, menos isolado)';
+    saveConfig({ shellSandboxRede: a[0] === 'on' });
+    return a[0] === 'on' ? 'Comandos na sandbox agora acessam a rede (npm install, git pull...). Os segredos continuam invisíveis.' : 'Comandos na sandbox voltaram a ficar sem rede.';
+  }
+  if (sub === 'add-pasta-gravavel' || sub === 'rm-pasta-gravavel') {
+    const path = require('path');
+    const bruto = a.join(' ').trim();
+    if (!bruto) return `Uso: gemini-code config ${sub} /caminho/da/pasta`;
+    // v0.49.3: a pasta do usuário de verdade (com HOME vazio, o os.homedir() dava '' e a checagem abaixo comparava com a pasta atual)
+    const casa = require('./config').pastaDoUsuario();
+    const dir = path.resolve(bruto.replace(/^~(?=$|\/)/, casa));
+    const { loadConfig } = require('./config');
+    const atuais = Array.isArray(loadConfig().pastasGravaveis) ? loadConfig().pastasGravaveis : [];
+    if (sub === 'rm-pasta-gravavel') {
+      if (!atuais.includes(dir)) return `Essa pasta não estava liberada: ${dir}`;
+      saveConfig({ pastasGravaveis: atuais.filter((d) => d !== dir) });
+      return `Pasta removida: ${dir}`;
+    }
+    const home = path.resolve(casa);
+    if (dir === path.parse(dir).root || home === dir || home.startsWith(dir + path.sep)) return `Não dá para liberar ${dir}: ela contém a sua HOME (~/.bashrc e companhia rodariam o que o agente gravasse).`;
+    if (!atuais.includes(dir)) saveConfig({ pastasGravaveis: [...atuais, dir] });
+    return `Pasta liberada: ${dir} — o agente grava ali sem perguntar (write_file e a sandbox do run_shell).`;
+  }
+  // v0.46.0: ferramentas sob demanda (saude_*, compras, camera, video) também no chat comum
+  if (sub === 'ferramentas-extras') {
+    const disponiveis = require('./tools').nomesSobDemanda();
+    const bruto = a.join(',').trim();
+    if (!bruto) {
+      const atuais = require('./config').loadConfig().ferramentasExtras || [];
+      return `Ferramentas extras no chat comum: ${atuais.length ? atuais.join(', ') : '(nenhuma)'}\nDisponíveis: ${disponiveis.join(', ')}\nUso: gemini-code config ferramentas-extras compras,video   (ou "nenhuma")`;
+    }
+    const lista = ['nenhuma', 'none'].includes(bruto.toLowerCase()) ? [] : [...new Set(bruto.split(/[\s,]+/).filter(Boolean))];
+    const desconhecida = lista.find((n) => !disponiveis.includes(n));
+    if (desconhecida) return `Ferramenta "${desconhecida}" não é sob demanda. Disponíveis: ${disponiveis.join(', ')}`;
+    saveConfig({ ferramentasExtras: lista });
+    return lista.length ? `No chat comum agora: ${lista.join(', ')}${lista.some((n) => n.startsWith('saude_')) ? ' (ATENÇÃO: o chat comum passa a ler o seu diário de saúde)' : ''}` : 'Ferramentas extras desligadas: elas só aparecem nos aliados que as usam.';
+  }
+  if (sub === 'set-confirmar-midia') {
+    if (!['on', 'off'].includes(a[0])) return 'Uso: gemini-code config set-confirmar-midia on|off   (on: pergunta antes de gerar imagem/vídeo com IA — gasta a cota da chave)';
+    saveConfig({ confirmarMidia: a[0] === 'on' });
+    return a[0] === 'on' ? 'Gerar imagem/vídeo com IA volta a perguntar antes.' : 'Gerar imagem/vídeo com IA não pergunta mais (a câmera continua perguntando sempre).';
+  }
+  if (sub === 'set-confirmar-fora') {
+    if (!['on', 'off'].includes(a[0])) return 'Uso: gemini-code config set-confirmar-fora on|off   (on: write_file/edit_file perguntam antes de gravar fora da pasta do projeto)';
+    saveConfig({ confirmarForaDoProjeto: a[0] === 'on' });
+    return a[0] === 'on' ? 'Gravar fora da pasta do projeto volta a pedir confirmação.' : 'ATENÇÃO: o agente agora grava em qualquer lugar sem perguntar (inclusive ~/.bashrc).';
   }
   if (sub === 'set-fallback-model') {
     saveConfig({ fallbackModel: a[0] || '' });

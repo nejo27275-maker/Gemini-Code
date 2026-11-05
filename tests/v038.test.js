@@ -57,12 +57,13 @@ test('mensagem de truncamento aponta para search_files (grep_files não existe)'
   assert.doesNotMatch(r, /grep_files/);
 });
 
-test('edit_file explica o problema quando o arquivo é CRLF e o old_text multilinha usa \\n', async () => {
+test('edit_file num arquivo CRLF com old_text multilinha em \\n: edita e mantém o CRLF (v0.50.0; antes recusava)', async () => {
   const p = path.join(temp(), 'crlf.txt');
   fs.writeFileSync(p, 'linha1\r\nlinha2\r\n');
-  const r = await fileTools.execute('edit_file', { path: p, old_text: 'linha1\nlinha2', new_text: 'x' });
-  assert.match(r, /CRLF/);
-  assert.equal(fs.readFileSync(p, 'utf8'), 'linha1\r\nlinha2\r\n');
+  const r = await fileTools.execute('edit_file', { path: p, old_text: 'linha1\nlinha2', new_text: 'x\ny' });
+  assert.match(r, /^Editado:/);
+  assert.match(r, /CRLF/, 'avisa que manteve o fim de linha do arquivo');
+  assert.equal(fs.readFileSync(p, 'utf8'), 'x\r\ny\r\n');
 });
 
 test('list_dir: pastas primeiro, ordenado, e com teto de itens', async () => {
@@ -148,7 +149,8 @@ test('run_checks cancelado quando o usuário responde n, e liberado (uma vez) co
   // então simulamos a leitura direto no readline compartilhado.
   const rl = ui.getShared();
   const questionOriginal = rl.question.bind(rl);
-  rl.question = (q, cb) => { perguntas++; cb(resposta); };
+  // assinatura real do readline: (pergunta, [opções], callback) — desde a v0.49.1 o ask() passa { signal }
+  rl.question = (q, opcoes, cb) => { perguntas++; (typeof opcoes === 'function' ? opcoes : cb)(resposta); };
   try {
     checkTools.sessao.confirmado = false;
     const negado = await checkTools.execute('run_checks', { cwd: d });
@@ -231,7 +233,7 @@ test('subagente: contexto isolado, ferramentas restritas, sem delegate_task e re
   const r = await sub.execute('delegate_task', { task: 'onde fica o login?', context: 'projeto X' }, { runOnceFn });
   assert.match(r, /^\[relatório do subagente explorador\]\nachei em src\/a\.js:10/);
   assert.deepEqual(recebido.opts.history, []);
-  assert.deepEqual(recebido.opts.allowedTools, ['read_file', 'list_dir', 'search_files', 'read_skill']);
+  assert.deepEqual(recebido.opts.allowedTools, ['read_file', 'list_dir', 'search_files', 'glob_files', 'read_skill']);
   assert.ok(!recebido.opts.allowedTools.includes('delegate_task'));
   assert.match(recebido.prompt, /onde fica o login\?[\s\S]*Contexto:\nprojeto X/);
   assert.match(recebido.opts.extraSystemInstruction, /EXPLORADOR/);

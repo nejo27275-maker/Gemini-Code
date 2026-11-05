@@ -10,7 +10,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { isSecret, verificadorDeSegredos, MSG_SEGREDO } = require('./protectedPaths');
+const { isSecret, verificadorDeSegredos, foraDoProjetoParaConvidado, MSG_SEGREDO } = require('./protectedPaths');
 
 const SEMPRE_IGNORAR = new Set(['.git', 'node_modules']);
 // Objeto mutável só para os testes exercitarem os limites sem criar 50 000 arquivos.
@@ -432,6 +432,9 @@ async function execute(name, args) {
   const pasta = args.path || '.';
   const raiz = path.resolve(pasta);
   if (isSecret(raiz)) return MSG_SEGREDO;
+  // v0.45.1: mesma trava do search_files/read_file para a sessão de convidado (só dentro do projeto).
+  const fora = foraDoProjetoParaConvidado(raiz);
+  if (fora) return fora;
   let st;
   try {
     st = fs.statSync(raiz);

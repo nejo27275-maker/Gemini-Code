@@ -8,7 +8,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { PROTECTED_PATHS, PROTECTED_DIRS, SECRET_PATHS } = require('../config');
+const { PROTECTED_PATHS, PROTECTED_DIRS, SECRET_PATHS, SECRET_DIRS } = require('../config');
 
 const MAX_SYMLINKS = 40;
 
@@ -76,8 +76,8 @@ function dentroDePastaProtegida(p, pastas = PROTECTED_DIRS) {
 
 /** O modelo não pode GRAVAR (config, mcp.json, hooks.json, tokens, agentes pessoais). */
 const isProtected = (p) => bateCom(PROTECTED_PATHS, p) || dentroDePastaProtegida(p);
-/** O modelo não pode nem LER (API key, segredos de MCP, tokens). */
-const isSecret = (p) => bateCom(SECRET_PATHS, p);
+/** O modelo não pode nem LER (API key, segredos de MCP, tokens; v0.46.0: a pasta dos dados de saúde). */
+const isSecret = (p) => bateCom(SECRET_PATHS, p) || dentroDePastaProtegida(p, SECRET_DIRS);
 
 /**
  * Para varreduras (search_files): calcula UMA vez os inodes dos segredos que existem e
@@ -89,7 +89,11 @@ function verificadorDeSegredos() {
   for (const p of SECRET_PATHS) {
     try { const s = fs.statSync(p); if (s.ino) inodes.add(`${s.dev}:${s.ino}`); } catch { /* não existe */ }
   }
-  return (arquivo, stat) => (stat && stat.ino ? inodes.has(`${stat.dev}:${stat.ino}`) : isSecret(arquivo));
+  // v0.46.0: os arquivos das pastas secretas (saúde) também — pelo caminho e pelo inode (link de fora para dentro)
+  const pastas = SECRET_DIRS.map((d) => caminhoReal(d));
+  for (const k of inodesDasPastas(pastas)) inodes.add(k);
+  const naPasta = (arquivo) => { const r = path.resolve(arquivo); return pastas.some((d) => r === d || r.startsWith(d + path.sep)); };
+  return (arquivo, stat) => naPasta(arquivo) || (stat && stat.ino ? inodes.has(`${stat.dev}:${stat.ino}`) : isSecret(arquivo));
 }
 
 /**
@@ -108,9 +112,85 @@ function foraDoProjetoParaConvidado(p, raiz = process.cwd()) {
   return `Bloqueado: a sessão de convidado só lê arquivos dentro do projeto (${base}).`;
 }
 
+/**
+ * v0.44.0: caminho para gravar um .png NOVO pedido pelo modelo (print do adb e do navegador): só `.png` e
+ * nunca dentro das áreas protegidas do gemini-code. Quem grava usa a flag 'wx' (não sobrescreve nada).
+ */
+function destinoPngNovo(arquivo, prefixo = 'tela') {
+  const destino = path.resolve(String(arquivo || `${prefixo}-${new Date().toISOString().replace(/[:.]/g, '-')}.png`));
+  if (path.extname(destino).toLowerCase() !== '.png') throw new Error('o print precisa ser salvo num arquivo .png.');
+  if (isProtected(destino) || isSecret(destino)) throw new Error('esse caminho é protegido do gemini-code; escolha outro lugar para o print.');
+  return destino;
+}
+
+/**
+ * v0.45.0: o que está no .git roda comandos fora de qualquer controle — no próximo "git" do usuário ou no autoGit
+ * do próprio gemini-code: hooks, core.fsmonitor/filtros no config, um .git/commondir ou um arquivo ".git"
+ * ("gitdir: ...") apontando para outra config. O modelo não grava nada ali (nem o próprio ".git"); para mexer no
+ * repositório, usa o comando git (run_shell, que pergunta ou roda na sandbox com o .git só leitura).
+ */
+function arquivoQueRodaNoGit(p) {
+  return caminhoReal(p).split(path.sep).some((x) => x.toLowerCase() === '.git');
+}
+
+const MSG_GIT =
+  'Bloqueado: o que está no .git (hooks, config, commondir) roda comandos fora do controle do gemini-code — no ' +
+  'próximo git do usuário — e não pode ser gravado por write_file/edit_file. Para mexer no repositório, use o ' +
+  'comando git pelo run_shell; hooks, só o usuário instala.';
+
+const contem = (base, alvo) => alvo === base || alvo.startsWith(base.endsWith(path.sep) ? base : base + path.sep);
+
+/**
+ * v0.45.0: o caminho fica FORA da área de trabalho (pasta do projeto, temporária do sistema e `pastasGravaveis`)?
+ * Se a pasta do projeto for a HOME (ou a raiz), os arquivos e pastas "ponto" da HOME (~/.bashrc, ~/.config...)
+ * contam como fora: são configuração que roda sozinha no próximo terminal/login.
+ */
+// v0.49.3: home pela pastaDoUsuario() (src/config.js) — com HOME vazio o os.homedir() dava '' (= a pasta atual)
+function foraDaAreaDeTrabalho(p, { raiz = process.cwd(), extras = [], home = require('../config').pastaDoUsuario() } = {}) {
+  const alvo = caminhoReal(p);
+  const homeReal = caminhoReal(home);
+  const raizReal = caminhoReal(raiz);
+  const raizAbrangeHome = contem(raizReal, homeReal);
+  const bases = [
+    ...(raizAbrangeHome ? [] : [raizReal]),
+    caminhoReal(require('os').tmpdir()),
+    ...(Array.isArray(extras) ? extras : [])
+      .map((d) => String(d || '').trim().replace(/^~(?=$|\/)/, home))
+      .filter((d) => path.isAbsolute(d))
+      .map((d) => caminhoReal(d))
+      .filter((d) => !contem(d, homeReal)),
+  ];
+  if (bases.some((b) => contem(b, alvo))) return false;
+  if (raizAbrangeHome && contem(raizReal, alvo) && contem(homeReal, alvo) && alvo !== homeReal) {
+    return path.relative(homeReal, alvo).split(path.sep)[0].startsWith('.');
+  }
+  return true;
+}
+
+/**
+ * Pergunta UMA vez antes de gravar fora da área de trabalho (config confirmarForaDoProjeto, ligado por padrão).
+ * @returns {Promise<string|null>} mensagem de recusa, ou null para seguir
+ */
+async function confirmarForaDaArea(caminhos, { cfg, perguntar } = {}) {
+  const config = cfg || require('../config').loadConfig();
+  if (config.confirmarForaDoProjeto === false) return null;
+  const fora = [...new Set(caminhos.map(String))].filter((c) => foraDaAreaDeTrabalho(c, { extras: config.pastasGravaveis }));
+  if (!fora.length) return null;
+  const { paraExibir } = require('../ui/textoSeguro');
+  const ask = perguntar || require('../ui/prompt').ask;
+  const lista = fora.slice(0, 10).map((c) => `  ${paraExibir(path.resolve(c))}`).join('\n') + (fora.length > 10 ? `\n  … (+${fora.length - 10})` : '');
+  const r = String(await ask(`\n[gemini-code] O agente quer gravar FORA da pasta do projeto (${paraExibir(process.cwd())}):\n${lista}\nConfirmar? (s/n) `)).trim().toLowerCase();
+  if (r === 's' || r === 'y' || r === 'sim') return null;
+  return `Gravação cancelada: ${fora.length > 1 ? 'esses arquivos ficam' : 'esse arquivo fica'} fora da pasta do projeto e o usuário não confirmou. ` +
+    'Grave dentro do projeto, ou peça ao usuário (ele pode liberar pastas com "gemini-code config add-pasta-gravavel DIR").';
+}
+
 const MSG_SEGREDO =
   'Bloqueado: este arquivo (ou o destino deste link) guarda segredos do próprio gemini-code ' +
   '(API key, segredos de MCP ou token de acesso) e não pode ser lido por ferramentas do modelo. ' +
   'Para ver a configuração, peça ao usuário para rodar "gemini-code config show" (mostra mascarado).';
 
-module.exports = { caminhoReal, mesmoInode, isProtected, isSecret, dentroDePastaProtegida, verificadorDeSegredos, foraDoProjetoParaConvidado, MSG_SEGREDO };
+module.exports = {
+  caminhoReal, mesmoInode, isProtected, isSecret, dentroDePastaProtegida, verificadorDeSegredos, foraDoProjetoParaConvidado, destinoPngNovo,
+  arquivoQueRodaNoGit, foraDaAreaDeTrabalho, confirmarForaDaArea, MSG_SEGREDO, MSG_GIT,
+};

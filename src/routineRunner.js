@@ -119,7 +119,176 @@ async function executeHttpCheck(action, { allowPrivateTargets = process.env.ROUT
   } finally { clearTimeout(timer); }
 }
 
-function createRoutineRunner({ store, maxRetries = 2, baseRetryMs = 500, now = () => new Date(), allowPrivateTargets = process.env.ROUTINE_ALLOW_PRIVATE_TARGETS === '1' } = {}) {
+// ---------------------------------------------------------------------------
+// v0.44.0: ação "agente" — o agente faz uma tarefa sozinho no horário marcado
+// ---------------------------------------------------------------------------
+
+const INSTRUCAO_ROTINA = 'TAREFA AGENDADA: ninguém está olhando o terminal. Não faça perguntas ao usuário; ações que pediriam ' +
+  'confirmação serão recusadas automaticamente — siga sem elas ou explique o que faltou. Comandos do run_shell (se ele ' +
+  'estiver liberado) rodam numa sandbox quando ela existe nesta máquina: sem rede e gravando só na pasta do projeto. ' +
+  'Termine com um resumo curto e objetivo do resultado (é o que o usuário vai ler na notificação e no histórico).';
+
+/**
+ * Notificação do sistema, se houver como: termux-notification (Android/Termux), notify-send (Linux) ou
+ * osascript (macOS). Texto vai sempre como argumento (execFile, nunca shell; no macOS o texto entra pelo
+ * argv do script, não dentro do código AppleScript). Devolve 'enviada' ou 'indisponível'.
+ */
+function notificarSistema(titulo, texto, { execFileFn = require('child_process').execFile, plataforma = process.platform } = {}) {
+  const { semControlesInvisiveis } = require('./ui/textoSeguro');
+  // título nunca começa com "-" (não vira opção do comando; no osascript é o 1º argumento depois do script)
+  const t = semControlesInvisiveis(String(titulo)).replace(/\s+/g, ' ').replace(/^-+/, '').slice(0, 100) || 'gemini-code';
+  const c = semControlesInvisiveis(String(texto)).slice(0, 500);
+  const comando = plataforma === 'android' ? ['termux-notification', ['--title', t, '--content', c]]
+    : plataforma === 'linux' ? ['notify-send', ['--', t, c]]
+      : plataforma === 'darwin' ? ['osascript', ['-e', 'on run argv', '-e', 'display notification (item 2 of argv) with title (item 1 of argv)', '-e', 'end run', t, c]]
+        : null;
+  if (!comando) return Promise.resolve('indisponível');
+  return new Promise((resolve) => {
+    try { execFileFn(comando[0], comando[1], { timeout: 10000 }, (err) => resolve(err ? 'indisponível' : 'enviada')); }
+    catch { resolve('indisponível'); }
+  });
+}
+
+let agentesRodando = 0;
+
+async function executeAgente(routine, {
+  runOnceFn = (...a) => require('./agent').runOnce(...a),
+  notificarFn = notificarSistema,
+  criarArtefato = (o) => require('./artifacts').createArtifact(o),
+} = {}) {
+  const { semControlesInvisiveis } = require('./ui/textoSeguro');
+  const action = routine.action;
+  const liberar = require('./ui/prompt').suspenderPerguntas();
+  agentesRodando++;
+  const started = Date.now();
+  try {
+    let resposta;
+    try {
+      const r = await runOnceFn(action.prompt, { history: [], allowedTools: action.ferramentas, maxSteps: action.maxPassos, extraSystemInstruction: INSTRUCAO_ROTINA });
+      resposta = semControlesInvisiveis(String((r && r.text) || '')).trim() || '(o agente terminou sem texto)';
+    } catch (err) {
+      const wrapped = new Error(`O agente falhou: ${err && err.message ? err.message : err}`);
+      wrapped.result = { ok: false, message: wrapped.message, durationMs: Date.now() - started, checkedAt: new Date().toISOString() };
+      if (action.notificar) wrapped.result.notificacao = await notificarFn(`gemini-code: ${routine.name} falhou`, wrapped.message);
+      throw wrapped;
+    }
+    let artefato = null;
+    try {
+      artefato = criarArtefato({
+        title: `Rotina: ${routine.name}`, type: 'rotina', summary: resposta.slice(0, 1200),
+        content: `# ${routine.name}\n\n${new Date().toISOString()}\n\n## Pedido\n\n${action.prompt}\n\n## Resultado\n\n${resposta}\n`,
+        metadata: { routineId: routine.id },
+      });
+    } catch { /* sem artefato, o resultado ainda fica no histórico */ }
+    const result = {
+      ok: true, message: 'O agente concluiu a tarefa.', resposta: resposta.slice(0, 4000),
+      artefato: artefato ? artefato.id : null, durationMs: Date.now() - started, checkedAt: new Date().toISOString(),
+    };
+    if (action.notificar) result.notificacao = await notificarFn(`gemini-code: ${routine.name}`, resposta);
+    return result;
+  } finally {
+    liberar();
+    // o navegador do agente é um só por processo: fecha quando a última rotina de agente termina
+    if (--agentesRodando === 0) { try { await require('./tools/browserTools').encerrar(); } catch { /* já fechado */ } }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// v0.44.1: ação "adb" — comandos para a TV/celular no horário marcado, sem IA
+// ---------------------------------------------------------------------------
+
+const FALHA_ADB = /^(Erro|adb falhou|adb não encontrado|Ação de adb cancelada)/;
+
+async function executeAdb(routine, {
+  executeFn = (args, deps) => require('./tools/adbTools').execute('adb', args, deps),
+  loadConfig = () => require('./config').loadConfig(),
+  dormir = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  notificarFn = notificarSistema,
+} = {}) {
+  const { semControlesInvisiveis } = require('./ui/textoSeguro');
+  // Revalida (o arquivo pode ter sido editado à mão): só ações seguras, nunca reiniciar/desinstalar/shell.
+  const action = require('./routines').validarAcao(routine.action);
+  const cfg = loadConfig() || {};
+  const started = Date.now();
+  // Os passos foram aprovados por quem criou a rotina; este "sim" só chega a ações da lista segura.
+  const deps = { ask: async () => 's' };
+  // TV por Wi-Fi: a conexão do adb cai quando ela dorme ou reinicia. Reconecta antes (não faz mal se já estiver).
+  let alvo = action.alvo || cfg.adbSerial || '';
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(alvo)) alvo = `${alvo}:${Number(cfg.adbPorta) || 5555}`;
+  const registro = [];
+  const falhar = async (mensagem) => {
+    const err = new Error(mensagem);
+    err.result = { ok: false, message: mensagem, passos: registro, durationMs: Date.now() - started, checkedAt: new Date().toISOString() };
+    if (action.notificar) err.result.notificacao = await notificarFn(`gemini-code: ${routine.name} falhou`, mensagem);
+    throw err;
+  };
+  const anotar = (rotulo, saida) => registro.push(`${rotulo}: ${semControlesInvisiveis(String(saida)).replace(/\s+/g, ' ').trim().slice(0, 300)}`);
+  if (/:\d+$/.test(alvo)) {
+    const r = String(await executeFn({ acao: 'conectar', alvo }, deps));
+    anotar('conectar', r);
+    if (FALHA_ADB.test(r) || /cannot|failed|unable/i.test(r)) await falhar(`Não consegui conectar a ${alvo}: ${r.split('\n')[0]}`);
+  }
+  for (const [i, passo] of action.passos.entries()) {
+    if (passo.acao === 'esperar') { await dormir(passo.segundos * 1000); anotar(`esperar`, `${passo.segundos} s`); continue; }
+    const args = { ...passo, ...(alvo ? { alvo } : {}) };
+    // As regras "negar" do usuário valem também aqui (no chat quem confere é o loop do agente).
+    const regra = require('./permissions').negada('adb', args, cfg);
+    if (regra) await falhar(`Passo ${i + 1} (${passo.acao}) bloqueado pela regra de permissão "${regra}".`);
+    const r = String(await executeFn(args, deps));
+    anotar(passo.acao, r);
+    if (FALHA_ADB.test(r)) await falhar(`Passo ${i + 1} (${passo.acao}) falhou: ${r.split('\n')[0]}`);
+  }
+  const result = { ok: true, message: `${action.passos.length} passo(s) enviados ao aparelho.`, passos: registro, durationMs: Date.now() - started, checkedAt: new Date().toISOString() };
+  if (action.notificar) result.notificacao = await notificarFn(`gemini-code: ${routine.name}`, result.message);
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// v0.46.0: ação "lembrete" — só a notificação (remédio, conta, compromisso). Sem notificação disponível, a
+// execução falha (e aparece em "routines logs"): um lembrete que ninguém vê não lembrou nada.
+// ---------------------------------------------------------------------------
+async function executeLembrete(routine, { notificarFn = notificarSistema, log = (m) => console.log(m), agora = () => new Date() } = {}) {
+  const { paraTerminal } = require('./ui/textoSeguro');
+  const action = require('./routines').validarAcao(routine.action);
+  const started = Date.now();
+  // v0.47.0: lembrete com data final ("ate", dia local): passado o último dia, não notifica e a rotina se encerra
+  if (action.ate) {
+    const d = agora();
+    const hoje = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    if (hoje > action.ate) return { ok: true, encerrar: true, message: `O período do lembrete terminou (${action.ate}).`, durationMs: Date.now() - started, checkedAt: new Date().toISOString() };
+  }
+  log(`[lembrete] ${paraTerminal(action.titulo)}: ${paraTerminal(action.texto)}`);
+  const notificacao = await notificarFn(action.titulo, action.texto);
+  const result = { ok: notificacao === 'enviada', message: notificacao === 'enviada' ? 'Lembrete enviado.' : 'Não deu para mostrar a notificação (no celular: instale o Termux:API — pkg install termux-api).', notificacao, durationMs: Date.now() - started, checkedAt: new Date().toISOString() };
+  if (!result.ok) throw Object.assign(new Error(result.message), { result });
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// v0.47.0: ação "rede" — o post agendado (src/redes.js). Publica uma vez, sem perguntar (aprovado ao criar) e nunca
+// repete (sairia duplicado). Uma rede que falha aparece no resultado; se nenhuma deu certo, a execução falha.
+// ---------------------------------------------------------------------------
+async function executeRede(routine, { store, cliente, log = (m) => console.log(m) } = {}) {
+  const { paraTerminal } = require('./ui/textoSeguro');
+  const redes = require('./redes');
+  const action = require('./routines').validarAcao(routine.action);
+  const started = Date.now();
+  const s = store || redes.createRedesStore();
+  const plano = redes.planejar({ texto: action.texto, redes: action.redes, foto: action.foto, fotoUrl: action.fotoUrl, alt: action.alt }, { store: s });
+  const resultados = await redes.publicar(plano, { store: s, ...(cliente ? { cliente } : {}) });
+  for (const r of resultados) log(`[rede] ${r.nome}: ${r.ok ? `publicado ${r.url || ''}` : `não publicou — ${paraTerminal(r.erro)}`}`);
+  const feitos = resultados.filter((r) => r.ok);
+  const falhas = resultados.filter((r) => !r.ok);
+  const message = [feitos.length ? `Publicado em ${feitos.map((r) => r.nome).join(', ')}.` : '', falhas.map((r) => `${r.nome}: ${r.erro}`).join(' ')].filter(Boolean).join(' ');
+  const result = {
+    ok: falhas.length === 0, message, publicados: feitos.map((r) => ({ rede: r.rede, url: r.url })),
+    falhas: falhas.map((r) => ({ rede: r.rede, erro: r.erro })), durationMs: Date.now() - started, checkedAt: new Date().toISOString(),
+  };
+  if (!feitos.length) throw Object.assign(new Error(message || 'Nada foi publicado.'), { result });
+  return result;
+}
+
+function createRoutineRunner({ store, maxRetries = 2, baseRetryMs = 500, now = () => new Date(), allowPrivateTargets = process.env.ROUTINE_ALLOW_PRIVATE_TARGETS === '1', agente = {}, adb = {}, lembrete = {}, rede = {} } = {}) {
   if (!store) throw new Error('O executor precisa de um armazenamento de rotinas.');
   const inFlight = new Set();
 
@@ -138,9 +307,16 @@ function createRoutineRunner({ store, maxRetries = 2, baseRetryMs = 500, now = (
     try {
       let result;
       let lastError;
-      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      // Só a verificação HTTP repete. O agente gastaria tokens e refaria ações; no aparelho, repetir um "power"
+      // desfaria o primeiro (liga e desliga).
+      const tentativas = routine.action.type === 'http-check' ? maxRetries : 0;
+      for (let attempt = 0; attempt <= tentativas; attempt++) {
         try {
           if (routine.action.type === 'http-check') result = await executeHttpCheck(routine.action, { allowPrivateTargets });
+          else if (routine.action.type === 'agente') result = await executeAgente(routine, agente);
+          else if (routine.action.type === 'adb') result = await executeAdb(routine, adb);
+          else if (routine.action.type === 'lembrete') result = await executeLembrete(routine, lembrete);
+          else if (routine.action.type === 'rede') result = await executeRede(routine, rede);
           else throw new Error(`Executor não implementado: ${routine.action.type}`);
           execution.attempts.push({ number: attempt + 1, ok: true, finishedAt: now().toISOString() });
           break;
@@ -148,7 +324,7 @@ function createRoutineRunner({ store, maxRetries = 2, baseRetryMs = 500, now = (
           lastError = err;
           execution.attempts.push({ number: attempt + 1, ok: false, error: err.message, finishedAt: now().toISOString() });
           // Falha HTTP ou timeout pode ser transitória; retentativa limitada.
-          if (attempt < maxRetries) await new Promise((resolve) => setTimeout(resolve, baseRetryMs * (2 ** attempt)));
+          if (attempt < tentativas) await new Promise((resolve) => setTimeout(resolve, baseRetryMs * (2 ** attempt)));
         }
       }
       if (lastError && !result) {
@@ -169,7 +345,8 @@ function createRoutineRunner({ store, maxRetries = 2, baseRetryMs = 500, now = (
       store.updateExecution(execution.id, { status: 'concluida', finishedAt: now().toISOString(), attempts: execution.attempts, result, error: null });
       const current = store.get(id);
       if (current && current.status !== STATUSES.PAUSED) {
-        const isOnce = routine.trigger.type === 'once';
+        // v0.47.0: uma ação pode dizer que acabou (lembrete com data final, ex.: o de um desafio de 30 dias)
+        const isOnce = routine.trigger.type === 'once' || (result && result.encerrar === true);
         const patch = { lastRunAt: now().toISOString(), lastResult: result };
         if (current.status !== STATUSES.PAUSED) patch.status = isOnce ? STATUSES.COMPLETED : (priorStatus === STATUSES.DRAFT ? STATUSES.DRAFT : STATUSES.ACTIVE);
         if (routine.trigger.type === 'interval') patch.nextRunAt = new Date(now().getTime() + routine.trigger.intervalMs).toISOString();
@@ -224,4 +401,4 @@ function createRoutineRunner({ store, maxRetries = 2, baseRetryMs = 500, now = (
   return { execute, tick, start, inFlight };
 }
 
-module.exports = { createRoutineRunner, executeHttpCheck, ensurePublicTarget, privateAddress, zonedMinuteKey };
+module.exports = { createRoutineRunner, executeHttpCheck, executeAgente, executeAdb, executeLembrete, executeRede, notificarSistema, ensurePublicTarget, privateAddress, zonedMinuteKey, INSTRUCAO_ROTINA };

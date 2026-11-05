@@ -33,7 +33,7 @@ Opções de criar/editar:
   --descricao TEXTO          o que ele faz (até ${LIMITES.descricao} caracteres)
   --instrucoes TEXTO         o papel dele (até ${LIMITES.instrucoes} caracteres); ou --instrucoes-arquivo ARQ
   --iniciador TEXTO          sugestão de conversa (repita até ${LIMITES.iniciadores} vezes); --sem-iniciadores apaga
-  --ferramentas PRESET|LISTA conversa | leitura | pesquisa (padrão) | completo, ou "read_file,web_fetch,..."
+  --ferramentas PRESET|LISTA conversa | leitura | pesquisa (padrão) | tv | completo, ou "read_file,web_fetch,..."
   --modelo NOME              modelo só dele (ex.: @local, openai:MODELO, gemini-...); "padrao" volta ao do config
   --memoria MODO             confirmar (padrão: pergunta antes de cada mudança) | auto | off
 
@@ -43,6 +43,15 @@ const DESCRICAO_PRESETS = {
   conversa: 'sem ferramentas (só conversa, memória e conhecimento)',
   leitura: 'lê arquivos e pastas do computador',
   pesquisa: 'leitura + abre páginas web (pergunta antes de cada acesso, se confirmWeb)',
+  tv: 'controla a TV/celular por adb e acha o que tocar na web (navegador), com as confirmações de sempre',
+  saude: 'diário de saúde (anota e consulta medições, sintomas e remédios; só este aliado lê) + web para conferir fontes',
+  midia: 'cria e melhora imagens e vídeos, e usa a câmera (pergunta toda vez) + web',
+  compras: 'cuida da lista de compras do mês (não compra nem paga) + web',
+  redes: 'escreve e publica nas suas redes sociais (sempre pergunta antes de publicar), cria imagens + web',
+  computador: 'usa o computador como você: print da tela, mouse, teclado e janelas (pergunta a cada ação) + navegador e web',
+  central: 'computador, celular/TV (adb), sites (navegador), redes sociais e desafios na mesma conversa — cada ação com a confirmação dela',
+  desafios: 'acompanha seus desafios (marca o dia, lembrete, sequência) e posta o progresso nas redes (pergunta antes)',
+  futebol: 'treinador de futebol: treinos, semana até o jogo, carga, prancheta tática, cortes do vídeo do jogo e artes + web',
   completo: 'todas as ferramentas da sessão (grava arquivos e roda comandos, com as confirmações de sempre)',
 };
 
@@ -175,7 +184,7 @@ Responda SÓ com um JSON, sem markdown e sem texto antes ou depois:
 {"description":"o que ele faz, em 1 frase curta",
  "instructions":"instruções completas em segunda pessoa (\\"Você é...\\"): papel, tom, o que fazer e o que evitar, formato das respostas e quando perguntar antes de agir. Até 4000 caracteres.",
  "starters":["até 4 sugestões curtas de primeira mensagem, escritas como o usuário escreveria"],
- "tools":"conversa | leitura | pesquisa | completo"}
+ "tools":"conversa | leitura | pesquisa | tv | completo"}
 
 Ferramentas: "conversa" = nenhuma; "leitura" = lê arquivos do computador; "pesquisa" = leitura + abre páginas web; "completo" = também grava arquivos e roda comandos. Escolha a MENOR que atende ao pedido. Não invente fatos sobre o usuário.`;
 
@@ -222,7 +231,7 @@ async function assistente(nome, perguntar, perguntarVarias) {
     if (!s.trim()) break;
     starters.push(s);
   }
-  const tools = (await perguntar(`Ferramentas [conversa | leitura | pesquisa | completo] (Enter = ${PRESET_PADRAO}): `)).trim() || PRESET_PADRAO;
+  const tools = (await perguntar(`Ferramentas [${Object.keys(PRESETS).join(' | ')}] (Enter = ${PRESET_PADRAO}): `)).trim() || PRESET_PADRAO;
   const memory = (await perguntar(`Memória [${MEMORIA_MODOS.join(' | ')}] (Enter = confirmar): `)).trim() || 'confirmar';
   return { name: nome, description: descricao, instructions: instrucoes, starters, tools, memory };
 }
@@ -359,9 +368,10 @@ async function cli(args = [], deps = {}) {
       if (!mensagem) return falha(L('erro', `Uso: gemini-code aliados run ${nome} "mensagem"`));
       const agente = store.obter(nome);
       const run = deps.runOnce || require('./agent').runOnce;
-      const { opcoes, ctx } = personalAgents.prepararTurno(store, agente, mensagem, { perguntar: deps.perguntar });
+      const { opcoes, ctx, alerta } = personalAgents.prepararTurno(store, agente, mensagem, { perguntar: deps.perguntar });
       const r = await personalAgents.comAgente(ctx, () => run(mensagem, { history: [], ...opcoes }));
-      return ok(L('texto', r.text));
+      // v0.46.0: aliado de saúde — o aviso de emergência (regras fixas) vem antes da resposta
+      return ok(...(alerta ? [L('erro', alerta)] : []), L('texto', r.text));
     }
 
     if (sub === 'conhecimento') {

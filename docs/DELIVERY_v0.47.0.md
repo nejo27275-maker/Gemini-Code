@@ -1,0 +1,25 @@
+# Entrega v0.47.0 — redes sociais, celular e computador pela tela, sites e desafios
+
+- **Redes sociais** (`gemini-code redes`, guia `docs/REDES_SOCIAIS.md`):
+  - **Redes com conta:** Bluesky, Mastodon, Telegram, Discord, Facebook (Página), Instagram (profissional), Threads e X, pelas APIs oficiais com tokens seus.
+  - **O que faz:** publica em várias ao mesmo tempo, com foto; lê menções; agenda posts.
+  - **Sem conta:** compartilhar abre WhatsApp, LinkedIn e outras com o texto pronto.
+  - **Segurança:** credenciais protegidas e perguntadas sem eco; sempre pergunta antes de publicar; travas contra spam.
+- **Celular/TV:** o `adb` lê a tela (`ui`) e toca pelo texto do botão (`tocar`), além de `deslizar` e `segurar`. Pelo Termux, controla o próprio celular.
+- **Computador:** `gemini-code computador` e a ferramenta `computador` fazem print, clique, digitação, teclas, rolagem, janelas e abertura de site, arquivo ou app (Linux, macOS, Windows). Perguntam a cada ação.
+- **Sites:**
+  - `selecionar` e `esperar` no navegador;
+  - modo com janela;
+  - CAPTCHA faz o agente parar e pedir a você (não burla).
+- **Desafios** (`gemini-code desafio`): lembrete diário com fim, marcar o dia, sequência, calendário e post do progresso.
+- **Aliado `central`:** computador, celular, sites, redes e desafios na mesma conversa.
+- **Corrigido:**
+  - `routines create --at` lia "04/11/2026" como 11 de abril;
+  - o bwrap de dentro podia ficar órfão ao encerrar um comando da sandbox;
+  - o temporário dos arquivos com segredo nascia 0644 por um instante.
+- **Testes:** novos: `redes` (17), `adbTela` (7), `computador` (9), `desafios` (7), `v047` (3), mais o navegador (2). Estresse das ferramentas novas: 24.094 chamadas, 0 problemas. Total: 964 testes no Node 20 e 22 (963 passando, 1 pulado como root); CI verde nos Node 20, 22 e 24 (964/964 no Node 22).
+- **Não testado aqui:**
+  - **Redes de verdade:** usei um servidor falso que imita cada API, e a assinatura do X foi conferida com o exemplo oficial.
+  - **Tela de computador de verdade e Mac/Windows:** os comandos foram conferidos e a execução testada com programas falsos.
+  - **Celular de verdade:** usei o adb falso.
+- **NetoLang:** não há outra versão da linguagem neste repositório (só o modelo em branco).

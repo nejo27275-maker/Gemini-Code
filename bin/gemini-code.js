@@ -12,18 +12,26 @@ const security = require('../src/security');
 const configCommands = require('../src/configCommands');
 const mcpPresets = require('../src/mcpPresets');
 const PACKAGE_JSON = require('../package.json');
-const { runOnce } = require('../src/agent');
-const { runAgentFile } = require('../src/agents/runner');
-const designTools = require('../src/tools/designTools');
-const mediaTools = require('../src/tools/mediaTools');
-const voice = require('../src/voice/voice');
-const { runLive } = require('../src/live/live');
+
+// v0.46.1: o agente (ferramentas, provedores, navegador, sandbox...) e o que depende dele só carregam quando o comando
+// usa. Antes até "--version", "saude", "compras" e "config" carregavam 78 módulos do projeto (uns 50 ms a mais aqui;
+// num celular com Termux, perto de meio segundo em CADA comando).
+function sobDemanda(caminho) {
+  let modulo = null;
+  return new Proxy({}, { get: (_, nome) => (modulo || (modulo = require(caminho)))[nome] });
+}
+const runOnce = (...a) => require('../src/agent').runOnce(...a);
+const runAgentFile = (...a) => require('../src/agents/runner').runAgentFile(...a);
+const designTools = sobDemanda('../src/tools/designTools');
+const mediaTools = sobDemanda('../src/tools/mediaTools');
+const voice = sobDemanda('../src/voice/voice');
+const runLive = (...a) => require('../src/live/live').runLive(...a);
 const { listSkills } = require('../src/skills/loader');
-const toolsIndex = require('../src/tools');
+const toolsIndex = sobDemanda('../src/tools');
 const agenda = require('../src/agenda');
 const projetos = require('../src/projetos');
 const routines = require('../src/routines');
-const { createRoutineRunner } = require('../src/routineRunner');
+const createRoutineRunner = (...a) => require('../src/routineRunner').createRoutineRunner(...a);
 const backup = require('../src/tools/backup');
 const sessions = require('../src/sessions');
 const checkpoints = require('../src/checkpoints');
@@ -33,15 +41,15 @@ const hooks = require('../src/hooks');
 const planMode = require('../src/planMode');
 const usage = require('../src/usage');
 const stepApproval = require('../src/stepApproval');
-const workflowTools = require('../src/tools/workflowTools');
+const workflowTools = sobDemanda('../src/tools/workflowTools');
 const artifacts = require('../src/artifacts');
 const agentProfiles = require('../src/agentProfiles');
 const { compactar } = require('../src/compact');
 const customCommands = require('../src/customCommands');
-const todoTools = require('../src/tools/todoTools');
+const todoTools = sobDemanda('../src/tools/todoTools');
 const knowledgeModule = require('../src/knowledge');
-const personalAgents = require('../src/personalAgents');
-const aliadosCommands = require('../src/personalAgentCommands');
+const personalAgents = sobDemanda('../src/personalAgents');
+const aliadosCommands = sobDemanda('../src/personalAgentCommands');
 // v0.43.2: a resposta do modelo vai ao terminal sem sequências de controle (OSC 52, ESC[2J...).
 const { paraTerminal } = require('../src/ui/textoSeguro');
 const { INSTRUCAO_MODO_CIENCIA } = require('../src/modoCiencia');
@@ -60,7 +68,8 @@ let saindo = false;
 function encerrarComLimpeza() {
   if (saindo) return;
   saindo = true;
-  try { toolsIndex.stopMcp(); } catch { /* já não tem o que fazer aqui */ }
+  // só há servidor MCP para parar se o cliente MCP chegou a ser carregado (não carrega o agente inteiro na saída)
+  try { if (require.cache[require.resolve('../src/tools/mcpClient')]) toolsIndex.stopMcp(); } catch { /* já não tem o que fazer aqui */ }
   process.exit(0);
 }
 process.on('SIGINT', encerrarComLimpeza);
@@ -157,6 +166,32 @@ No modo "chat", digite /help para ver os comandos de sessão (/clear, /model, /s
   gemini-code adb tecla <cima|baixo|ok|voltar|home|play...>   Navega na TV pelo controle virtual
   gemini-code adb abrir <pacote> | digitar <texto> | instalar <app.apk> | shell <cmd>   (pedem confirmação)
 
+  gemini-code saude anotar pressao 13x8        Assistente de saúde (não é médico): diário, alertas, remédios com lembrete,
+  gemini-code saude resumo | pagina | aliado   página para a consulta e triagem de emergência (gemini-code saude ajuda)
+  gemini-code compras add "arroz 5kg" --qtd 2  Lista de compras do mês por seção, gasto estimado e orçamento
+  gemini-code compras mes | ifood              ifood: copia a lista e abre o iFood (o pedido e o pagamento são seus)
+  gemini-code redes conectar bluesky           Redes sociais pelas APIs oficiais (Bluesky, Mastodon, Telegram, Discord, Facebook,
+  gemini-code redes postar "texto" --em a,b    Instagram, Threads, X): publica em várias ao mesmo tempo (pergunta antes),
+  gemini-code redes compartilhar "t" --em whatsapp   abre WhatsApp/LinkedIn/... com o texto pronto, lê menções e agenda posts
+  gemini-code computador status | tela | clicar X Y   Usa o computador como você: print, mouse, teclado e janelas (Linux, Mac, Windows)
+  gemini-code adb ui | tocar "Enviar" | deslizar cima  Celular/TV: lê o que está na tela e toca pelo texto do botão
+  gemini-code desafio criar "30 dias de caminhada"  Desafios: lembrete diário, marcar o dia, sequência e postar o progresso
+  gemini-code futebol treino|semana|carga|prancheta|aliado   O treinador de futebol: treinos, semana até o jogo, carga e prancheta
+  gemini-code site --abrir [--aliado treinador]  O site (só neste aparelho): conversa, microfone, foto/vídeo, aliados e o modo voz
+  gemini-code site --voz --abrir               Abre o site direto no modo voz (a esfera animada)
+  gemini-code imagem gerar|editar|melhorar|descrever   Imagens com IA ou, para melhorar, sem IA (ImageMagick)
+  gemini-code video melhorar|slideshow|gerar   Vídeos: melhorar e slideshow no aparelho (ffmpeg); gerar com IA (Veo)
+  gemini-code camera foto|analisar|vigiar      Câmera do celular/webcam; vigiar avisa quando algo muda
+  gemini-code tv diagnostico | otimizar        Melhorador de TV: animações, cache e apps em segundo plano (pergunta)
+  gemini-code criar site|app NOME | servir PASTA   Site ou app (PWA, instala no celular) prontos para personalizar
+
+  gemini-code sandbox                          Mostra se a sandbox do run_shell funciona aqui e o que ela libera
+  gemini-code sandbox testar "comando"         Roda um comando na sandbox (para ver o que funciona lá dentro)
+  gemini-code config set-sandbox auto|sempre|off   auto: o que roda sem você aprovar vai para a sandbox (Linux + bubblewrap)
+  gemini-code config set-sandbox-rede on|off   Internet dentro da sandbox (padrão: off)
+  gemini-code config add-pasta-gravavel DIR    O agente grava ali sem perguntar (fora do projeto ele pergunta)
+  gemini-code config set-conferir-sintaxe on|off   Depois de editar .js/.json/.py/.sh, avisa se a sintaxe quebrou (padrão: on)
+
   gemini-code ciencia "pergunta"               Modo ciência: explica em formato fixo (números, comparação, dá pra escapar?)
 
   gemini-code agenda add "texto" --dia N       Marca algo num dia (ou --data AAAA-MM-DD)
@@ -166,6 +201,10 @@ No modo "chat", digite /help para ver os comandos de sessão (/clear, /model, /s
 
   gemini-code routines list                     Lista rotinas persistentes
   gemini-code routines create --name N --url URL (--every 5m | --at ISO | --cron '*/5 * * * *')
+  gemini-code routines create --name N --prompt "TAREFA" [--ferramentas a,b] [--passos 20] [--notificar] (--every|--at|--cron)
+                                                O agente faz a tarefa sozinho no horário (sem perguntar nada)
+  gemini-code routines create --name N --tv "tecla dormir" [--tv "..."] [--alvo IP] (--every|--at|--cron)
+                                                Comandos para a TV/celular no horário, sem IA
   gemini-code routines activate ID              Autoriza a execução automática de um rascunho
   gemini-code routines pause ID | resume ID     Pausa ou retoma uma rotina
   gemini-code routines run ID                   Executa uma verificação agora
@@ -220,6 +259,7 @@ Comandos disponíveis no chat:
   /aprovar [ajuste]  aprova o plano e deixa o agente executar
   /custo [zerar]     tokens gastos nesta sessão (reais, do Gemini), chamadas locais e limite; /custo zerar recomeça a contagem
   /passo [on|off]    aprovação passo a passo: mostra uma prévia e pergunta s/n/t antes de cada write_file/edit_file
+  /ate-terminar [on|off]  modo até terminar: o agente continua sozinho até a tarefa estar feita (Ctrl+C ainda para)
   /workflows         lista os workflows salvos que o agente pode acionar sozinho (run_workflow)
   /workflows rodar <nome> [var=valor ...]   roda um workflow direto, sem o modelo escolher
   /workflows validar <nome>                 confere o workflow sem rodar (erros e avisos)
@@ -238,7 +278,8 @@ Comandos disponíveis no chat:
   /aliado NOME       a conversa passa a ser com esse aliado (instruções, memória e conhecimento dele); /aliado off volta
   @NOME mensagem     manda só esta mensagem para o aliado NOME
   /memoria [esquecer ID]   o que o aliado ativo guardou sobre você
-  Ctrl+C             sai
+  Ctrl+C             para a resposta em andamento (e o comando que ela estiver rodando); no "você>", apaga o que
+                     você digitou, e com a linha vazia sai (Ctrl+D também sai)
 `;
 
 // Linhas { nivel, texto } dos módulos de comando (src/workflowCommands.js, src/personalAgentCommands.js).
@@ -301,7 +342,7 @@ async function chatLoop({ agente: nomeAgente } = {}) {
   const aliadosStore = personalAgents.defaultStore;
   let agenteAtivo = nomeAgente ? aliadosStore.obter(nomeAgente) : null;
   const sessoes = agenteAtivo ? aliadosStore.sessoes(agenteAtivo.name) : sessions;
-  console.log(chalk.bold(`gemini-code v${PACKAGE_JSON.version} — modo conversa. Ctrl+C para sair, /help para comandos.\n`));
+  console.log(chalk.bold(`gemini-code v${PACKAGE_JSON.version} — modo conversa. Ctrl+C para uma resposta (com a linha vazia, sai), /help para comandos.\n`));
   if (require('../src/solo').ativo()) console.log(chalk.green('[solo] code-ia sozinho: nenhuma outra IA (Gemini, llama.cpp, Ollama) é usada.\n'));
   const primeiraMensagem = await perguntarConfiancaNoProjeto();
   // Item 8 da revisão: usa a MESMA interface de readline que a confirmação
@@ -321,8 +362,40 @@ async function chatLoop({ agente: nomeAgente } = {}) {
   // estourar ERR_USE_AFTER_CLOSE na próxima pergunta.
   let fechado = false;
   let modoPlano = false;
+  let ateTerminar = loadConfig().modoAteTerminar === true; // v0.52.0
   stepApproval.configurar({ ativo: loadConfig().confirmarEscrita === true, perguntar: (q) => (fechado ? Promise.resolve('n') : require('../src/ui/prompt').ask(q)) });
-  rl.on('close', () => { fechado = true; });
+  // v0.49.2: Ctrl+D no "você>" (fim da entrada) sai pelo encerrarComLimpeza. Antes só marcava `fechado`: com um
+  // servidor MCP vivo o processo ficava pendurado para sempre. Com uma mensagem a caminho (entrada por pipe, colagem),
+  // o fluxo normal termina a resposta e sai depois, como antes.
+  let noPrompt = false; // esperando o "você>" sem nenhuma linha recebida ainda
+  rl.on('close', () => {
+    fechado = true;
+    if (noPrompt) { process.stdout.write('\n'); encerrarComLimpeza(); }
+  });
+  // v0.49.1: Ctrl+C durante uma resposta PARA a resposta (o agente para no próximo ponto seguro, como o "Parar" do
+  // modo site; uma confirmação aberta vale "não") e o chat continua. Ctrl+C de novo enquanto ele para, ou no "você>",
+  // sai. Antes, o Ctrl+C só fechava a leitura do teclado: a resposta seguia até o fim (com ferramentas!) e o chat
+  // fechava sozinho depois, sem aviso.
+  let respostaEmAndamento = null; // AbortController da resposta atual
+  rl.on('SIGINT', () => {
+    if (!respostaEmAndamento) {
+      // v0.49.2: com algo digitado, o Ctrl+C só apaga a linha (como num terminal) — sair perdia a mensagem pela metade
+      if (rl.line) {
+        rl.write(null, { ctrl: true, name: 'e' }); // cursor para o fim
+        rl.write(null, { ctrl: true, name: 'u' }); // apaga a linha
+        return;
+      }
+      process.stdout.write('\n');
+      encerrarComLimpeza();
+      return;
+    }
+    if (respostaEmAndamento.signal.aborted) { process.stdout.write(chalk.dim('\n(saindo)\n')); encerrarComLimpeza(); return; }
+    respostaEmAndamento.abort();
+    require('../src/ui/prompt').cancelarPerguntas();
+    // um comando de terminal em andamento é interrompido como num terminal; gravar um arquivo, por exemplo, termina antes
+    const comandos = require('../src/emAndamento').interromperTodos();
+    process.stdout.write(chalk.yellow(`\n(parando a resposta${comandos ? ' e o comando em andamento' : ''} — Ctrl+C de novo para sair)\n`));
+  });
 
   const tratarLinha = async (line) => {
     const cmd = line.trim();
@@ -409,6 +482,16 @@ async function chatLoop({ agente: nomeAgente } = {}) {
       else if (arg) { console.log(chalk.dim('Uso: /passo [on|off]\n')); return ask(); }
       else stepApproval.configurar({ ativo: !stepApproval.ativo() });
       console.log(chalk.dim(stepApproval.ativo() ? 'Passo a passo LIGADO: cada gravação de arquivo pede sua aprovação (s/n/t).\n' : 'Passo a passo desligado.\n'));
+      return ask();
+    }
+    if (cmd === '/ate-terminar' || cmd.startsWith('/ate-terminar ') || cmd === '/até-terminar' || cmd.startsWith('/até-terminar ')) {
+      const arg = cmd.replace(/^\/at[eé]-terminar/, '').trim().toLowerCase();
+      if (arg === 'on' || arg === 'off') ateTerminar = arg === 'on';
+      else if (arg) { console.log(chalk.dim('Uso: /ate-terminar [on|off]\n')); return ask(); }
+      else ateTerminar = !ateTerminar;
+      console.log(chalk.dim(ateTerminar
+        ? 'Modo até terminar LIGADO: o agente continua sozinho até a tarefa estar feita (as permissões continuam sendo perguntadas; Ctrl+C para).\n'
+        : 'Modo até terminar desligado.\n'));
       return ask();
     }
     if (cmd === '/workflows' || cmd.startsWith('/workflows ')) {
@@ -584,18 +667,25 @@ async function chatLoop({ agente: nomeAgente } = {}) {
         console.log(chalk.dim('Uso: /ciencia pergunta (ex.: /ciencia quanto tempo passa em 1 segundo perto de um buraco negro?)\n'));
         return ask();
       }
+      const parar = new AbortController(); // v0.49.1: Ctrl+C para esta resposta também
+      respostaEmAndamento = parar;
       try {
         process.stdout.write(chalk.green('\ngemini-code> '));
         let streamed = false;
-        const { text } = await runOnce(pergunta, {
+        const { text, interrompido } = await runOnce(pergunta, {
           extraSystemInstruction: INSTRUCAO_MODO_CIENCIA,
-          onText: (pedaco) => { streamed = true; process.stdout.write(paraTerminal(pedaco)); },
+          onText: (pedaco) => { if (parar.signal.aborted) return; streamed = true; process.stdout.write(paraTerminal(pedaco)); },
+          signal: parar.signal,
         });
-        if (!streamed) process.stdout.write(paraTerminal(text));
-        console.log('\n');
+        if (interrompido) console.log(chalk.yellow('(resposta parada)\n'));
+        else {
+          if (!streamed) process.stdout.write(paraTerminal(text));
+          console.log('\n');
+        }
       } catch (err) {
         console.error(chalk.red('Erro: ' + err.message));
       }
+      respostaEmAndamento = null;
       return ask();
     }
 
@@ -654,38 +744,54 @@ async function chatLoop({ agente: nomeAgente } = {}) {
       // plano só restringe (interseção das ferramentas). O modelo do agente, se definido, vale sobre o /model.
       const restricao = planMode.opcoes(modoPlano);
       const turno = agenteDoTurno ? personalAgents.prepararTurno(aliadosStore, agenteDoTurno, textoEnviado, { restricao }) : null;
+      // v0.46.0: aliado de saúde — aviso de emergência por regras fixas, antes da resposta da IA
+      if (turno && turno.alerta) console.log(chalk.red(`\n${turno.alerta}`));
       process.stdout.write(chalk.green(`\n${agenteDoTurno ? agenteDoTurno.name : 'gemini-code'}> `));
       let streamed = false;
+      const parar = new AbortController();
+      respostaEmAndamento = parar;
       const rodar = () => runOnce(textoEnviado, {
         history,
         modelName: modeloAtual,
         imagens: imagensDoTurno,
         ...(turno ? turno.opcoes : restricao),
+        ...(ateTerminar && !modoPlano ? { ateTerminar: true } : {}),
         onText: (pedaco) => {
+          if (parar.signal.aborted) return; // o que ainda chegar depois do Ctrl+C não aparece
           streamed = true;
           process.stdout.write(paraTerminal(pedaco));
         },
+        signal: parar.signal,
       });
-      const { text, history: newHistory } = await (turno ? personalAgents.comAgente(turno.ctx, rodar) : rodar());
+      const { text, history: newHistory, interrompido } = await (turno ? personalAgents.comAgente(turno.ctx, rodar) : rodar());
       history = newHistory;
       sessaoAtual = sessoes.save(sessaoAtual.id, { history, modelName: modeloAtual });
       try { artifacts.createArtifact({ title: line.slice(0, 120), type: 'turno-chat', status: 'concluido', summary: text.slice(0, 1000), content: text, taskId: sessaoAtual.id, cwd: process.cwd(), metadata: { sessionId: sessaoAtual.id, ...(agenteDoTurno ? { agentePessoal: agenteDoTurno.name } : {}) } }); } catch { /* relatório é best-effort e não pode travar o chat */ }
       // Se nada foi impresso via streaming (ex.: resposta veio só como
       // functionCalls sem texto acompanhando, ou streaming desabilitado),
       // imprime o texto completo agora.
-      if (!streamed) process.stdout.write(paraTerminal(text));
-      console.log('\n');
+      if (interrompido) console.log(chalk.yellow('(resposta parada)\n'));
+      else {
+        if (!streamed) process.stdout.write(paraTerminal(text));
+        console.log('\n');
+      }
     } catch (err) {
       console.error(chalk.red('Erro: ' + err.message));
     }
+    respostaEmAndamento = null;
     if (modoPlano) console.log(chalk.dim('(modo plano: nada foi alterado. /aprovar executa, /plano off cancela)\n'));
     const rw = rewind.finalizarTurno();
     if (autoGit) { const f = snapshots.tirar({ rotulo: `depois: ${line}` }); if (f) console.log(chalk.dim(`(foto ${f.curto} salva — /snapshots lista, /snapshots restaurar N volta)`)); }
     if (rw) console.log(chalk.dim(`(${rw.arquivos} arquivo(s) gravado(s) neste turno — /rewind desfaz)\n`));
     ask();
   };
-  const rotulo = () => [agenteAtivo && agenteAtivo.name, modoPlano && 'plano'].filter(Boolean).join(' · ');
-  const ask = () => fechado ? encerrarComLimpeza() : perguntarColando(rl, chalk.cyan(rotulo() ? `você [${rotulo()}]> ` : 'você> '), tratarLinha);
+  const rotulo = () => [agenteAtivo && agenteAtivo.name, modoPlano && 'plano', ateTerminar && !modoPlano && 'até terminar'].filter(Boolean).join(' · ');
+  const ask = () => {
+    if (fechado) return encerrarComLimpeza();
+    noPrompt = true;
+    // a mensagem chegou (mesmo que a colagem ainda esteja juntando linhas): o fim da entrada não corta mais nada
+    return perguntarColando(rl, chalk.cyan(rotulo() ? `você [${rotulo()}]> ` : 'você> '), tratarLinha, 150, () => { noPrompt = false; });
+  };
   if (primeiraMensagem) tratarLinha(primeiraMensagem); else ask();
 }
 
@@ -695,7 +801,7 @@ async function chatLoop({ agente: nomeAgente } = {}) {
 // "agenda" e "projetos" são só arquivo local (sem API key nenhuma
 // envolvida) — pedir a chave de segurança pra só ver a lista seria atrito
 // à toa.
-const COMANDOS_SEM_DESBLOQUEIO = new Set([undefined, 'help', '--help', 'version', '--version', '-v', 'config', 'confianca', 'trust', 'agenda', 'projetos', 'backups', 'routines', 'sessions', 'checkpoints', 'artifacts', 'context', 'doctor', 'solo', 'security', 'profiles', 'agents', 'code-ia', 'codeia', 'adb']);
+const COMANDOS_SEM_DESBLOQUEIO = new Set([undefined, 'help', '--help', 'version', '--version', '-v', 'config', 'confianca', 'trust', 'agenda', 'projetos', 'backups', 'routines', 'sessions', 'checkpoints', 'artifacts', 'context', 'doctor', 'solo', 'security', 'profiles', 'agents', 'code-ia', 'codeia', 'adb', 'futebol', 'treinador']);
 
 // v0.42.0: de "aliados", só conversar (chat/run) e criar com --ia chamam o modelo.
 function aliadosUsaModelo() {
@@ -820,7 +926,7 @@ async function main() {
     case 'run': {
       const parsed = agentProfiles.parseRunArgs(rest);
       const { profile, createCheckpoint, instruction } = parsed;
-      if (!instruction) throw new Error('Informe uma instrução. Uso: gemini-code run [--profile coder|explore|plan|review|test] [--checkpoint] [--imagem ARQ] [--json] "instrução"');
+      if (!instruction) throw new Error('Informe uma instrução. Uso: gemini-code run [--profile coder|explore|plan|review|test] [--checkpoint] [--imagem ARQ] [--json] [--ate-terminar] "instrução"');
       try {
         const imagens = parsed.imagens.map((arq) => require('../src/imagens').lerImagem(arq));
         let checkpoint = null;
@@ -832,6 +938,7 @@ async function main() {
           allowedTools: profile.tools ? [...profile.tools] : undefined,
           extraSystemInstruction: profile.instructions,
           imagens,
+          ...(parsed.ateTerminar ? { ateTerminar: true } : {}),
         });
         if (!parsed.json) console.log(paraTerminal(text));
         const report = artifacts.createArtifact({ title: instruction.slice(0, 120), type: profile.artifactType, status: 'concluido', summary: text.slice(0, 1000), content: text, cwd: process.cwd(), metadata: { profile: profile.name, allowedTools: profile.tools ? [...profile.tools] : 'session-default', checkpointId: checkpoint && checkpoint.id } });
@@ -872,6 +979,123 @@ async function main() {
       // Uma pergunta feita no caminho (assistente, confirmação, s/n de ferramenta) deixa a readline segurando o
       // terminal: sem fechar, o processo só saía com Ctrl+C.
       require('../src/ui/prompt').closeShared();
+      return;
+    }
+
+    case 'compras': {
+      // v0.46.0: lista de compras do mês + ponte para o iFood (src/compras.js)
+      const r = await require('../src/comprasCommands').executar(rest);
+      imprimirLinhas(r.linhas);
+      if (r.codigo) process.exitCode = r.codigo;
+      return;
+    }
+
+    case 'site':
+    case 'web':
+    case 'painel': {
+      // v0.48.0: modo site — conversar com o agente pelo navegador, por voz (com a esfera animada) ou, desde a v0.49.0,
+      // pela versão chat (/chat: uma conversa comum, por texto). Mesmo servidor e mesma segurança (src/site/).
+      // v0.53.0: um site só — o chat tem tudo (voz, aliados, foto e vídeo) e a esfera é um botão; --voz abre direto nela
+      const USO = 'Uso: gemini-code site [--abrir] [--voz] [--porta 8765] [--aliado NOME]   (--voz: abre direto no modo voz, a esfera; porta 0 = qualquer uma livre)';
+      const flags = { _: [] };
+      for (let i = 0; i < rest.length; i++) {
+        const a = rest[i];
+        if (a === '--abrir' || a === '--chat' || a === '--voz') flags[a.slice(2)] = true;
+        else if (a === '--porta' || a === '--aliado') {
+          // valor obrigatório: "--porta --abrir" não pode virar porta "--abrir"
+          if (i + 1 >= rest.length || rest[i + 1].startsWith('--')) { console.error(chalk.red(`Erro: ${a} precisa de um valor. ${USO}`)); process.exitCode = 1; return; }
+          flags[a.slice(2)] = rest[++i];
+        } else if (a === '--help' || !a.startsWith('--')) flags._.push(a);
+        else { console.error(chalk.red(`Erro: opção desconhecida ${paraTerminal(a)}. ${USO}`)); process.exitCode = 1; return; }
+      }
+      if (['ajuda', 'help', '--help'].includes(flags._[0])) { console.log(USO); return; }
+      if (flags._[0] === 'chat') flags.chat = true; // "gemini-code site chat" também vale (o padrão desde a v0.53.0)
+      if (flags._[0] === 'voz') flags.voz = true;
+      const porta = flags.porta === undefined ? 8765 : Number(flags.porta);
+      if (!Number.isInteger(porta) || porta < 0 || porta > 65535) { console.error(chalk.red(`Erro: --porta inválida. ${USO}`)); process.exitCode = 1; return; }
+      const site = require('../src/site/servidor');
+      let aliado = null;
+      if (flags.aliado !== undefined) {
+        const store = personalAgents.defaultStore;
+        let agente = null;
+        try { agente = store.carregar(String(flags.aliado)); } catch { /* nome inválido */ }
+        if (!agente) { console.error(chalk.red(`Erro: aliado "${paraTerminal(String(flags.aliado))}" não encontrado. Veja os seus com: gemini-code aliados listar`)); process.exitCode = 1; return; }
+        aliado = { store, agente };
+      }
+      // v0.53.0: trocar de aliado pela página (o mesmo que reabrir com --aliado: as ferramentas e a memória são as dele)
+      const store = personalAgents.defaultStore;
+      const aliados = {
+        listar: () => store.listar().filter((a) => !a.erro).map((a) => ({ nome: a.name, descricao: a.description || '' })),
+        abrir: (nome) => {
+          if (!nome) return { nome: null, conversar: site.conversarComAgente({ aliado: null }), sugestoes: null };
+          const agente = store.obter(nome);
+          return { nome: agente.name, conversar: site.conversarComAgente({ aliado: { store, agente } }), sugestoes: agente.starters };
+        },
+      };
+      const s = site.criarServidorSite({
+        conversar: site.conversarComAgente({ aliado }),
+        log: (m) => console.log(chalk.dim(paraTerminal(m))),
+        aliado: aliado ? aliado.agente.name : null,
+        sugestoes: aliado && Array.isArray(aliado.agente.starters) ? aliado.agente.starters : null, // v0.52.0
+        aliados,
+      });
+      s.servidor.on('error', (e) => {
+        console.error(chalk.red(`Erro: ${e.code === 'EADDRINUSE' ? `a porta ${porta} está em uso (use --porta 8766, ou --porta 0 para qualquer uma livre)` : e.message}`));
+        process.exitCode = 1;
+      });
+      s.servidor.listen(porta, '127.0.0.1', async () => {
+        const voz = s.endereco('/');
+        const chat = s.endereco('/chat');
+        console.log(chalk.green(`Site do Gemini Code${aliado ? ` (começa com o aliado "${paraTerminal(aliado.agente.name)}")` : ''}:`));
+        console.log(`  ${chalk.green(chat)}`);
+        console.log(chalk.dim(`  Tudo nele: conversa, microfone, "Ouvir" nas respostas, foto e vídeo pelo clipe, os aliados no topo e o botão "Modo voz" (a esfera). Direto na esfera: ${voz}`));
+        console.log(chalk.dim('Só neste aparelho (127.0.0.1). A chave no fim do endereço (#t=...) muda a cada vez: não compartilhe. Voz: Chrome ou Edge (no celular, se o Chrome não deixar, o site ouve pelo app Termux:API). As confirmações das ferramentas aparecem na página. Ctrl+C para parar.'));
+        console.log(chalk.dim(`Fotos e vídeos que você mandar ficam em ${path.join(process.cwd(), site.PASTA_RECEBIDA)}, e o que o agente editar aparece na página.`));
+        // v0.52.0: o site só precisa da chave do Gemini — sem ela, a própria página pede
+        try {
+          if (site.chavesPadrao().estado().precisa) console.log(chalk.yellow('Falta a chave da API do Gemini: a página vai pedir (é grátis em aistudio.google.com/apikey). Ou: gemini-code config set-key SUA_CHAVE'));
+        } catch { /* sem config: segue */ }
+        const url = flags.voz ? voz : chat;
+        if (flags.abrir && !(await require('../src/abrir').abrir(url))) console.log(chalk.dim('Não consegui abrir o navegador sozinho: copie o endereço acima.'));
+      });
+      return;
+    }
+
+    case 'futebol':
+    case 'treinador': {
+      // v0.52.0: o treinador de futebol (src/futebol.js, src/futebolCommands.js)
+      const r = await require('../src/futebolCommands').executar(rest);
+      imprimirLinhas(r.linhas);
+      if (r.codigo) process.exitCode = r.codigo;
+      return;
+    }
+
+    case 'desafio':
+    case 'desafios': {
+      // v0.47.0: desafios pessoais (src/desafios.js, src/desafiosCommands.js)
+      const r = await require('../src/desafiosCommands').executar(rest);
+      imprimirLinhas(r.linhas);
+      if (r.codigo) process.exitCode = r.codigo;
+      require('../src/ui/prompt').closeShared();
+      return;
+    }
+
+    case 'redes':
+    case 'rede': {
+      // v0.47.0: redes sociais pelas APIs oficiais (src/redes.js, src/redesCommands.js)
+      const r = await require('../src/redesCommands').executar(rest);
+      imprimirLinhas(r.linhas);
+      if (r.codigo) process.exitCode = r.codigo;
+      require('../src/ui/prompt').closeShared();
+      return;
+    }
+
+    case 'saude':
+    case 'saúde': {
+      // v0.46.0: assistente de saúde (src/saude.js, src/saudeCommands.js)
+      const r = await require('../src/saudeCommands').executar(rest);
+      imprimirLinhas(r.linhas);
+      if (r.codigo) process.exitCode = r.codigo;
       return;
     }
 
@@ -991,6 +1215,362 @@ async function main() {
         console.log(`Imagem gerada: ${r.outPath}`);
       } else {
         console.log('Uso: gemini-code design [slides|doc|image] "descrição" [pasta]');
+      }
+      return;
+    }
+
+    case 'imagem':
+    case 'foto': {
+      // v0.46.0: criar, editar, melhorar e descrever imagens (src/imagem.js)
+      const [sub, ...resto] = rest;
+      const flags = { _: [] };
+      for (let i = 0; i < resto.length; i++) {
+        if (['--saida', '--modo', '--ampliar', '--formato'].includes(resto[i]) && i + 1 < resto.length) flags[resto[i].slice(2)] = resto[++i];
+        else flags._.push(resto[i]);
+      }
+      const im = require('../src/imagem');
+      // v0.46.1: "uso" por falta de argumento sai com código 1 (scripts sabem que não rodou); sem subcomando, 0
+      const uso = () => { if (sub && !['ajuda', 'help', '--help'].includes(sub)) process.exitCode = 1; console.log([
+        'Uso: gemini-code imagem ajustar FOTO [FOTO2 ...] [opções]       Edição profissional SEM IA (ImageMagick, no aparelho):',
+        '       --formato feed|quadrado|stories|youtube   --enquadrar fundo-desfocado|preencher|barras   --melhorar',
+        '       --cor natural|vivo|quente|frio|cinema|pb|vintage|dramatico   --brilho -1..1 --contraste 0..3 --saturacao 0..3 --nitidez 0..3',
+        '       --texto "Oferta" (pode repetir) [--posicao-texto topo|centro|baixo] [--fundo]   --marca logo.png [--posicao-marca ...]',
+        '       --qualidade alta|normal|leve   --manter-localizacao (por padrão a localização/EXIF sai)',
+        '     gemini-code imagem gerar "descrição" [--formato feed|quadrado|stories|youtube|16:9]   (com IA; usa a cota da sua chave)',
+        '     gemini-code imagem editar FOTO "o que mudar"              (com IA)',
+        '     gemini-code imagem melhorar FOTO [--modo local|ia] [--ampliar 2]   (local = ImageMagick, grátis e offline)',
+        '     gemini-code imagem descrever FOTO ["pergunta"]',
+        '     opções: --saida arquivo.png (nunca sobrescreve: cria um arquivo novo)',
+      ].join('\n')); };
+      try {
+        let r;
+        if (sub === 'ajustar') {
+          // v0.50.0: edição profissional sem IA (src/imagemEdicao.js); opção desconhecida é recusada, não ignorada
+          const BOOL = new Set(['melhorar', 'fundo', 'manter-localizacao']);
+          const VALOR = new Set(['saida', 'formato', 'enquadrar', 'cor', 'brilho', 'contraste', 'saturacao', 'nitidez', 'texto',
+            'posicao-texto', 'marca', 'posicao-marca', 'qualidade']);
+          const o = { fotos: [], textos: [] };
+          for (let i = 0; i < resto.length; i++) {
+            const arg = resto[i];
+            if (!arg.startsWith('--')) { o.fotos.push(arg); continue; }
+            const nome = arg.slice(2);
+            if (BOOL.has(nome)) o[nome] = true;
+            else if (!VALOR.has(nome)) throw new Error(`opção desconhecida: ${arg}. Veja: gemini-code imagem ajuda`);
+            else if (i + 1 >= resto.length) throw new Error(`falta o valor de ${arg}`);
+            else if (nome === 'texto') o.textos.push(resto[++i]);
+            else o[nome] = resto[++i];
+          }
+          if (!o.fotos.length) return uso();
+          const receita = {
+            formato: o.formato, enquadrar: o.enquadrar, cor: o.cor, brilho: o.brilho, contraste: o.contraste, saturacao: o.saturacao,
+            nitidez: o.nitidez, melhorar: o.melhorar === true, marca_dagua: o.marca, posicao_marca: o['posicao-marca'],
+            qualidade: o.qualidade, manter_localizacao: o['manter-localizacao'] === true,
+            textos: o.textos.map((texto) => ({ texto, posicao: o['posicao-texto'] || 'baixo', fundo: o.fundo === true })),
+          };
+          const feito = await require('../src/imagemEdicao').ajustar(o.fotos, receita, { saida: o.saida });
+          for (const f of feito.arquivos) console.log(chalk.green(`Foto editada (sem IA): ${f.arquivo}`) + chalk.dim(` (${f.largura}x${f.altura})`));
+          if (feito.passos.length) console.log(chalk.dim(feito.passos.join(', ')));
+          return;
+        }
+        if (sub === 'gerar') {
+          if (bloquearSeConvidado('geração de imagem (custa cota da API do dono).')) return;
+          if (!flags._.length) return uso();
+          r = await im.gerar(flags._.join(' '), { saida: flags.saida, formato: flags.formato });
+        } else if (sub === 'editar') {
+          if (bloquearSeConvidado('edição de imagem com IA (custa cota da API do dono).')) return;
+          if (flags._.length < 2) return uso();
+          r = await im.editar(flags._[0], flags._.slice(1).join(' '), { saida: flags.saida });
+        } else if (sub === 'melhorar') {
+          if (!flags._[0]) return uso();
+          // v0.46.1: "--modo xyz" caía na IA; e no "auto" sem ImageMagick a IA rodava sem a trava de convidado
+          if (flags.modo !== undefined && !['auto', 'local', 'ia'].includes(flags.modo)) throw new Error('--modo: auto, local (ImageMagick) ou ia.');
+          const modo = flags.modo || 'auto';
+          const usaIa = modo === 'ia' || (modo === 'auto' && !im.acharMagick());
+          if (usaIa && bloquearSeConvidado('melhorar com IA (custa cota da API do dono).')) return;
+          r = await im.melhorar(flags._[0], { modo, saida: flags.saida, ampliar: flags.ampliar });
+        } else if (sub === 'descrever') {
+          if (!flags._[0]) return uso();
+          console.log(paraTerminal(await im.descrever(flags._[0], flags._.slice(1).join(' ') || undefined)));
+          return;
+        } else return uso();
+        console.log(chalk.green(`Imagem criada (${r.modo === 'ia' ? 'com IA' : 'sem IA, pelo ImageMagick'}): ${r.arquivo}`));
+      } catch (err) {
+        console.error(chalk.red(`Erro: ${err.message}`));
+        process.exitCode = 1;
+      }
+      return;
+    }
+
+    case 'criar': {
+      // v0.46.0: ponto de partida de site e de app (PWA), sem IA — src/criador.js
+      const [sub, ...resto] = rest;
+      const flags = { _: [] };
+      for (let i = 0; i < resto.length; i++) {
+        if (resto[i] === '--abrir') flags.abrir = true;
+        else if (resto[i].startsWith('--') && i + 1 < resto.length) flags[resto[i].slice(2)] = resto[++i];
+        else flags._.push(resto[i]);
+      }
+      const criador = require('../src/criador');
+      try {
+        if ((sub === 'site' || sub === 'app') && flags._[0]) {
+          const r = criador.criar({ tipo: sub, nome: flags._[0], titulo: flags.titulo, descricao: flags.descricao });
+          console.log(chalk.green(`${sub === 'app' ? 'App (PWA)' : 'Site'} criado em ${r.pasta}: ${r.arquivos.join(', ')}`));
+          console.log(chalk.dim(`Veja: gemini-code criar servir ${flags._[0]}   ·   Personalize: gemini-code chat → "no ./${flags._[0]}, ..."`));
+        } else if (sub === 'servir' && flags._[0]) {
+          const porta = Number(flags.porta || 8080);
+          if (!Number.isInteger(porta) || porta < 1 || porta > 65535) throw new Error('porta inválida.');
+          const srv = criador.servidor(flags._[0]);
+          srv.on('error', (e) => { console.error(chalk.red(`Erro: ${e.code === 'EADDRINUSE' ? `a porta ${porta} está em uso (use --porta 8081)` : e.message}`)); process.exitCode = 1; });
+          srv.listen(porta, '127.0.0.1', async () => {
+            const url = `http://127.0.0.1:${srv.address().port}/`;
+            console.log(chalk.green(`Servindo ${path.resolve(flags._[0])} em ${url} (só neste aparelho). Ctrl+C para parar.`));
+            if (flags.abrir) await require('../src/abrir').abrir(url);
+          });
+          return;
+        } else {
+          if (sub && !['ajuda', 'help', '--help'].includes(sub)) process.exitCode = 1;
+          console.log([
+            'Uso: gemini-code criar site NOME [--titulo "Minha Padaria"] [--descricao "..."]   site responsivo, sem IA',
+            '     gemini-code criar app NOME [--titulo "Meus Gastos"]                         app PWA (instala no celular, funciona offline)',
+            '     gemini-code criar servir PASTA [--porta 8080] [--abrir]                      vê o site/app em http://127.0.0.1',
+          ].join('\n'));
+        }
+      } catch (err) {
+        console.error(chalk.red(`Erro: ${err.message}`));
+        process.exitCode = 1;
+      }
+      return;
+    }
+
+    case 'computador':
+    case 'pc': {
+      // v0.47.0: usar o computador como uma pessoa (src/computador.js) — o que você digita aqui roda direto, sem perguntar
+      const c = require('../src/computador');
+      const [sub = 'status', ...resto] = rest;
+      const amb = c.ambiente();
+      const USO = 'Uso: gemini-code computador status | tela [arquivo.png] | janelas | clicar X Y [--direito] [--duplo] | mover X Y | digitar "texto" | tecla ctrl+c | rolar baixo [N] | focar "título" | abrir ALVO';
+      if (['status', 'ajuda', 'help', '--help'].includes(sub)) {
+        const linhas = [];
+        if (!amb.sessao) linhas.push(chalk.yellow(c.SEM_TELA));
+        else {
+          linhas.push(`Sistema: ${{ x11: 'Linux (X11)', wayland: 'Linux (Wayland)', mac: 'macOS', windows: 'Windows' }[amb.sessao]}`);
+          linhas.push(`Mouse e teclado: ${amb.mouse ? chalk.green('ok') : chalk.yellow(`falta — ${c.dicaInstalar(amb, 'mouse')}`)}`);
+          linhas.push(`Print da tela: ${amb.print ? chalk.green(typeof amb.print === 'string' ? amb.print : 'ok') : chalk.yellow(`falta — ${c.dicaInstalar(amb, 'print')}`)}`);
+        }
+        linhas.push(USO);
+        linhas.push(chalk.dim('No chat, um aliado com o preset "computador" (ou "central") faz isso pedindo confirmação a cada ação: gemini-code aliados criar pc --ferramentas computador'));
+        console.log(linhas.join('\n'));
+        return;
+      }
+      const flags = { _: [] };
+      for (const x of resto) {
+        if (x === '--direito') flags.botao = 'direito';
+        else if (x === '--meio') flags.botao = 'meio';
+        else if (x === '--duplo') flags.duplo = true;
+        else flags._.push(x);
+      }
+      const p = flags._;
+      const args = {
+        tela: { arquivo: p[0] }, janelas: {}, clicar: { x: Number(p[0]), y: Number(p[1]), botao: flags.botao, duplo: flags.duplo },
+        mover: { x: Number(p[0]), y: Number(p[1]) }, digitar: { texto: p.join(' ') }, tecla: { tecla: p.join('') },
+        rolar: { direcao: p[0], quantidade: p[1] }, focar: { titulo: p.join(' ') }, abrir: { alvo: p.join(' ') },
+      }[sub];
+      if (!args) { process.exitCode = 1; console.log(USO); return; }
+      const r = await c.executar(sub, args, { amb });
+      console.log(r.ok ? paraTerminal(r.texto) : chalk.red(paraTerminal(r.texto)));
+      if (!r.ok) process.exitCode = 1;
+      return;
+    }
+
+    case 'tv': {
+      // v0.46.0: melhorador de TV (src/tvOtimizar.js) — diagnóstico (só lê), otimizar (pergunta a cada passo), desfazer
+      const [sub = 'diagnostico', ...resto] = rest;
+      const flags = { _: [] };
+      for (let i = 0; i < resto.length; i++) {
+        if (resto[i] === '--tudo') flags.tudo = true;
+        else if (resto[i].startsWith('--') && i + 1 < resto.length) flags[resto[i].slice(2)] = resto[++i];
+        else flags._.push(resto[i]);
+      }
+      const tvo = require('../src/tvOtimizar');
+      const adbT = require('../src/tools/adbTools');
+      const cfg = loadConfig();
+      if (!['diagnostico', 'diagnóstico', 'otimizar', 'desfazer'].includes(sub)) {
+        // v0.46.1: antes o subcomando errado só aparecia depois de procurar o adb ("adb não encontrado")
+        if (!['ajuda', 'help', '--help'].includes(sub)) process.exitCode = 1;
+        console.log('Uso: gemini-code tv diagnostico | otimizar [--tudo] | desfazer   [--alvo IP]');
+        return;
+      }
+      try {
+        // TV por Wi-Fi: reconecta antes (a conexão do adb cai quando ela dorme), como as rotinas de TV
+        let alvo = flags.alvo || cfg.adbSerial || '';
+        if (/^\d{1,3}(\.\d{1,3}){3}$/.test(alvo)) alvo = `${alvo}:${Number(cfg.adbPorta) || 5555}`;
+        if (/:\d+$/.test(alvo)) await adbT.rodarAdb(cfg.adbPath || 'adb', ['connect', adbT.hostPorta(alvo, cfg.adbPorta)]);
+        const executar = tvo.executorAdb({ alvo });
+        const teste = await executar(['echo', 'ok']);
+        if (teste.erro) { console.error(chalk.red(teste.erro)); process.exitCode = 1; return; }
+        if (sub === 'diagnostico' || sub === 'diagnóstico') {
+          console.log(paraTerminal(tvo.relatorio(await tvo.diagnostico(executar))));
+        } else if (sub === 'otimizar') {
+          const r = await tvo.otimizar(executar, require('../src/ui/prompt').ask, flags.tudo ? { passos: Object.keys(tvo.PASSOS) } : {});
+          console.log(paraTerminal(tvo.relatorio(r.diagnostico)));
+          if (!r.feitos.length) console.log(chalk.green('Nada a otimizar agora (use --tudo para fazer todos os passos mesmo assim).'));
+          for (const f of r.feitos) console.log((f.feito ? chalk.green : f.erro ? chalk.red : chalk.dim)(`${f.feito ? 'feito' : f.erro ? `falhou: ${paraTerminal(f.erro)}` : 'pulado'} — ${tvo.PASSOS[f.passo].titulo}`));
+          if (r.feitos.some((f) => f.feito && f.passo === 'animacoes')) console.log(chalk.dim('Para voltar as animações ao normal: gemini-code tv desfazer'));
+          require('../src/ui/prompt').closeShared();
+        } else if (sub === 'desfazer') {
+          const erro = await tvo.desfazer(executar);
+          console.log(erro ? chalk.red(erro) : chalk.green('Animações de volta em 1x.'));
+        }
+      } catch (err) {
+        console.error(chalk.red(`Erro: ${err.message}`));
+        process.exitCode = 1;
+      }
+      return;
+    }
+
+    case 'camera':
+    case 'câmera': {
+      // v0.46.0: câmera do celular/webcam (src/camera.js)
+      const [sub, ...resto] = rest;
+      const flags = { _: [] };
+      for (let i = 0; i < resto.length; i++) {
+        if (['--notificar', '--descrever'].includes(resto[i])) flags[resto[i].slice(2)] = true;
+        else if (resto[i].startsWith('--') && i + 1 < resto.length) flags[resto[i].slice(2)] = resto[++i];
+        else flags._.push(resto[i]);
+      }
+      const cam = require('../src/camera');
+      try {
+        if (sub === 'foto') {
+          console.log(chalk.green(`Foto salva: ${await cam.foto({ saida: flags.saida, camera: flags.camera })}`));
+        } else if (sub === 'analisar') {
+          const r = await cam.analisar(flags._.join(' ') || undefined, { camera: flags.camera, manterFoto: Boolean(flags.saida) });
+          console.log(paraTerminal(r.resposta));
+        } else if (sub === 'vigiar') {
+          let parar = false;
+          process.on('SIGINT', () => { parar = true; console.log(chalk.dim('\n(parando depois da foto atual...)')); });
+          const { notificarSistema } = require('../src/routineRunner');
+          const pv = cam.parametrosVigia({ intervaloS: flags.intervalo, sensibilidade: flags.sensibilidade });
+          console.log(chalk.dim(`Vigiando: uma foto a cada ${pv.intervalo} s; mudança acima de ${pv.sensibilidadePct}% guarda a foto em ./${flags.pasta || 'vigia'}. Ctrl+C para parar.`));
+          const r = await cam.vigiar({
+            intervaloS: flags.intervalo, sensibilidade: flags.sensibilidade, pasta: flags.pasta || 'vigia', camera: flags.camera,
+            deveParar: () => parar, log: (m) => console.log(chalk.dim(m)),
+            aoDetectar: async ({ arquivo, mudou }) => {
+              let texto = `Movimento: ${(mudou * 100).toFixed(0)}% da imagem mudou (${path.basename(arquivo)})`;
+              if (flags.descrever) {
+                try { texto += ` — ${await require('../src/imagem').descrever(arquivo, 'Em uma frase: o que mudou ou quem/o que aparece nesta foto?')}`; } catch (e) { texto += ` (sem descrição: ${e.message})`; }
+              }
+              console.log(chalk.yellow(paraTerminal(texto)));
+              if (flags.notificar) await notificarSistema('gemini-code: câmera', texto.slice(0, 300));
+            },
+          });
+          console.log(`Fim: ${r.fotos} fotos, ${r.deteccoes} movimento(s); fotos em ${r.pasta}`);
+        } else {
+          if (sub && !['ajuda', 'help', '--help'].includes(sub)) process.exitCode = 1;
+          console.log([
+            'Uso: gemini-code camera foto [--camera 1] [--saida foto.jpg]           (1 = frontal)',
+            '     gemini-code camera analisar "o que tem na geladeira?" [--camera 1]   (manda a foto para a IA)',
+            '     gemini-code camera vigiar [--intervalo 30] [--sensibilidade 5] [--pasta vigia] [--notificar] [--descrever]',
+            '     (vigiar compara as fotos no aparelho, sem IA; --descrever pede à IA uma frase sobre cada movimento)',
+          ].join('\n'));
+        }
+      } catch (err) {
+        console.error(chalk.red(`Erro: ${err.message}`));
+        process.exitCode = 1;
+      }
+      return;
+    }
+
+    case 'video':
+    case 'vídeo': {
+      // v0.46.0: melhorar vídeo, slideshow de fotos (ffmpeg, local) e vídeo com IA (Veo) — src/video.js
+      // v0.50.0: editar como um editor profissional, juntar, capa, áudio e info — src/videoEdicao.js
+      const [sub, ...resto] = rest;
+      const BOOLEANOS = new Set(['estabilizar', 'melhorar', 'sem-normalizar', 'fundo']);
+      const COM_VALOR = new Set(['saida', 'segundos', 'musica', 'cortar', 'formato', 'enquadrar', 'cor', 'texto', 'posicao-texto',
+        'legenda', 'volume-musica', 'marca', 'posicao-marca', 'velocidade', 'fade', 'qualidade', 'brilho', 'contraste', 'saturacao',
+        'transicao', 'tempo']);
+      const flags = { _: [], textos: [] };
+      let erroFlag = null;
+      for (let i = 0; i < resto.length; i++) {
+        const arg = resto[i];
+        if (!arg.startsWith('--')) { flags._.push(arg); continue; }
+        const nome = arg.slice(2);
+        if (BOOLEANOS.has(nome)) flags[nome] = true;
+        else if (!COM_VALOR.has(nome)) { erroFlag = `opção desconhecida: ${arg}`; break; } else if (i + 1 >= resto.length) { erroFlag = `falta o valor de ${arg}`; break; } else if (nome === 'texto') flags.textos.push(resto[++i]);
+        else flags[nome] = resto[++i];
+      }
+      if (erroFlag) { console.error(chalk.red(`Erro: ${erroFlag}. Veja: gemini-code video ajuda`)); process.exitCode = 1; return; }
+      const v = require('../src/video');
+      const ve = require('../src/videoEdicao');
+      try {
+        let r;
+        if (sub === 'editar' && flags._[0]) {
+          const receita = {
+            cortar: flags.cortar, formato: flags.formato, enquadrar: flags.enquadrar, cor: flags.cor, velocidade: flags.velocidade,
+            fade: flags.fade, legenda: flags.legenda, musica: flags.musica, volume_musica: flags['volume-musica'],
+            marca_dagua: flags.marca, posicao_marca: flags['posicao-marca'], qualidade: flags.qualidade, brilho: flags.brilho,
+            contraste: flags.contraste, saturacao: flags.saturacao, estabilizar: flags.estabilizar === true,
+            melhorar: flags.melhorar === true, normalizar: flags['sem-normalizar'] !== true,
+            textos: flags.textos.map((texto) => ({ texto, posicao: flags['posicao-texto'] || 'baixo', fundo: flags.fundo === true })),
+          };
+          r = await ve.editar(flags._[0], receita, { saida: flags.saida });
+          console.log(chalk.green(`Vídeo editado: ${r.arquivo}`));
+          console.log(chalk.dim(ve.descreverResultado(r)));
+          return;
+        }
+        if (sub === 'juntar' && flags._.length) {
+          r = await ve.juntar(flags._, { transicao: flags.transicao || 'nenhuma', formato: flags.formato, enquadrar: flags.enquadrar || 'barras', normalizar: flags['sem-normalizar'] !== true, qualidade: flags.qualidade || 'normal', saida: flags.saida });
+          console.log(chalk.green(`Vídeos juntados: ${r.arquivo}`));
+          console.log(chalk.dim(`${r.clipes} clipes, ${ve.descreverResultado(r)}`));
+          return;
+        }
+        if (sub === 'capa' && flags._[0]) {
+          r = await ve.capa(flags._[0], { tempo: flags.tempo, saida: flags.saida });
+          console.log(chalk.green(`Capa salva: ${r.arquivo}`));
+          return;
+        }
+        if (sub === 'audio' && flags._[0]) {
+          r = await ve.extrairAudio(flags._[0], { saida: flags.saida });
+          console.log(chalk.green(`Áudio salvo: ${r.arquivo}`));
+          return;
+        }
+        if (sub === 'info' && flags._[0]) {
+          const i = await ve.info(flags._[0]);
+          if (!i.largura) throw new Error('não achei imagem nesse arquivo (é só áudio?).');
+          const dur = i.duracao ? `${Math.floor(i.duracao / 60)}:${String(Math.round(i.duracao % 60)).padStart(2, '0')}` : '?';
+          console.log(`${i.arquivo}\n  duração ${dur} · ${i.largura}x${i.altura}${i.fps ? ` · ${i.fps} fps` : ''} · ${i.temAudio ? 'com áudio' : 'sem áudio'}${i.rotacao ? ` · gravado girado ${i.rotacao}°` : ''}${i.hdr ? ` · HDR (${i.hdr.toUpperCase()})` : ''}`);
+          return;
+        }
+        if (sub === 'melhorar' && flags._[0]) r = await v.melhorar(flags._[0], { saida: flags.saida, estabilizar: flags.estabilizar });
+        else if (sub === 'slideshow' && flags._.length) r = await v.slideshow(flags._, { segundos: flags.segundos, musica: flags.musica, saida: flags.saida });
+        else if (sub === 'gerar' && flags._.length) {
+          if (bloquearSeConvidado('geração de vídeo (custa cota da API do dono).')) return;
+          r = await v.gerar(flags._.join(' '));
+        } else {
+          if (sub && !['ajuda', 'help', '--help'].includes(sub)) process.exitCode = 1;
+          console.log([
+            'Uso: gemini-code video editar VIDEO.mp4 [opções]       Edição profissional numa passada só (ffmpeg, no aparelho):',
+            '       --cortar 0:05-0:35   --formato reels|feed|quadrado|youtube   --enquadrar fundo-desfocado|preencher|barras',
+            '       --cor natural|vivo|quente|frio|cinema|pb|vintage|dramatico   --brilho -1..1 --contraste 0..3 --saturacao 0..3',
+            '       --texto "Oferta de hoje" (pode repetir) [--posicao-texto topo|centro|baixo] [--fundo]',
+            '       --legenda falas.srt   --musica fundo.mp3 [--volume-musica 0.25]   --marca logo.png [--posicao-marca canto-inferior-direito]',
+            '       --velocidade 1.25   --fade 0.5   --estabilizar   --melhorar   --sem-normalizar   --qualidade alta|normal|leve',
+            '     gemini-code video juntar a.mp4 b.mp4 ... [--transicao suave] [--formato reels]   Junta clipes num vídeo só',
+            '     gemini-code video capa VIDEO.mp4 [--tempo 0:12]       A imagem para a capa do post (.jpg)',
+            '     gemini-code video audio VIDEO.mp4 [--saida a.mp3]     Só o áudio (.mp3 ou .m4a)',
+            '     gemini-code video info VIDEO.mp4                      Duração, tamanho, áudio',
+            '     gemini-code video melhorar VIDEO.mp4 [--estabilizar]  Menos ruído, mais nitidez',
+            '     gemini-code video slideshow foto1.jpg foto2.jpg ... [--segundos 3] [--musica musica.mp3]',
+            '     gemini-code video gerar "descrição"                   Com IA (Veo)',
+            '     Sempre cria um arquivo novo (--saida escolhe o nome). Termux: pkg install ffmpeg',
+          ].join('\n'));
+          return;
+        }
+        console.log(chalk.green(`Vídeo criado: ${r.arquivo}`));
+        if (r.passos && r.passos.length) console.log(chalk.dim(r.passos.join('; ')));
+      } catch (err) {
+        console.error(chalk.red(`Erro: ${err.message}`));
+        process.exitCode = 1;
       }
       return;
     }
@@ -1260,39 +1840,17 @@ async function main() {
       // antes de o agente usá-la, e para quem prefere a linha de comando. As confirmações acontecem na própria
       // ferramenta (igual ao chat): ações que mudam o aparelho pedem s/n, a menos que adbConfirm:false.
       const adbTools = require('../src/tools/adbTools');
-      const ALIAS = {
-        devices: 'dispositivos', dispositivos: 'dispositivos', conectar: 'conectar', connect: 'conectar',
-        descobrir: 'descobrir', discover: 'descobrir', parear: 'parear', pair: 'parear',
-        desconectar: 'desconectar', disconnect: 'desconectar', tcpip: 'tcpip', info: 'info', apps: 'apps',
-        estado: 'estado', tela: 'tela', print: 'tela', screenshot: 'tela', logcat: 'logcat', log: 'logcat',
-        abrir: 'abrir_app', abrir_app: 'abrir_app', fechar: 'fechar_app', fechar_app: 'fechar_app',
-        instalar: 'instalar', install: 'instalar', desinstalar: 'desinstalar', uninstall: 'desinstalar',
-        limpar: 'limpar', tecla: 'tecla', key: 'tecla', digitar: 'digitar', texto: 'digitar',
-        config: 'config', settings: 'config', reiniciar: 'reiniciar', reboot: 'reiniciar', shell: 'shell',
-      };
       const bruto = rest.slice();
       let alvoFlag;
       for (const f of ['--alvo', '-s']) { const i = bruto.indexOf(f); if (i !== -1) { alvoFlag = bruto[i + 1]; bruto.splice(i, 2); } }
-      const [subBruto = 'dispositivos', ...resto] = bruto;
-      const acao = ALIAS[String(subBruto).toLowerCase()];
-      if (!acao) {
-        console.log(`Ação de adb desconhecida: "${subBruto}". Use: ${[...new Set(Object.values(ALIAS))].join(', ')}.`);
+      // v0.44.1: a leitura das palavras mora na ferramenta (as rotinas de TV usam a mesma)
+      const args = adbTools.argsDoComando(bruto);
+      if (!args) {
+        console.log(`Ação de adb desconhecida: "${bruto[0]}". Use: ${[...new Set(Object.values(adbTools.ALIASES))].join(', ')}.`);
         process.exitCode = 1;
         return;
       }
-      const args = { acao };
       if (alvoFlag) args.alvo = alvoFlag;
-      if (acao === 'conectar' || acao === 'desconectar') { if (resto[0]) args.alvo = resto[0]; }
-      else if (acao === 'parear') { args.alvo = resto[0]; args.codigo = resto[1]; }
-      else if (acao === 'tcpip') { if (resto[0]) args.porta = Number(resto[0]); }
-      else if (acao === 'logcat') { if (resto[0]) args.linhas = Number(resto[0]); }
-      else if (acao === 'tela') { if (resto[0]) args.arquivo = resto[0]; }
-      else if (acao === 'instalar') args.arquivo = resto[0];
-      else if (acao === 'abrir_app' || acao === 'fechar_app' || acao === 'desinstalar' || acao === 'limpar') args.app = resto[0];
-      else if (acao === 'tecla') args.tecla = resto[0];
-      else if (acao === 'digitar') args.texto = resto.join(' ');
-      else if (acao === 'config') { args.espaco = resto[0]; args.chave = resto[1]; if (resto.length > 2) args.valor = resto.slice(2).join(' '); }
-      else if (acao === 'shell') args.comando = resto.join(' ');
       try { console.log(await adbTools.execute('adb', args)); }
       catch (err) { console.error(chalk.red('Erro: ' + err.message)); process.exitCode = 1; }
       require('../src/ui/prompt').closeShared();
@@ -1367,11 +1925,12 @@ async function main() {
       try {
         if (sub === 'list' || sub === 'listar' || !sub) {
           const list = artifacts.listArtifacts({ limit: Number(args[0] || 30) });
-          console.log(list.length ? list.map((a) => `${a.id} | ${a.status} | ${a.type} | ${a.title} | ${a.createdAt}`).join('\n') : 'Nenhum artefato salvo.');
+          console.log(list.length ? list.map((a) => paraTerminal(`${a.id} | ${a.status} | ${a.type} | ${a.title} | ${a.createdAt}`)).join('\n') : 'Nenhum artefato salvo.');
         } else if (sub === 'show' || sub === 'ver') {
           const item = artifacts.readArtifact(args[0]);
           if (!item) throw new Error('Artefato não encontrado.');
-          console.log(`# ${item.title}\nID: ${item.id}\nTipo: ${item.type} | Estado: ${item.status}\nCriado: ${item.createdAt}\nSHA-256: ${item.sha256}\n\n${item.content}`);
+          // v0.44.0: guarda respostas do modelo (rotinas de agente): passa pelo filtro do terminal
+          console.log(paraTerminal(`# ${item.title}\nID: ${item.id}\nTipo: ${item.type} | Estado: ${item.status}\nCriado: ${item.createdAt}\nSHA-256: ${item.sha256}\n\n${item.content}`));
         } else {
           console.log('Uso: artifacts list [limite] | artifacts show ID');
         }
@@ -1441,12 +2000,52 @@ async function main() {
       };
       const cfg = loadConfig();
       const bins = ['git', 'claude', 'codex', 'agy', 'hermes', 'kimi', 'kimi-code', 'higgsfield', 'ollama', 'docker'].map((name) => { const binPath = which(name); return { name, available: !!binPath, path: binPath }; });
-      const report = { node: process.version, platform: process.platform, cwd: process.cwd(), provider: cfg.provider, model: cfg.model, ollamaModel: cfg.ollamaModel, codeIa: (() => { try { const i = require('../src/code-ia/install'); return { instalado: fs.existsSync(i.modelPath()), arquivo: i.modelPath() }; } catch { return { instalado: false }; } })(), modoSolo: require('../src/solo').ativo(cfg), geminiKeyConfigured: Boolean(cfg.apiKey), llamaCpp: (() => { const srv = require('../src/localServer'); const c = srv.caminhos(); const l = require('../src/providers/llamacpp'); let livreMB = null; try { const st = fs.statfsSync(require('os').homedir()); livreMB = Math.round((st.bavail * st.bsize) / 1048576); } catch { /* sem statfs */ } return { servidorBinario: fs.existsSync(c.servidor), modeloGGUF: fs.existsSync(c.modelo), ctx: l.ctxTamanho(cfg), autoStart: cfg.llamaCppAutoStart === true, pid: srv.lerPid(), espacoLivreMB: livreMB }; })(), integrations: bins,
+      const report = { node: process.version, platform: process.platform, cwd: process.cwd(), provider: cfg.provider, model: cfg.model, ollamaModel: cfg.ollamaModel, codeIa: (() => { try { const i = require('../src/code-ia/install'); return { instalado: fs.existsSync(i.modelPath()), arquivo: i.modelPath() }; } catch { return { instalado: false }; } })(), modoSolo: require('../src/solo').ativo(cfg), geminiKeyConfigured: Boolean(cfg.apiKey), llamaCpp: (() => { const srv = require('../src/localServer'); const c = srv.caminhos(); const l = require('../src/providers/llamacpp'); let livreMB = null; try { const st = fs.statfsSync(require('../src/config').pastaDoUsuario()); livreMB = Math.round((st.bavail * st.bsize) / 1048576); } catch { /* sem statfs */ } return { servidorBinario: fs.existsSync(c.servidor), modeloGGUF: fs.existsSync(c.modelo), ctx: l.ctxTamanho(cfg), autoStart: cfg.llamaCppAutoStart === true, pid: srv.lerPid(), espacoLivreMB: livreMB }; })(), integrations: bins,
         // v0.43.3: ferramentas que dependem de algo fora do projeto: o adb (TV/celular) e o pacote ws (cowork).
+        // v0.44.0: navegador do agente (ferramenta browser)
+        navegador: (() => { const p = require('../src/navegador').acharNavegador({ caminho: cfg.navegadorPath || '' }); return { encontrado: Boolean(p), caminho: p || cfg.navegadorPath || null, abreLocalhost: cfg.navegadorPermitirLocal === true }; })(),
         adb: (() => { const p = cfg.adbPath || 'adb'; const achado = p.includes('/') || p.includes('\\') ? (fs.existsSync(p) ? p : null) : which(p); return { encontrado: Boolean(achado), caminho: achado || p, aparelhoPadrao: cfg.adbSerial || null, confirmar: cfg.adbConfirm !== false }; })(),
         cowork: (() => { try { require.resolve('ws'); return { ws: true }; } catch { return { ws: false, dica: 'rode npm install na pasta do gemini-code' }; } })(),
+        // v0.45.0: sandbox do run_shell (src/sandbox.js)
+        sandbox: await (async () => { const sb = require('../src/sandbox'); const i = await sb.verificar(); return { modo: sb.modoDe(cfg), funciona: i.ok, ...(i.ok ? { bwrap: i.arquivo } : { motivo: i.motivo }), rede: cfg.shellSandboxRede === true, confirmarForaDoProjeto: cfg.confirmarForaDoProjeto !== false }; })(),
         note: 'A presença de um executável só indica disponibilidade local; não comprova login, acesso à nuvem ou que a ferramenta funcione corretamente.' };
       console.log(JSON.stringify(report, null, 2));
+      return;
+    }
+
+    case 'sandbox': {
+      // v0.45.0: estado da sandbox do run_shell e um jeito de testar comandos lá dentro.
+      const sb = require('../src/sandbox');
+      const cfg = loadConfig();
+      const [sub, ...resto] = rest;
+      const info = await sb.verificar();
+      if (sub === 'testar' || sub === 'test') {
+        const cmd = resto.join(' ').trim();
+        if (!cmd) return console.log('Uso: gemini-code sandbox testar "comando"');
+        if (!info.ok) { process.exitCode = 1; return console.log(`A sandbox não funciona aqui: ${info.motivo}`); }
+        const prep = sb.montar(cmd, { info, cfg });
+        prep.avisos.forEach((a) => console.log(`[sandbox] ${a}`));
+        const filho = require('child_process').spawn(prep.arquivo, prep.args, { env: prep.env, stdio: ['ignore', 'inherit', 'inherit', 'pipe'] });
+        filho.stdio[3].on('error', () => { /* bwrap saiu antes de ler o filtro */ });
+        filho.stdio[3].end(prep.bpf);
+        process.exitCode = await new Promise((ok) => { filho.on('error', () => ok(127)); filho.on('close', (c) => ok(c ?? 1)); });
+        return;
+      }
+      if (sub && sub !== 'status') return console.log('Uso: gemini-code sandbox [status]  |  gemini-code sandbox testar "comando"');
+      const modo = sb.modoDe(cfg);
+      const r = sb.resumo({ cfg });
+      const home = require('../src/config').pastaDoUsuario();
+      const curto = (p) => (p === home || p.startsWith(home + path.sep) ? `~${p.slice(home.length)}` : p);
+      const explica = { auto: 'comandos que rodam sem você aprovar na hora (confirmShell desligado, regra "permitir", rotinas)', sempre: 'todos os comandos do run_shell', off: 'nenhum comando (desligada)' };
+      console.log([
+        `Modo: ${modo} — vai para a sandbox: ${explica[modo]}   (config set-sandbox auto|sempre|off)`,
+        info.ok ? `Nesta máquina: funciona (bwrap: ${info.arquivo})` : `Nesta máquina: NÃO funciona — ${info.motivo}${modo === 'sempre' ? '\n  Com o modo "sempre", o run_shell recusa os comandos até isso ser resolvido.' : '\n  Os comandos rodam sem sandbox (com a confirmação de sempre).'}`,
+        `Rede: ${r.rede ? 'ligada' : 'desligada'}   (config set-sandbox-rede on|off)`,
+        `Grava em: ${r.gravaveis.length ? r.gravaveis.map(curto).join(', ') : '(nenhuma pasta)'} e num /tmp descartável; .git/hooks e .git/config só leitura`,
+        ...r.avisos.map((a) => `  aviso: ${a}`),
+        `Invisível lá dentro: ${r.escondidos.map((e) => curto(e.caminho)).join(', ') || '(nada encontrado)'}, sockets do sistema e variáveis com cara de segredo`,
+        `write_file/edit_file fora do projeto: ${cfg.confirmarForaDoProjeto === false ? 'grava sem perguntar' : 'pergunta antes'}   (config set-confirmar-fora on|off)`,
+      ].join('\n'));
       return;
     }
 
@@ -1458,7 +2057,9 @@ async function main() {
           const item = items[i];
           if (item.startsWith('--')) {
             const key = item.slice(2);
-            if (['yes'].includes(key)) flags[key] = true;
+            if (['yes', 'notificar'].includes(key)) flags[key] = true;
+            // --tv pode aparecer várias vezes: um passo por vez, na ordem
+            else if ((key === 'tv' || key === 'adb') && i + 1 < items.length) (flags.tv = flags.tv || []).push(items[++i]);
             else if (i + 1 < items.length && !items[i + 1].startsWith('--')) flags[key] = items[++i];
             else throw new Error(`Informe um valor para --${key}.`);
           } else if (!flags._) flags._ = [item];
@@ -1466,7 +2067,7 @@ async function main() {
         }
         return flags;
       };
-      const fmt = (r) => `${r.id} | ${r.status} | ${r.name} | ${r.trigger.type}${r.nextRunAt ? ` | próxima: ${r.nextRunAt}` : ''}`;
+      const fmt = (r) => `${r.id} | ${r.status} | ${r.name} | ${r.action.type} | ${r.trigger.type}${r.nextRunAt ? ` | próxima: ${r.nextRunAt}` : ''}`;
       try {
         if (sub === 'list' || sub === 'listar') {
           const lista = routines.list();
@@ -1477,23 +2078,49 @@ async function main() {
           const flags = parseFlags(args);
           const name = flags.name;
           const url = flags.url;
+          const pedido = flags.prompt;
+          const tv = flags.tv;
+          const lembrete = flags.lembrete;
           const timezone = flags.timezone || routines.DEFAULT_TIMEZONE;
           const triggers = ['every', 'at', 'cron'].filter((k) => flags[k] !== undefined);
-          if (!name || !url || triggers.length !== 1) {
+          if (!name || [url, pedido, tv, lembrete].filter(Boolean).length !== 1 || triggers.length !== 1) {
             console.log("Uso: gemini-code routines create --name \"Meu site\" --url https://exemplo.com (--every 5m | --at 2026-10-11T08:00:00-03:00 | --cron '*/5 * * * *') [--timezone America/Recife]");
+            console.log("  ou: gemini-code routines create --name \"Resumo\" --prompt \"resuma os TODO do projeto\" [--ferramentas read_file,list_dir] [--passos 20] [--notificar] --cron '0 8 * * 1-5'");
+            console.log('      (agente: sem ninguém olhando, o que pediria confirmação é recusado; padrão só leitura: ' + routines.FERRAMENTAS_ROTINA_PADRAO.join(', ') + ')');
+            console.log("  ou: gemini-code routines create --name \"Dormir\" --tv \"tecla dormir\" --cron '0 23 * * *' [--alvo 192.168.0.50]");
+            console.log('      (TV/celular, sem IA; um --tv por passo: ' + routines.ACOES_ROTINA_ADB.join(', ') + ', ex.: --tv "abrir_app com.netflix.ninja" --tv "esperar 5")');
+            console.log("  ou: gemini-code routines create --name \"Conta de luz\" --lembrete \"Pagar a conta de luz\" [--titulo \"Contas\"] --cron '0 9 10 * *'");
+            console.log('      (só uma notificação no horário, sem IA)');
             return;
           }
           let trigger;
           if (flags.every !== undefined) trigger = { type: 'interval', intervalMs: routines.parseDuration(flags.every), timezone };
-          if (flags.at !== undefined) trigger = { type: 'once', runAt: flags.at, timezone };
+          // v0.47.0: --at passa pelo leitor rígido (src/datas.js). Antes ia para o new Date(): "04/11/2026 09:00" virava
+          // 11 de ABRIL (formato americano) e a rotina rodava no dia errado sem aviso.
+          if (flags.at !== undefined) trigger = { type: 'once', runAt: require('../src/datas').lerDataHora(String(flags.at), { futuro: 'obrigatorio' }).toISOString(), timezone };
           if (flags.cron !== undefined) trigger = { type: 'cron', expression: flags.cron, timezone };
+          const ferramentas = flags.ferramentas === undefined ? undefined
+            : ['nenhuma', 'none', ''].includes(String(flags.ferramentas).trim()) ? [] : String(flags.ferramentas).split(',').map((t) => t.trim()).filter(Boolean);
+          // "--tv 'tecla dormir'" -> { acao: 'tecla', tecla: 'dormir' } (mesma leitura do comando gemini-code adb)
+          const passoDaTv = (texto) => {
+            const palavras = String(texto).trim().split(/\s+/).filter(Boolean);
+            if (/^esperar$/i.test(palavras[0] || '')) return { acao: 'esperar', segundos: Number(palavras[1]) };
+            const args = require('../src/tools/adbTools').argsDoComando(palavras);
+            if (!args) throw new Error(`comando de aparelho desconhecido: "${texto}". Use: ${routines.ACOES_ROTINA_ADB.join(', ')}.`);
+            return args;
+          };
           const routine = routines.create({
-            name, description: flags.description || '', category: flags.category || 'monitoramento',
+            name, description: flags.description || '', category: flags.category,
             priority: flags.priority || 'normal', trigger,
-            action: { type: 'http-check', url, timeoutMs: flags.timeout ? routines.parseDuration(flags.timeout) : 10000,
-              expectedStatus: flags['expected-status'] ? Number(flags['expected-status']) : undefined },
+            action: lembrete ? { type: 'lembrete', texto: lembrete, titulo: flags.titulo }
+              : tv ? { type: 'adb', alvo: flags.alvo, passos: tv.map(passoDaTv), notificar: flags.notificar === true } : pedido
+              ? { type: 'agente', prompt: pedido, ferramentas, maxPassos: flags.passos === undefined ? undefined : Number(flags.passos), notificar: flags.notificar === true }
+              : { type: 'http-check', url, timeoutMs: flags.timeout ? routines.parseDuration(flags.timeout) : 10000,
+                expectedStatus: flags['expected-status'] ? Number(flags['expected-status']) : undefined },
             missedPolicy: flags['missed-policy'] || 'skip',
           });
+          if (routine.action.type === 'agente') console.log(`Ferramentas do agente nesta rotina: ${routine.action.ferramentas.length ? routine.action.ferramentas.join(', ') : '(nenhuma)'}; sem ninguém olhando, o que pediria confirmação é recusado.`);
+          if (routine.action.type === 'adb') console.log(`Passos no aparelho${routine.action.alvo ? ` ${routine.action.alvo}` : ''} (rodam sem perguntar — você os aprovou agora): ${routine.action.passos.map((p) => Object.values(p).join(' ')).join(' → ')}`);
           console.log(`Rotina criada como rascunho (não executa automaticamente até ser ativada):\n${fmt(routine)}\nAtive com: gemini-code routines activate ${routine.id}`);
           return;
         }
@@ -1526,7 +2153,10 @@ async function main() {
           const flags = parseFlags(args);
           const id = flags._ && flags._[0];
           const execs = routines.executions({ routineId: id, limit: flags.limit || 30 });
-          console.log(execs.length ? execs.map((e) => `${e.id} | ${e.status} | ${e.startedAt} | ${e.routineName} | ${e.error || (e.result && e.result.message) || ''}`).join('\n') : 'Nenhuma execução registrada.');
+          // a resposta de uma rotina de agente é texto do modelo: passa pelo filtro do terminal
+          const resumo = (e) => e.error || (e.result && (e.result.resposta ? `${e.result.resposta.split('\n')[0].slice(0, 160)}${e.result.artefato ? ` (completo: gemini-code artifacts show ${e.result.artefato})` : ''}`
+            : Array.isArray(e.result.passos) && e.result.passos.length ? `${e.result.message} ${e.result.passos.join(' | ').slice(0, 200)}` : e.result.message)) || '';
+          console.log(execs.length ? execs.map((e) => paraTerminal(`${e.id} | ${e.status} | ${e.startedAt} | ${e.routineName} | ${resumo(e)}`)).join('\n') : 'Nenhuma execução registrada.');
           return;
         }
         if (sub === 'remove' || sub === 'remover') {
@@ -1563,7 +2193,7 @@ async function main() {
           console.log(JSON.stringify({ runtime: 'local-process', scheduler: 'not running unless `routines service` is active', storage: routines.ROUTINES_PATH, count: all.length, counts }, null, 2));
           return;
         }
-        console.log('Uso: gemini-code routines list | create --name N --url URL (--every 5m | --at ISO | --cron CRON) | activate ID | pause ID | resume ID | run ID | logs [ID] | remove ID --yes | service | status');
+        console.log('Uso: gemini-code routines list | create --name N (--url URL | --prompt TAREFA | --tv "COMANDO") (--every 5m | --at ISO | --cron CRON) | activate ID | pause ID | resume ID | run ID | logs [ID] | remove ID --yes | service | status');
       } catch (err) {
         console.error(chalk.red('Erro: ' + err.message));
         process.exitCode = 1;

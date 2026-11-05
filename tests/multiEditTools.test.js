@@ -83,10 +83,11 @@ test('aplicarEdicoes: old_text vazio, new_text ausente e replace_all não boolea
   assert.match(aplicarEdicoes('abc', [{ old_text: 'a', new_text: 'b', replace_all: 'false' }]).erro, /booleano/);
 });
 
-test('aplicarEdicoes: arquivo CRLF com old_text multilinha em \\n dá a dica de CRLF', () => {
-  const r = aplicarEdicoes('um\r\ndois\r\n', [{ old_text: 'um\ndois', new_text: 'x' }]);
-  assert.equal(r.ok, false);
-  assert.match(r.erro, /CRLF/);
+test('aplicarEdicoes: arquivo CRLF com old_text multilinha em \\n — edita e mantém o CRLF (v0.50.0; antes só dava a dica)', () => {
+  const r = aplicarEdicoes('um\r\ndois\r\n', [{ old_text: 'um\ndois', new_text: 'x\ny' }]);
+  assert.equal(r.ok, true);
+  assert.equal(r.conteudo, 'x\r\ny\r\n', 'o texto novo também entra com CRLF');
+  assert.match(r.ajustes.join(' '), /CRLF/, 'e o ajuste é informado');
   assert.deepEqual(aplicarEdicoes('um\r\ndois\r\n', [{ old_text: 'um\r\ndois', new_text: 'x' }]), { ok: true, conteudo: 'x\r\n' });
 });
 
@@ -103,8 +104,11 @@ test('edita dois arquivos (duas edições somadas no mesmo arquivo) e informa ba
   ]);
   assert.equal(ler(a), 'const nome = "novo";\nfunction novo() {}\n');
   assert.equal(ler(b), 'novo(); novo();\n');
-  const linhas = r.split('\n');
+  // v0.50.0: depois de cada "Editado:" vem o diff com números de linha
+  const linhas = r.split('\n').filter((l) => /^(Editado|Sem mudança):/.test(l));
   assert.equal(linhas.length, 2, r);
+  assert.match(r, /^-\s*1\tconst nome = "velho";$/m, 'o diff mostra a linha que saiu, com o número');
+  assert.match(r, /^\+\s*1\tconst nome = "novo";$/m, 'e a que entrou');
   assert.match(linhas[0], new RegExp(`^Editado: ${a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\(2 edições; backup do conteúdo anterior em `));
   assert.match(linhas[1], /\(1 edição; backup do conteúdo anterior em /);
   const backupA = linhas[0].match(/backup do conteúdo anterior em (.+)\)$/)[1];
@@ -274,7 +278,7 @@ test('arquivo maior que o limite é recusado sem ser lido', async () => {
   const p = path.join(dir, 'grande.txt');
   fs.writeFileSync(p, '');
   fs.truncateSync(p, multi.MAX_BYTES_ARQUIVO + 1);
-  assert.match(await editar([{ path: p, old_text: 'a', new_text: 'b' }]), /^Erro: edição 1 de 1 .*limite do edit_files/);
+  assert.match(await editar([{ path: p, old_text: 'a', new_text: 'b' }]), /^Erro: edição 1 de 1 .*limite da edição/);
 });
 
 test(`limite de ${multi.MAX_EDICOES} edições por chamada`, async () => {
@@ -292,7 +296,7 @@ test(`limite de ${multi.MAX_ARQUIVOS} arquivos distintos por chamada`, async () 
   const n = multi.MAX_ARQUIVOS;
   const arquivos = Array.from({ length: n + 1 }, (_, i) => criar(dir, `f${i}.txt`, 'v'));
   const r20 = await editar(arquivos.slice(0, n).map((p) => ({ path: p, old_text: 'v', new_text: 'w' })));
-  assert.equal(r20.split('\n').length, n);
+  assert.equal(r20.split('\n').filter((l) => l.startsWith('Editado:')).length, n);
   const r21 = await editar(arquivos.map((p) => ({ path: p, old_text: 'w', new_text: 'z' })));
   assert.match(r21, new RegExp(`^Erro: edição ${n + 1} de ${n + 1} \\(.*f${n}\\.txt\\): passa do limite de ${n} arquivos`));
   assert.equal(ler(arquivos[0]), 'w', 'nada da chamada recusada foi gravado');
@@ -305,7 +309,7 @@ test('o mesmo arquivo por symlink e caminho direto é UM arquivo: as edições s
   fs.symlinkSync(real, link);
   const r = await editar([{ path: real, old_text: 'um', new_text: 'UM' }, { path: link, old_text: 'dois', new_text: 'DOIS' }]);
   assert.match(r, /^Editado: .*real\.txt \(2 edições/);
-  assert.equal(r.split('\n').length, 1);
+  assert.equal(r.split('\n').filter((l) => /^(Editado|Sem mudança):/.test(l)).length, 1);
   assert.equal(ler(real), 'UM DOIS');
   assert.ok(fs.lstatSync(link).isSymbolicLink(), 'o link continua sendo link');
 });

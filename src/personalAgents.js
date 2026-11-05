@@ -51,6 +51,25 @@ const PRESETS = Object.freeze({
   conversa: Object.freeze([]),
   leitura: FERRAMENTAS_LEITURA,
   pesquisa: Object.freeze([...FERRAMENTAS_LEITURA, 'web_fetch']),
+  // v0.44.1: aliado da TV — controla a TV/celular por adb e acha o que tocar na web (navegador), com as confirmações de sempre
+  tv: Object.freeze(['adb', 'browser', 'web_fetch']),
+  // v0.46.0: aliado de saúde — o diário de saúde (só ele lê) e a web para conferir fontes oficiais
+  saude: Object.freeze(['saude_registrar', 'saude_consultar', 'web_fetch']),
+  // v0.46.0: aliado criador — imagens (gerar, editar, melhorar), câmera (pergunta toda vez) e vídeos
+  midia: Object.freeze(['imagem', 'camera', 'video', 'web_fetch']),
+  // v0.46.0: aliado das compras — a lista do mês (não compra nem paga) e a web para receitas e preços
+  compras: Object.freeze(['compras', 'web_fetch']),
+  // v0.47.0: aliado das redes sociais — publica pela ferramenta "redes" (sempre pergunta), cria imagens e confere fontes
+  redes: Object.freeze(['redes', 'desafio', 'imagem', 'web_fetch']),
+  // v0.47.0: aliado dos desafios — marca o dia, lembra, comemora a sequência e posta o progresso (perguntando)
+  desafios: Object.freeze(['desafio', 'redes', 'web_fetch']),
+  // v0.47.0: aliado do computador — mouse, teclado e print (pergunta a cada ação), vê o print pela imagem, sites pelo navegador
+  computador: Object.freeze(['computador', 'imagem', 'browser', 'web_fetch']),
+  // v0.47.0: a central — computador, celular/TV, sites e redes sociais na mesma conversa (cada ação com a confirmação dela)
+  central: Object.freeze(['computador', 'adb', 'browser', 'redes', 'desafio', 'imagem', 'web_fetch']),
+  // v0.52.0: o treinador de futebol — treinos, semana até o jogo, carga e prancheta; cortar os lances do vídeo do jogo,
+  // criar artes, desafios do time e a web para estudar o adversário
+  futebol: Object.freeze(['futebol', 'video', 'imagem', 'desafio', 'web_fetch']),
   completo: null,
 });
 const PRESET_PADRAO = 'pesquisa';
@@ -112,7 +131,7 @@ function normalizarFerramentas(valor, { conhecidas, tolerante = false } = {}) {
     if (chave === 'nenhuma' || chave === 'none') return [];
     valor = chave.split(/[\s,]+/).filter(Boolean);
   }
-  if (!Array.isArray(valor)) throw new Error('"tools" precisa ser um preset (conversa, leitura, pesquisa, completo) ou uma lista de ferramentas.');
+  if (!Array.isArray(valor)) throw new Error(`"tools" precisa ser um preset (${Object.keys(PRESETS).join(', ')}) ou uma lista de ferramentas.`);
   const validas = conhecidas || ferramentasConhecidas();
   const out = [];
   for (const bruto of valor) {
@@ -667,9 +686,23 @@ function prepararTurno(store, agenteAberto, mensagem, { maxChars, restricao = {}
   ];
   const doAgente = agente.tools === null ? null : [...agente.tools, ...proprias];
   const allowedTools = combinarFerramentas(doAgente, restricao.allowedTools);
+  // v0.46.0: aliado de saúde — sinais de emergência na mensagem são achados por regras fixas (src/saude.js), ANTES do
+  // modelo: o aviso vai para a tela na hora (quem chama imprime `alerta`) e o modelo é instruído a começar por ele.
+  let alerta = '';
+  let instrucaoAlerta = '';
+  if (Array.isArray(agente.tools) && agente.tools.some((t) => t.startsWith('saude_'))) {
+    const saude = require('./saude');
+    const sinais = saude.sinaisDeAlerta(mensagem);
+    if (sinais.length) {
+      alerta = saude.avisoDeEmergencia(sinais);
+      instrucaoAlerta = `\n\nALERTA: a mensagem do usuário tem sinal de possível emergência (${sinais.map((s) => s.sinal).join('; ')}). ` +
+        `Comece a resposta mandando procurar ajuda agora (${saude.EMERGENCIA}) e só depois converse.`;
+    }
+  }
   return {
+    alerta,
     opcoes: {
-      extraSystemInstruction: restricao.extraSystemInstruction ? `${instrucao}\n\n${restricao.extraSystemInstruction}` : instrucao,
+      extraSystemInstruction: (restricao.extraSystemInstruction ? `${instrucao}\n\n${restricao.extraSystemInstruction}` : instrucao) + instrucaoAlerta,
       ...(allowedTools !== undefined ? { allowedTools } : {}),
       ...(agente.model ? { modelName: agente.model } : {}),
     },

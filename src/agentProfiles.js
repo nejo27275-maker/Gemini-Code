@@ -2,7 +2,8 @@
 // Os perfis limitados usam allowlists reais; prompts sozinhos não são controles de segurança.
 'use strict';
 
-const READ_TOOLS = Object.freeze(['read_file', 'list_dir', 'search_files', 'read_skill']);
+// v0.45.1: glob_files (achar arquivos pelo nome) também é só leitura — sem ele, "onde estão os testes?" virava dezenas de list_dir.
+const READ_TOOLS = Object.freeze(['read_file', 'list_dir', 'search_files', 'glob_files', 'read_skill']);
 const PROFILES = Object.freeze({
   coder: {
     name: 'coder',
@@ -65,6 +66,7 @@ function parseRunArgs(args = []) {
   let createCheckpoint = false;
   let legacyReadOnly = false;
   let json = false;
+  let ateTerminar = false;
   const imagens = [];
   const instructionParts = [];
   for (let i = 0; i < args.length; i++) {
@@ -73,6 +75,7 @@ function parseRunArgs(args = []) {
     else if (arg === '--read-only') legacyReadOnly = true;
     // v0.41.0: --json (saída estruturada para automação/CI) e --imagem ARQUIVO (repetível).
     else if (arg === '--json') json = true;
+    else if (arg === '--ate-terminar' || arg === '--até-terminar') ateTerminar = true; // v0.52.0
     else if (arg === '--imagem' || arg === '--image') {
       if (!args[i + 1] || String(args[i + 1]).startsWith('--')) throw new Error(`Informe o arquivo da imagem após ${arg}.`);
       imagens.push(String(args[++i]));
@@ -86,7 +89,7 @@ function parseRunArgs(args = []) {
   }
   if (legacyReadOnly && profileName) throw new Error('Use --read-only ou --profile, não os dois juntos.');
   const profile = resolveProfile(profileName || (legacyReadOnly ? 'explore' : 'coder'));
-  return { profile, createCheckpoint, instruction: instructionParts.join(' ').trim(), legacyReadOnly, json, imagens };
+  return { profile, createCheckpoint, instruction: instructionParts.join(' ').trim(), legacyReadOnly, json, imagens, ateTerminar };
 }
 
 function listProfiles() {

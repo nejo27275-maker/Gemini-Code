@@ -7,7 +7,24 @@ const path = require('path');
 const os = require('os');
 const ConfigManager = require('../config-manager');
 
-const HOME_DIR = path.join(os.homedir(), '.gemini-code');
+/**
+ * v0.49.2: a pasta do usuário, sempre um caminho absoluto. Com `HOME` vazio (ou relativo), o `os.homedir()` devolve
+ * '' e a `.gemini-code` — com a config e a chave da API — ia parar na PASTA ATUAL (num projeto, pronta para um commit).
+ * Agora: o HOME quando é absoluto; senão a pasta do usuário no sistema; em último caso, uma pasta só dele no /tmp.
+ */
+function pastaDoUsuario() {
+  const h = os.homedir();
+  if (h && path.isAbsolute(h)) return h;
+  try {
+    const u = os.userInfo().homedir;
+    if (u && path.isAbsolute(u)) return u;
+  } catch { /* sem conta no sistema (contêiner sem passwd) */ }
+  let id = 'usuario';
+  try { id = String(os.userInfo().uid); } catch { /* idem */ }
+  return path.join(os.tmpdir(), `gemini-code-home-${id}`);
+}
+
+const HOME_DIR = path.join(pastaDoUsuario(), '.gemini-code');
 const CONFIG_PATH = path.join(HOME_DIR, 'config.json');
 const MCP_PATH = path.join(HOME_DIR, 'mcp.json');
 const SKILLS_DIR = path.join(HOME_DIR, 'skills');
@@ -19,6 +36,14 @@ const COWORK_TOKEN_PATH = path.join(HOME_DIR, 'cowork-token.txt');
 const ROUTINE_API_TOKEN_PATH = path.join(HOME_DIR, 'routine-api-token.txt');
 const TRUST_PATH = path.join(HOME_DIR, 'confianca.json'); // v0.41.0: src/trust.js
 const ALIADOS_DIR = path.join(HOME_DIR, 'aliados'); // v0.42.0: agentes pessoais (src/personalAgents.js)
+const ROUTINES_PATH = path.join(HOME_DIR, 'routines.json'); // v0.44.0: em PROTECTED_PATHS (rotinas de agente)
+// v0.46.0: dados de saúde (src/saude.js) — pessoais e sensíveis: só pelas ferramentas saude_*, nunca por read_file etc.
+const SAUDE_DIR = path.join(HOME_DIR, 'saude');
+const SAUDE_PATH = path.join(SAUDE_DIR, 'saude.json');
+// v0.47.0: credenciais das redes sociais (src/redes.js): tokens, senhas de app, URL de webhook. Pasta inteira, para
+// cobrir também os temporários da gravação (redes.json.tmp-PID).
+const REDES_DIR = path.join(HOME_DIR, 'redes');
+const REDES_PATH = path.join(REDES_DIR, 'redes.json');
 
 // Arquivos que o modelo nunca pode gravar sozinho (write_file/edit_file) e que
 // forçam confirmação no run_shell. Cada um, se reescrito, dá ao modelo mais
@@ -39,13 +64,21 @@ const PROTECTED_PATHS = Object.freeze([
   COWORK_TOKEN_PATH,
   ROUTINE_API_TOKEN_PATH,
   TRUST_PATH,
+  // v0.44.0: uma rotina pode rodar o agente sozinho, com o pedido e as ferramentas escritos aqui. Se o modelo
+  // gravasse este arquivo, agendaria a si mesmo para depois, sem ninguém olhando.
+  ROUTINES_PATH,
 ]);
 
 // v0.42.0: pastas inteiras que o modelo não grava. Cada agente pessoal (aliados/<nome>/) guarda as
 // instruções e as ferramentas que ele recebe, a memória que entra no prompt de toda conversa com ele
 // e o histórico. Se o modelo pudesse gravar ali, plantaria instruções ou se daria ferramentas para as
 // próximas sessões; a memória só muda pela ferramenta memory_save (que pergunta ao usuário por padrão).
-const PROTECTED_DIRS = Object.freeze([ALIADOS_DIR]);
+const PROTECTED_DIRS = Object.freeze([ALIADOS_DIR, SAUDE_DIR, REDES_DIR]);
+
+// v0.46.0: pastas inteiras que o modelo nem LÊ pelas ferramentas de arquivo (read_file, search_files, read_skill,
+// imagem): dados de saúde. O aliado de saúde lê pelas ferramentas saude_*, que só existem para ele.
+// v0.47.0: e as credenciais das redes sociais — o modelo publica pela ferramenta "redes", que nunca devolve um token.
+const SECRET_DIRS = Object.freeze([SAUDE_DIR, REDES_DIR]);
 
 // v0.41.0: destes o modelo nem LÊ (read_file, search_files, read_skill): guardam a API
 // key em texto puro, segredos de servidores MCP ou tokens que dão o agente inteiro pela
@@ -82,6 +115,16 @@ const DEFAULT_CONFIG = {
   fallbackModel: '',
   imageModel: 'gemini-2.5-flash-image',
   confirmShell: true,
+  // v0.52.0: modo até terminar — o chat e o modo site começam com ele ligado (o agente só para quando terminar)
+  modoAteTerminar: false,
+  // v0.45.0: sandbox do run_shell (src/sandbox.js, Linux com bubblewrap). 'auto': comando que roda sem você
+  // aprovar na hora (confirmShell:false, regra "permitir", rotina) roda isolado; 'sempre': todos; 'off': nenhum.
+  // shellSandboxRede: a sandbox tem internet? pastasGravaveis: pastas além do projeto onde o agente grava sem
+  // perguntar (write_file e sandbox). confirmarForaDoProjeto: write_file/edit_file perguntam antes de gravar fora.
+  shellSandbox: 'auto',
+  shellSandboxRede: false,
+  pastasGravaveis: [],
+  confirmarForaDoProjeto: true,
   // v0.41.0: regras FERRAMENTA(PADRÃO); "negar" bloqueia sempre, "permitir" dispensa a confirmação de
   // comandos simples do run_shell. Ver src/permissions.js e "gemini-code config regras".
   permissoes: { permitir: [], negar: [] },
@@ -159,6 +202,15 @@ const DEFAULT_CONFIG = {
   adbSerial: '',
   adbPorta: 5555,
   adbConfirm: true,
+  // v0.44.0: navegador do agente (ferramenta "browser", src/navegador.js). navegadorPath: Chrome/Chromium/Edge
+  // (vazio = procura sozinho); navegadorPermitirLocal: deixa abrir 127.0.0.1/localhost (testar o próprio app) —
+  // o resto da rede local continua bloqueado. Sites novos seguem confirmWeb/webDominiosPermitidos.
+  navegadorPath: '',
+  navegadorPermitirLocal: false,
+  // v0.46.0: confirmarMidia — a ferramenta imagem/vídeo pergunta antes de gerar com IA (gasta a cota da chave).
+  // ferramentasExtras — ferramentas "sob demanda" (saude_*, compras, camera, video) ligadas também no chat comum.
+  confirmarMidia: true,
+  ferramentasExtras: [],
   // v0.42.0: orçamento por mensagem dos trechos da base de conhecimento de um agente pessoal (src/personalAgents.js)
   aliadosConhecimentoMaxChars: 8000,
 };
@@ -280,6 +332,7 @@ function loadMcpServers() {
 }
 
 module.exports = {
+  pastaDoUsuario,
   HOME_DIR,
   CONFIG_PATH,
   MCP_PATH,
@@ -292,9 +345,15 @@ module.exports = {
   ROUTINE_API_TOKEN_PATH,
   TRUST_PATH,
   ALIADOS_DIR,
+  ROUTINES_PATH,
+  SAUDE_DIR,
+  SAUDE_PATH,
+  REDES_DIR,
+  REDES_PATH,
   PROTECTED_PATHS,
   PROTECTED_DIRS,
   SECRET_PATHS,
+  SECRET_DIRS,
   DEFAULT_CONFIG,
   CONFIG_VERSION,
   migrarConfig,

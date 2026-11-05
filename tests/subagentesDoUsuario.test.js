@@ -47,7 +47,7 @@ test('executa com a instrução, as ferramentas (sem delegate_task) e o modelo d
 
 test('sem "tools", o padrão é só leitura; nunca passa das ferramentas do pai', async () => {
   const leitor = subagent.todosOsTipos().leitor;
-  assert.deepEqual(leitor.tools, ['read_file', 'list_dir', 'search_files', 'read_skill']);
+  assert.deepEqual(leitor.tools, ['read_file', 'list_dir', 'search_files', 'glob_files', 'read_skill']);
   assert.equal(subagent.ehSomenteLeitura({ type: 'leitor' }), true);
   assert.equal(subagent.ehSomenteLeitura({ type: 'testador' }), false);
   let opcoes = null;

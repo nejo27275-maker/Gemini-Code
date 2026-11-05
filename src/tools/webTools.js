@@ -329,7 +329,10 @@ function criarExecute({
       if (regra) return `Bloqueado pela regra de permissão "${regra}" (config.json → permissoes.negar)${saltos ? ` no redirecionamento para ${atual.href}` : ''}.`;
       // Pergunta ANTES de qualquer rede (nem DNS). Num redirecionamento para outro
       // host fora da lista, pergunta de novo: domínio liberado não libera para onde ele manda.
-      if (confirmar && !dominioPermitido(host, permitidos) && !confirmados.has(chaveHost(host))) {
+      // v0.45.1: regra "permitir" (ex.: web_fetch(https://docs.python.org/*)) dispensa a pergunta, como no navegador e
+      // no adb — antes só o "negar" valia aqui e a regra documentada não mudava nada. Vale para CADA salto.
+      const liberadoPorRegra = require('../permissions').permitido('web_fetch', { url: atual.href }, cfg);
+      if (confirmar && !liberadoPorRegra && !dominioPermitido(host, permitidos) && !confirmados.has(chaveHost(host))) {
         const pergunta = saltos === 0
           ? `\n[gemini-code] Acessar ${paraExibir(atual.href)}? (s/n) `
           : `\n[gemini-code] A página redirecionou para outro site. Acessar ${paraExibir(atual.href)}? (s/n) `;
