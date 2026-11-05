@@ -1,20 +1,32 @@
-# Modo site — conversar pelo navegador: voz com a esfera, ou a versão chat (v0.48.0; "Parar" na v0.48.1; chat na v0.49.0; foto e vídeo na v0.51.0; só com a chave do Gemini e "até terminar" na v0.52.0)
+# Modo site — tudo num site só: conversa, voz, foto e vídeo, aliados (v0.48.0; "Parar" na v0.48.1; chat na v0.49.0; foto e vídeo na v0.51.0; só com a chave do Gemini e "até terminar" na v0.52.0; um site só na v0.53.0)
 
-`gemini-code site` abre uma página no seu navegador para conversar com o agente **por voz ou por texto**. No centro
-fica uma esfera brilhante com anéis e um círculo de "risquinhos" que reagem: seguem o seu microfone quando ele ouve,
-giram em violeta quando ele pensa, pulsam no ritmo da fala quando ele responde e ficam âmbar quando ele precisa da sua
-permissão.
+`gemini-code site` abre o site do Gemini Code no seu navegador. Desde a v0.53.0, é **um site só**, com tudo junto.
 
 ```bash
-gemini-code site --abrir                    # abre o navegador já no endereço certo (a página de voz)
-gemini-code site --chat --abrir             # abre a VERSÃO CHAT: uma conversa comum, por texto, sem a esfera
-gemini-code site --aliado central --abrir   # conversa com um aliado (ex.: o "central": computador, celular, sites, redes)
-gemini-code site --porta 0                  # qualquer porta livre (padrão: 8765)
+gemini-code site --abrir                      # abre o site (só neste aparelho)
+gemini-code site --aliado treinador --abrir   # já começa com um aliado (dá para trocar no topo)
+gemini-code site --voz --abrir                # abre direto no modo voz (a esfera)
+gemini-code site --porta 0                    # qualquer porta livre (padrão: 8765)
 ```
 
-O terminal mostra os dois endereços, `http://127.0.0.1:8765/chat#t=...` (chat) e `http://127.0.0.1:8765/#t=...` (voz).
-A parte `#t=...` é uma **chave que muda a cada vez**: abra o endereço completo e não compartilhe. As duas páginas são
-a mesma conversa.
+O terminal mostra um link só, `http://127.0.0.1:8765/chat#t=...`. A parte `#t=...` é uma **chave que muda a cada
+vez**: abra o endereço completo e não compartilhe.
+
+## Um site só (v0.53.0)
+
+- **No topo:**
+  - **com quem você conversa:** o agente geral ou um dos seus aliados (o treinador, o central...). Cada aliado tem as
+    ferramentas, a memória e as instruções dele, e trocar começa uma conversa nova;
+  - **Modo voz:** abre a esfera, para conversar sem as mãos, com a mesma conversa. Na esfera, o botão **Chat** volta;
+  - **Até terminar** e **Nova conversa**.
+- **Na caixa de mensagem:**
+  - o **microfone** dita a mensagem: fale, e quando você parar ela vai. Uma mensagem falada ganha a resposta falada;
+  - o **clipe** manda foto, vídeo ou áudio.
+- **Em cada resposta:** **Ouvir** lê a resposta em voz alta. Tocar de novo para.
+- **O microfone e a fala:** usam o reconhecimento e a voz do próprio navegador (Chrome ou Edge). Sem reconhecimento de
+  voz, o microfone não aparece.
+- **Até a v0.52.0:** a voz e o chat eram duas páginas, e o aliado era fixo por execução. O `--chat` continua aceito,
+  mas não precisa mais.
 
 ## Só com a chave do Gemini (v0.52.0)
 
@@ -144,6 +156,9 @@ O modo site roda o agente com as ferramentas dele, então o servidor é fechado:
   - limites: uma conferência por vez e até 10 tentativas a cada 10 minutos;
   - a chave nunca volta nas respostas nem vai para o log;
   - a conferência só fala com o endereço fixo do Google e não segue redirecionamento.
+- **Troca de aliado (v0.53.0):** pela mesma chave da sessão. Só para um aliado que existe, nunca no meio de uma
+  resposta, e a conversa começa do zero: o histórico de um aliado não vai para outro. As ferramentas são as do aliado,
+  como no `--aliado`.
 - **Envio de arquivo (v0.51.0):**
   - É a única rota que não é JSON. Exige a mesma chave e passa pelas mesmas travas de origem e de `Host`.
   - Só aceita os tipos de foto, vídeo e áudio da lista. Os tipos que outro site consegue mandar sem pedir licença ao
@@ -175,3 +190,13 @@ O modo site roda o agente com as ferramentas dele, então o servidor é fechado:
   - **Testado:** num Chromium de verdade, com um Gemini **falso**, porque este ambiente não tem internet nem modelo de
     IA: o cartão da chave, salvar e conversar, o botão "Até terminar" e a página que volta no meio.
   - **Não testado:** uma chave de verdade conferida com o Google, e o modelo real seguindo as marcas de fim.
+- Um site só (v0.53.0):
+  - **Testado:** num Chromium de verdade, de ponta a ponta:
+    - trocar de aliado no topo, e a mensagem ir para ele;
+    - ditar pelo microfone, com a mensagem indo sozinha e a resposta falada;
+    - o "Ouvir" e o parar;
+    - ir para o modo voz e voltar com a mesma conversa.
+
+    O comando `site` foi testado de verdade, com a lista de aliados do usuário.
+  - **Simulados:** o reconhecimento e a síntese de voz, porque aqui não há microfone, alto-falante nem internet.
+  - **Não testado:** o microfone de um celular de verdade.

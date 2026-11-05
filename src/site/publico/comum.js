@@ -622,8 +622,68 @@
   });
   const seloDoFim = (fim) => SELOS[fim] || '';
 
+  // ---------------------------------------------------------------------------
+  // v0.53.0: falar em voz alta (a síntese do próprio navegador), para o chat e para a página de voz
+  // ---------------------------------------------------------------------------
+  /** Texto para ler em voz alta: sem blocos de código, sem marcações, links viram "(link na tela)". */
+  function paraFala(texto) {
+    return String(texto)
+      .replace(/```[\s\S]*?```/g, ' (o código está na tela) ')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/!?\[([^\]]+)\]\([^)]+\)/g, '$1')
+      .replace(/https?:\/\/\S+/g, ' (link na tela) ')
+      .replace(/[*_#>|~]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+  /** Em pedaços de até `max` letras, cortando nas frases (frase longa demais trava a síntese de alguns aparelhos). */
+  function frases(texto, max = 200) {
+    const out = [];
+    let atual = '';
+    for (const f of texto.split(/(?<=[.!?;:])\s+/)) {
+      if ((atual + ' ' + f).length > max && atual) { out.push(atual); atual = f; } else atual = atual ? `${atual} ${f}` : f;
+      while (atual.length > max) { out.push(atual.slice(0, max)); atual = atual.slice(max); }
+    }
+    if (atual) out.push(atual);
+    return out;
+  }
+  const podeFalar = () => 'speechSynthesis' in window && typeof window.SpeechSynthesisUtterance === 'function';
+  function escolherVoz() {
+    if (!podeFalar()) return null;
+    const vozes = window.speechSynthesis.getVoices();
+    return vozes.find((v) => /pt[-_]BR/i.test(v.lang) && /Google/i.test(v.name))
+      || vozes.find((v) => /pt[-_]BR/i.test(v.lang)) || vozes.find((v) => /^pt/i.test(v.lang)) || null;
+  }
+  let vozEscolhida = null;
+  if (podeFalar()) {
+    vozEscolhida = escolherVoz();
+    window.speechSynthesis.addEventListener('voiceschanged', () => { vozEscolhida = escolherVoz(); });
+  }
+  /**
+   * Lê o texto em voz alta (português do Brasil, a melhor voz que o aparelho tiver). Devolve false se não deu.
+   * @param {{ aoTerminar?: () => void, aoPedaco?: (u) => void }} [o] aoPedaco recebe cada SpeechSynthesisUtterance
+   */
+  function falar(texto, { aoTerminar, aoPedaco } = {}) {
+    const limpo = paraFala(texto);
+    if (!limpo || !podeFalar()) { if (aoTerminar) aoTerminar(); return false; }
+    window.speechSynthesis.cancel();
+    const partes = frases(limpo);
+    partes.forEach((p, i) => {
+      const u = new window.SpeechSynthesisUtterance(p);
+      u.lang = 'pt-BR';
+      if (vozEscolhida) u.voice = vozEscolhida;
+      u.rate = 1.04;
+      if (aoPedaco) aoPedaco(u);
+      if (i === partes.length - 1 && aoTerminar) { u.addEventListener('end', aoTerminar); u.addEventListener('error', aoTerminar); }
+      window.speechSynthesis.speak(u);
+    });
+    return true;
+  }
+  function pararFala() { if (podeFalar()) window.speechSynthesis.cancel(); }
+
   window.GeminiSite = Object.freeze({
     lerToken, criarApi, eventos, analisarMarkdown, montarMarkdown, copiarTexto, linkSeguro,
     tamanhoLegivel, tipoDoArquivo, enviarArquivo, cartaoMidia, mostrarQuadro, MAX_ENVIO, cartaoChave, seloDoFim,
+    paraFala, frases, podeFalar, falar, pararFala,
   });
 })();

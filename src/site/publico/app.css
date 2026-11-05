@@ -70,6 +70,7 @@ button { cursor: pointer; }
   transition: background 0.2s, color 0.2s, box-shadow 0.2s;
 }
 .chip:hover { color: var(--texto); }
+a.chip { text-decoration: none; display: inline-block; } /* v0.53.0: "Chat" é um link para a outra página do site */
 .chip[aria-pressed="true"], .chip[aria-expanded="true"] {
   color: #001018; background: var(--ciano); border-color: var(--ciano); box-shadow: 0 0 14px rgba(62, 230, 255, 0.55);
 }

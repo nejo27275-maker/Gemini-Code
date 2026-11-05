@@ -70,14 +70,14 @@ async function executar(args, deps = {}) {
       }
       case 'aliado': {
         const aliados = deps.aliados || require('./personalAgents').defaultStore;
-        if (aliados.existe('treinador')) return ok(L('dim', 'O aliado "treinador" já existe. Converse com: gemini-code aliados chat treinador (ou pelo site: gemini-code site --chat --aliado treinador)'));
+        if (aliados.existe('treinador')) return ok(L('dim', 'O aliado "treinador" já existe. Converse com: gemini-code aliados chat treinador (ou pelo site: gemini-code site --abrir, e escolha "treinador" no topo)'));
         aliados.criar({
           name: 'treinador', description: 'treinador de futebol de elite: treinos, semana até o jogo, carga, prancheta e análise de vídeo',
           instructions: futebol.INSTRUCOES_TREINADOR, tools: 'futebol', memory: 'confirmar', starters: [...futebol.INICIADORES],
         });
         return ok(
           L('ok', 'Aliado "treinador" criado. Converse com: gemini-code aliados chat treinador'),
-          L('dim', 'Pelo navegador: gemini-code site --chat --aliado treinador (mande o vídeo do jogo pelo clipe para ele cortar os lances).'),
+          L('dim', 'Pelo navegador: gemini-code site --abrir e escolha "treinador" no topo, ou já comece com ele: gemini-code site --aliado treinador --abrir (mande o vídeo do jogo pelo clipe para ele cortar os lances).'),
         );
       }
       default:

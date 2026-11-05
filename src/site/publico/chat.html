@@ -14,12 +14,20 @@
   <header class="topo">
     <div class="identidade">
       <span class="logo" aria-hidden="true">G</span>
-      <div>
+      <div class="identidade-textos">
         <h1 class="nome">Gemini Code</h1>
         <p id="subtitulo" class="subtitulo">Chat</p>
+        <label id="aliado-caixa" class="aliado-caixa" hidden>
+          <span class="aliado-rotulo">com</span>
+          <select id="sel-aliado" class="sel-aliado" aria-label="Conversar com qual aliado"></select>
+        </label>
       </div>
     </div>
     <div class="topo-acoes">
+    <a id="btn-modo-voz" class="botao-sec" href="/" aria-label="Modo voz" title="Modo voz: a esfera, para conversar sem as mãos (a mesma conversa)">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M6.3 6.3a8 8 0 0 0 0 11.4M17.7 6.3a8 8 0 0 1 0 11.4M3.5 3.5a12 12 0 0 0 0 17M20.5 3.5a12 12 0 0 1 0 17"/></svg>
+      <span>Modo voz</span>
+    </a>
     <button id="btn-ate" class="botao-sec botao-ate" type="button" aria-pressed="false" title="Modo até terminar: o agente continua sozinho até a tarefa estar feita (você ainda pode parar)">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.6M4 4v4h4"/></svg>
       <span>Até terminar</span>
@@ -53,13 +61,16 @@
       <button id="btn-anexar" class="anexar" type="button" aria-label="Mandar foto, vídeo ou áudio" title="Mandar foto, vídeo ou áudio (ou arraste para a conversa)">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5 12.6 19.9a5.5 5.5 0 0 1-7.8-7.8l8.4-8.4a3.7 3.7 0 0 1 5.2 5.2l-8.4 8.4a1.8 1.8 0 0 1-2.6-2.6l7.8-7.8"/></svg>
       </button>
-      <textarea id="texto" rows="1" maxlength="16000" placeholder="Escreva uma mensagem…" aria-label="Mensagem para o agente" enterkeyhint="send"></textarea>
+      <textarea id="texto" rows="1" maxlength="16000" placeholder="Escreva ou fale uma mensagem…" aria-label="Mensagem para o agente" enterkeyhint="send"></textarea>
+      <button id="btn-mic" class="mic-chat" type="button" aria-pressed="false" aria-label="Falar a mensagem" title="Falar: dite a mensagem; quando você parar, ela vai, e a resposta vem falada" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/></svg>
+      </button>
       <button id="btn-enviar" class="enviar" type="submit" aria-label="Enviar">
         <svg class="icone-enviar" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5"/></svg>
         <svg class="icone-parar" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>
       </button>
     </form>
-    <p class="dica">Enter envia · Shift+Enter quebra a linha · Esc para a resposta · arraste ou cole uma foto para mandar</p>
+    <p class="dica">Enter envia · Shift+Enter quebra a linha · Esc para a resposta · o microfone dita · arraste ou cole uma foto para mandar</p>
   </footer>
 </div>
 <script src="/comum.js"></script>

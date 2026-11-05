@@ -3,7 +3,9 @@
  * v0.51.0: foto, vídeo e áudio — pelo clipe, arrastando ou colando; o arquivo sobe na hora (com o progresso), aparece
  * na sua mensagem, e o que o agente criar (a foto editada, o vídeo) aparece na resposta, com o botão de baixar.
  * v0.52.0: o pedido da chave do Gemini quando falta (o site só precisa dela) e o modo até terminar (botão no topo):
- * o agente continua sozinho, a página fechada não o para e, ao voltar, a página mostra o andamento. */
+ * o agente continua sozinho, a página fechada não o para e, ao voltar, a página mostra o andamento.
+ * v0.53.0: um site só — o microfone dita a mensagem (e a resposta vem falada), cada resposta tem "Ouvir", o seletor
+ * troca de aliado (treinador, central...) sem sair da página, e "Modo voz" abre a esfera com a mesma conversa. */
 (function () {
   'use strict';
 
@@ -25,6 +27,12 @@
   const elArquivo = $('arquivo');
   const elAnexar = $('btn-anexar');
   const elAte = $('btn-ate');
+  const elMic = $('btn-mic');
+  const elModoVoz = $('btn-modo-voz');
+  const elAliadoCaixa = $('aliado-caixa');
+  const elSelAliado = $('sel-aliado');
+  // as sugestões da página (voltam quando a conversa é com o agente geral)
+  const SUGESTOES_PADRAO = Array.from(document.querySelectorAll('.sugestao'), (b) => b.textContent);
   // no PC, Enter envia; no celular, Enter quebra a linha e quem envia é o botão
   const ponteiroFino = Boolean(window.matchMedia && window.matchMedia('(pointer: fine)').matches);
 
@@ -95,6 +103,13 @@
     const copiar = criar('button', 'acao', 'Copiar resposta');
     copiar.type = 'button';
     acoes.append(copiar);
+    // v0.53.0: ouvir a resposta em voz alta (a síntese do navegador)
+    const ouvir = G.podeFalar() ? criar('button', 'acao acao-ouvir', 'Ouvir') : null;
+    if (ouvir) {
+      ouvir.type = 'button';
+      ouvir.setAttribute('aria-pressed', 'false');
+      acoes.append(ouvir);
+    }
     corpo.append(ferramentas, digitando, conteudo, midias, seguindo, acoes);
     li.append(avatar, corpo);
     li.setAttribute('aria-busy', 'true');
@@ -110,8 +125,11 @@
       rolar();
     };
     copiar.addEventListener('click', () => G.copiarTexto(texto, copiar));
+    if (ouvir) ouvir.addEventListener('click', () => falarResposta(texto, ouvir));
     return {
       li,
+      /** v0.53.0: lê em voz alta (a resposta inteira, quando ela veio em mais de um pedaço). */
+      falar(inteiro) { falarResposta(inteiro || texto, ouvir); },
       ferramenta(nome) {
         if (texto) separar = true; // o que o agente escrever depois da ferramenta é outro parágrafo
         const n = String(nome);
@@ -228,6 +246,8 @@
     elEnviar.setAttribute('aria-label', sim ? 'Parar a resposta (Esc)' : 'Enviar');
     elEnviar.title = sim ? 'Parar a resposta (Esc)' : 'Enviar';
     elNova.disabled = sim;
+    elMic.disabled = sim;
+    elSelAliado.disabled = sim; // trocar de aliado no meio de uma resposta, não
   }
 
   // Parar de verdade: o servidor para o agente no próximo ponto seguro e conta a pergunta aberta como "não".
@@ -245,6 +265,10 @@
     if ((!texto && !prontos.length) || ocupado) return;
     if (!token) { semChave(); return; }
     if (cartaoDaChave) { anunciar('Cole a chave da API do Gemini primeiro.'); focarChave(); return; }
+    // v0.53.0: a mensagem que veio do microfone ganha a resposta falada
+    const responderFalando = falarProxima;
+    falarProxima = false;
+    pararDeFalar();
     marcarOcupado(true);
     // o histórico entra primeiro: se a mensagem fosse antes, ela voltaria junto com o histórico e apareceria duas vezes
     await pronto;
@@ -301,6 +325,7 @@
     const nota = interrompida ? 'Você parou a resposta.' : '';
     const m = atual || ((final && !interrompida) || nota || erro ? msgAgente() : null);
     if (m) m.fim({ final: interrompida ? '' : final, nota, erro, selo: interrompida ? '' : selo });
+    if (m && responderFalando && final && !interrompida && !erro) m.falar(final);
     parando = false;
     marcarOcupado(false);
     anunciar(erro ? 'Algo deu errado.' : interrompida ? 'Resposta parada.' : 'Resposta pronta.');
@@ -315,6 +340,8 @@
     elNova.disabled = true;
     elAnexar.disabled = true;
     elAte.disabled = true;
+    elMic.disabled = true;
+    elSelAliado.disabled = true;
   }
 
   // ---------------------------------------------------------------------------
@@ -353,6 +380,125 @@
     anunciar(ateTerminar ? 'Modo até terminar ligado: o agente continua sozinho até a tarefa estar feita (você ainda pode parar).' : 'Modo até terminar desligado.');
   });
 
+  // ---------------------------------------------------------------------------
+  // v0.53.0: voz no chat — ditar a mensagem (o reconhecimento do navegador) e ouvir as respostas
+  // ---------------------------------------------------------------------------
+  const Reconhecimento = () => window.SpeechRecognition || window.webkitSpeechRecognition;
+  let rec = null;
+  let falarProxima = false;
+  let botaoFalando = null;
+
+  function soltarBotaoDaFala() {
+    if (!botaoFalando) return;
+    botaoFalando.setAttribute('aria-pressed', 'false');
+    botaoFalando.textContent = 'Ouvir';
+    botaoFalando = null;
+  }
+  function pararDeFalar() { soltarBotaoDaFala(); G.pararFala(); }
+  /** Lê a resposta em voz alta; tocar de novo no mesmo "Ouvir" para. */
+  function falarResposta(texto, botao) {
+    const mesmo = Boolean(botao) && botao === botaoFalando;
+    pararDeFalar();
+    if (mesmo) return;
+    if (botao) {
+      botao.setAttribute('aria-pressed', 'true');
+      botao.textContent = 'Parar de ouvir';
+      botaoFalando = botao;
+    }
+    G.falar(texto, { aoTerminar: () => { if (botao && botaoFalando === botao) soltarBotaoDaFala(); } });
+  }
+
+  function ditar() {
+    if (rec) { try { rec.stop(); } catch { /* já parou */ } return; } // tocar de novo: manda o que já ouviu
+    const R = Reconhecimento();
+    if (!R) { anunciar('Este navegador não ouve voz: use o Chrome ou o Edge (ou digite).'); return; }
+    if (ocupado || !token) return;
+    pararDeFalar();
+    const antes = elTexto.value.trim();
+    let final = '';
+    rec = new R();
+    rec.lang = 'pt-BR';
+    rec.interimResults = true;
+    rec.continuous = false;
+    rec.maxAlternatives = 1;
+    rec.onstart = () => {
+      elMic.setAttribute('aria-pressed', 'true');
+      app.dataset.ouvindo = 'true';
+      anunciar('Ouvindo… fale; quando você parar, a mensagem vai.');
+    };
+    rec.onresult = (ev) => {
+      let parcial = '';
+      for (let i = ev.resultIndex; i < ev.results.length; i++) {
+        const tr = ev.results[i][0].transcript;
+        if (ev.results[i].isFinal) final += tr; else parcial += tr;
+      }
+      elTexto.value = [antes, (final + parcial).trim()].filter(Boolean).join(' ');
+      ajustarAltura();
+    };
+    rec.onerror = (ev) => {
+      if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') anunciar('Microfone bloqueado: permita o microfone para esta página (no ícone ao lado do endereço).');
+      else if (ev.error === 'network') anunciar('O reconhecimento de voz do navegador precisa de internet. Você pode digitar.');
+      else if (ev.error === 'no-speech') anunciar('Não ouvi nada. Toque no microfone e fale.');
+    };
+    rec.onend = () => {
+      rec = null;
+      elMic.setAttribute('aria-pressed', 'false');
+      delete app.dataset.ouvindo;
+      if (!final.trim()) { elTexto.value = antes; ajustarAltura(); return; }
+      falarProxima = true;
+      if (!mandar(elTexto.value)) falarProxima = false;
+    };
+    try { rec.start(); } catch { rec = null; }
+  }
+  if (Reconhecimento()) elMic.hidden = false;
+  elMic.addEventListener('click', ditar);
+
+  // ---------------------------------------------------------------------------
+  // v0.53.0: um site só — o modo voz (a esfera) e a troca de aliado
+  // ---------------------------------------------------------------------------
+  // a esfera é a mesma conversa: a chave vai pelo fragmento do endereço (nunca para o servidor nem para o histórico)
+  elModoVoz.addEventListener('click', (ev) => {
+    if (!token) return;
+    ev.preventDefault();
+    pararDeFalar();
+    location.href = `/#t=${encodeURIComponent(token)}`;
+  });
+
+  let aliadoAtual = null;
+  function montarAliados(lista, atual) {
+    aliadoAtual = atual || null;
+    if (!Array.isArray(lista)) return;
+    const opcoes = [{ nome: '', rotulo: 'Agente geral', descricao: 'o Gemini Code de sempre, com as ferramentas do dia a dia' }]
+      .concat(lista.map((a) => ({ nome: a.nome, rotulo: a.nome, descricao: a.descricao })));
+    elSelAliado.replaceChildren(...opcoes.map((o) => {
+      const op = criar('option', '', o.rotulo);
+      op.value = o.nome;
+      if (o.descricao) op.title = o.descricao;
+      return op;
+    }));
+    elSelAliado.value = aliadoAtual || '';
+    elAliadoCaixa.hidden = false;
+    elSubtitulo.hidden = true;
+  }
+  elSelAliado.addEventListener('change', async () => {
+    const nome = elSelAliado.value || null;
+    const voltar = () => { elSelAliado.value = aliadoAtual || ''; };
+    if (nome === aliadoAtual) return;
+    if (ocupado) { anunciar('Espere a resposta terminar para trocar.'); voltar(); return; }
+    if (elLista.childElementCount && !window.confirm(`Trocar para ${nome ? `o aliado "${nome}"` : 'o agente geral'} começa uma conversa nova. Trocar?`)) { voltar(); return; }
+    let d;
+    try {
+      const r = await api('/api/aliado', { nome });
+      d = await r.json().catch(() => ({}));
+      if (!r.ok) { aviso(d.erro || 'Não consegui trocar agora.'); voltar(); return; }
+    } catch { aviso('Sem conexão com o agente.'); voltar(); return; }
+    aliadoAtual = d.aliado || null;
+    limparTela();
+    trocarSugestoes(d.sugestoes && d.sugestoes.length ? d.sugestoes : SUGESTOES_PADRAO);
+    anunciar(aliadoAtual ? `Agora você conversa com o aliado "${aliadoAtual}".` : 'Agora você conversa com o agente geral.');
+    if (ponteiroFino) elTexto.focus({ preventScroll: true });
+  });
+
   /** v0.52.0: as sugestões do aliado no lugar das da página (como texto, cada uma um botão). */
   function trocarSugestoes(lista) {
     const caixa = document.querySelector('.sugestoes');
@@ -377,8 +523,9 @@
       if (!r.ok) { if (r.status === 401) semChave(); return; }
       d = await r.json();
     } catch { return; /* sem conexão: a página segue vazia */ }
-    if (d.aliado) elSubtitulo.textContent = `Chat com o aliado "${d.aliado}"`;
-    if (Array.isArray(d.sugestoes) && d.sugestoes.length) trocarSugestoes(d.sugestoes);
+    if (Array.isArray(d.aliados)) montarAliados(d.aliados, d.aliado); // v0.53.0: o seletor no lugar do subtítulo
+    else if (d.aliado) elSubtitulo.textContent = `Chat com o aliado "${d.aliado}"`;
+    trocarSugestoes(Array.isArray(d.sugestoes) && d.sugestoes.length ? d.sugestoes : SUGESTOES_PADRAO);
     let lembrado = null;
     try { lembrado = sessionStorage.getItem('gc-ate-terminar'); } catch { /* sem armazenamento */ }
     marcarAte(lembrado === null ? d.ateTerminarPadrao === true : lembrado === '1', { lembrar: false });
@@ -439,18 +586,25 @@
     await carregar({ substituir: true });
   }
 
+  /** A tela de uma conversa nova (o servidor já começou outra: /api/limpar ou a troca de aliado). */
+  function limparTela() {
+    pararDeFalar();
+    elLista.replaceChildren();
+    pendentes.clear();
+    cartaoDaChave = null;
+    for (const a of [...anexos]) tirarAnexo(a);
+    for (const u of urls) URL.revokeObjectURL(u);
+    urls.clear();
+    atualizarVazio();
+  }
+
   elNova.addEventListener('click', async () => {
     if (ocupado) return;
     try {
       const r = await api('/api/limpar', {});
       if (!r.ok) { const e = await r.json().catch(() => ({})); aviso(e.erro || 'Não consegui começar outra agora.'); return; }
     } catch { aviso('Sem conexão com o agente.'); return; }
-    elLista.replaceChildren();
-    pendentes.clear();
-    for (const a of [...anexos]) tirarAnexo(a);
-    for (const u of urls) URL.revokeObjectURL(u);
-    urls.clear();
-    atualizarVazio();
+    limparTela();
     anunciar('Conversa nova.');
     elTexto.focus();
   });
@@ -469,18 +623,24 @@
       else elForm.dispatchEvent(new Event('submit', { cancelable: true }));
     }
   });
-  elForm.addEventListener('submit', (ev) => {
-    ev.preventDefault();
-    if (ocupado) { parar(); return; } // enquanto responde, o botão de enviar é o "Parar"
-    const t = elTexto.value;
-    if (anexos.some((a) => a.estado === 'fila' || a.estado === 'enviando')) { anunciar('Espere o arquivo terminar de subir.'); avisarNaBandeja('Espere o arquivo terminar de subir para mandar.'); return; }
-    if (!t.trim() && !anexos.some((a) => a.estado === 'pronto')) return;
+  /** Manda o que está na caixa (texto e/ou os arquivos prontos). @returns {boolean} se foi */
+  function mandar(t) {
+    if (ocupado) return false;
+    if (anexos.some((a) => a.estado === 'fila' || a.estado === 'enviando')) { anunciar('Espere o arquivo terminar de subir.'); avisarNaBandeja('Espere o arquivo terminar de subir para mandar.'); return false; }
+    if (!String(t || '').trim() && !anexos.some((a) => a.estado === 'pronto')) return false;
     elTexto.value = '';
     ajustarAltura();
     enviar(t);
+    return true;
+  }
+  elForm.addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    if (ocupado) { parar(); return; } // enquanto responde, o botão de enviar é o "Parar"
+    mandar(elTexto.value);
   });
   document.addEventListener('keydown', (ev) => {
-    if (ev.key === 'Escape' && ocupado) { ev.preventDefault(); parar(); }
+    if (ev.key !== 'Escape') return;
+    if (ocupado) { ev.preventDefault(); parar(); } else if (botaoFalando || (G.podeFalar() && window.speechSynthesis.speaking)) pararDeFalar();
   });
   for (const b of document.querySelectorAll('.sugestao')) b.addEventListener('click', () => enviar(b.textContent));
 

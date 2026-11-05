@@ -39,10 +39,10 @@ qualquer PC/Linux com Node.js.
   formulários e tira print.
 - **Rotinas com agente** (`gemini-code routines create --prompt ...`): o agente
   faz uma tarefa sozinho no horário marcado e avisa por notificação.
-- **Modo site** (v0.48.0; a versão chat é da v0.49.0): converse pelo navegador, só neste aparelho.
-  `gemini-code site --chat --abrir` abre um chat comum, com respostas formatadas, permissões no meio da conversa, Parar e
-  a conversa de volta ao recarregar. `gemini-code site --abrir` abre a conversa por voz com a esfera animada. Veja
-  `docs/MODO_SITE.md`.
+- **Modo site** (v0.48.0; um site só desde a v0.53.0): converse pelo navegador, só neste aparelho.
+  `gemini-code site --abrir` abre o site com tudo junto: a conversa com respostas formatadas, o microfone (a resposta
+  vem falada), "Ouvir" em cada resposta, foto e vídeo pelo clipe, os seus aliados no topo e o botão "Modo voz" (a esfera
+  animada). Veja `docs/MODO_SITE.md`.
   - **Foto e vídeo pela página** (v0.51.0): toque no clipe (ou arraste/cole) para mandar uma foto, um vídeo ou um
     áudio. O agente edita, e o resultado aparece na conversa com o botão Baixar.
   - **Só com a chave do Gemini** (v0.52.0): sem chave, a própria página pede uma, e o site funciona só com ela. Ele
@@ -72,7 +72,7 @@ qualquer PC/Linux com Node.js.
 
 ```bash
 gemini-code futebol aliado                     # cria o aliado "treinador"
-gemini-code site --chat --aliado treinador --abrir
+gemini-code site --aliado treinador --abrir    # o site já com o treinador (v0.53.0: dá para trocar no topo)
 gemini-code futebol treino --tema pressao --categoria sub-15 --jogadores 18
 gemini-code futebol semana --jogo sabado --dias segunda,terca,quinta,sexta
 gemini-code futebol prancheta 4-3-3 --nomes "Marcos,Rafa,Thiago,..."
@@ -135,19 +135,27 @@ gemini-code imagem ajustar loja.jpg --formato feed --cor vivo --texto "50% OFF s
 
 Tudo explicado em `docs/EDICAO.md`.
 
-## Modo site: conversa por voz com a esfera — v0.48.0 (e a versão chat, v0.49.0)
+## Modo site: um site só, com conversa, voz e aliados — v0.48.0 (um site só desde a v0.53.0)
 
 ```bash
-gemini-code site --abrir                    # abre a página no navegador (só neste aparelho)
-gemini-code site --aliado central --abrir   # pela voz: computador, celular/TV, sites, redes e desafios
+gemini-code site --abrir                    # abre o site no navegador (só neste aparelho)
+gemini-code site --aliado central --abrir   # já começa com um aliado (computador, celular/TV, sites, redes e desafios)
+gemini-code site --voz --abrir              # abre direto no modo voz (a esfera)
 ```
 
-Uma esfera brilhante com anéis e um círculo de risquinhos que reagem à sua voz (ouvindo), giram em violeta (pensando),
+**Um site só (v0.53.0):**
+- **No topo:** você escolhe com quem conversar (o agente geral ou um aliado) e abre o modo voz, com a mesma conversa.
+- **Na caixa de mensagem:** o microfone dita, e a resposta de uma mensagem falada vem falada.
+- **Em cada resposta:** o botão "Ouvir".
+
+O terminal mostra um link só.
+
+**O modo voz:** uma esfera brilhante com anéis e um círculo de risquinhos que reagem à sua voz (ouvindo), giram em violeta (pensando),
 pulsam com a fala (respondendo) e ficam âmbar quando o agente precisa da sua permissão — que você dá **na própria
 página**. Microfone com **espaço**; enquanto ele trabalha, o botão vira **Parar** (ou **Esc**) e para o agente de verdade
 (v0.48.1). Modo **contínuo** para conversar sem as mãos. Voz pelo Chrome ou Edge (PC ou Android).
 
-Prefere digitar? `gemini-code site --chat --abrir` abre a **versão chat** (v0.49.0). É uma conversa comum, clara ou
+**A conversa** (a versão chat, v0.49.0; é onde o site abre desde a v0.53.0): é uma conversa comum, clara ou
 escura, sem a esfera. As respostas vêm formatadas (listas, tabelas, código com "Copiar"), e as permissões aparecem no meio
 da conversa. Tem também o botão Parar, a nova conversa, e a conversa volta ao recarregar a página. O servidor só atende em `127.0.0.1`, com uma chave nova a cada vez. Guia: `docs/MODO_SITE.md`.
 

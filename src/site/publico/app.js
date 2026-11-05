@@ -358,27 +358,8 @@
     window.speechSynthesis.onvoiceschanged = () => { vozEscolhida = escolherVoz(); };
   }
 
-  /** Texto para ler em voz alta: sem blocos de código, sem marcações. */
-  function paraFala(texto) {
-    return String(texto)
-      .replace(/```[\s\S]*?```/g, ' (o código está na tela) ')
-      .replace(/`([^`]+)`/g, '$1')
-      .replace(/!?\[([^\]]+)\]\([^)]+\)/g, '$1')
-      .replace(/https?:\/\/\S+/g, ' (link na tela) ')
-      .replace(/[*_#>|~]+/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-  }
-  function frases(texto, max = 200) {
-    const out = [];
-    let atual = '';
-    for (const f of texto.split(/(?<=[.!?;:])\s+/)) {
-      if ((atual + ' ' + f).length > max && atual) { out.push(atual); atual = f; } else atual = atual ? `${atual} ${f}` : f;
-      while (atual.length > max) { out.push(atual.slice(0, max)); atual = atual.slice(max); }
-    }
-    if (atual) out.push(atual);
-    return out;
-  }
+  // texto para a fala e em pedaços: os mesmos do chat (comum.js, v0.53.0)
+  const { paraFala, frases } = G;
 
   function falar(texto) {
     const limpo = paraFala(texto);
@@ -565,6 +546,14 @@
   $('btn-ate').addEventListener('click', () => marcarAte(!ateTerminar));
   $('btn-voz').addEventListener('click', () => { falarRespostas = !falarRespostas; marcar('btn-voz', falarRespostas); if (!falarRespostas) pararFala(); });
   $('btn-historico').addEventListener('click', () => { const el = $('historico'); el.hidden = !el.hidden; marcar('btn-historico', !el.hidden); });
+  // v0.53.0: um site só — o chat é a mesma conversa (a chave vai pelo fragmento, nunca para o servidor)
+  $('btn-chat').addEventListener('click', (ev) => {
+    if (!token) return;
+    ev.preventDefault();
+    pararDeOuvir();
+    pararFala();
+    location.href = `/chat#t=${encodeURIComponent(token)}`;
+  });
   $('btn-limpar').addEventListener('click', async () => {
     if (ocupado) return;
     try { await api('/api/limpar', {}); } catch { /* segue limpando a tela */ }

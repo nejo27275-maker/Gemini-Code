@@ -9,7 +9,7 @@ ser nenhuma pessoa real**.
 ```bash
 gemini-code futebol aliado                  # cria o aliado "treinador" (uma vez)
 gemini-code aliados chat treinador          # conversa no terminal
-gemini-code site --chat --aliado treinador  # ou pelo navegador (mande o vídeo do jogo pelo clipe)
+gemini-code site --aliado treinador --abrir  # ou pelo navegador (no topo do site dá para trocar de aliado)
 ```
 
 Exemplos do que pedir: "monta o treino de amanhã: sub-15, 18 jogadores, 75 minutos, foco em pressão pós-perda";

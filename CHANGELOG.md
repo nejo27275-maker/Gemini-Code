@@ -1,3 +1,39 @@
+## 0.53.0 — um site só: conversa, voz, aliados, foto e vídeo no mesmo lugar
+
+Você pediu "tudo em um só site": o modo voz e o resto juntos. Até a 0.52.0 eram duas páginas (chat e voz), e o aliado
+ficava fixo enquanto o site estava aberto.
+
+**Novo — o site com tudo:**
+- **`gemini-code site --abrir`** abre o site completo, e o terminal mostra um link só. `--voz` abre direto na esfera.
+  O `--chat` continua aceito, mas não precisa mais.
+- **Com quem conversar, no topo:** o agente geral ou um dos seus aliados (o treinador, o central...).
+  - **A troca:** começa uma conversa nova, porque cada um tem as ferramentas, a memória e as instruções dele.
+  - **As sugestões:** a tela inicial passa a mostrar as do aliado.
+- **O microfone na caixa de mensagem:** você fala, e quando para a mensagem vai. Uma mensagem falada ganha a resposta
+  falada.
+- **"Ouvir" em cada resposta:** lê a resposta em voz alta. Tocar de novo para, e o Esc também para.
+- **Modo voz:** o botão no topo abre a esfera, com a mesma conversa e o mesmo aliado. Na esfera, o botão **Chat** volta.
+
+**Por dentro:**
+- **A rota nova:** `/api/aliado` troca de aliado.
+  - **O que aceita:** só um aliado que existe, nunca no meio de uma resposta.
+  - **A conversa nova:** a troca zera o histórico, os turnos e as mídias, então a conversa de um aliado não vai para outro.
+  - **As travas:** a mesma chave da sessão e as mesmas de origem e de `Host`.
+  - **Na página:** os nomes e as descrições vão limpos, como texto.
+- **A voz:** o reconhecimento e a fala são os do navegador. Só o texto final da mensagem vai para o servidor.
+- **Código compartilhado:** o texto para a fala agora é um só (`comum.js`), usado pelo chat e pela esfera.
+
+**Testes (+5):**
+- **Servidor:** a troca (lista limpa, conversa nova, só um que existe, nunca no meio, um aliado quebrado não troca nada,
+  sem a chave nada).
+- **Comando:** o `site` de verdade, com a lista de aliados do usuário.
+- **Chromium de verdade:** o seletor, o ditado com a resposta falada, o "Ouvir" e o parar, e o vai e volta entre o chat
+  e a esfera.
+- **Simulados no Chromium:** o reconhecimento e a síntese de voz, porque aqui não há microfone, alto-falante nem
+  internet.
+
+**Não testado:** o microfone de um celular de verdade.
+
 ## 0.52.0 — o site só com a chave do Gemini, criar imagem, o modo até terminar e o treinador de futebol
 
 Base: a 0.51.0 (no PR [#7](https://github.com/nejo27275-maker/Gemini-Code/pull/7)). Você pediu:

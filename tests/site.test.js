@@ -67,7 +67,11 @@ test('páginas: só os nossos arquivos (voz e chat), com CSP fechada, sem moldur
     assert.ok(!/<script>/.test(r.corpo) && !/ on[a-z]+="/.test(r.corpo) && !/ style="/.test(r.corpo), `${caminho}: nada de script/estilo inline nem onclick (a CSP bloquearia)`);
     assert.match(r.corpo, /<script src="\/comum\.js"><\/script>/, `${caminho}: usa o comum.js`);
   }
-  assert.doesNotMatch((await pedir(porta, { caminho: '/chat' })).corpo, /orbe|esfera/i, 'a versão chat não tem nada da esfera');
+  const paginaChat = (await pedir(porta, { caminho: '/chat' })).corpo;
+  assert.doesNotMatch(paginaChat, /<canvas|id="orbe"/i, 'a versão chat não desenha a esfera');
+  // v0.53.0: um site só — o chat leva ao modo voz, e o modo voz volta para o chat
+  assert.match(paginaChat, /<a id="btn-modo-voz" class="botao-sec" href="\/" aria-label="Modo voz"/);
+  assert.match((await pedir(porta, { caminho: '/' })).corpo, /<a id="btn-chat" class="chip" href="\/chat"/);
   for (const c of ['/app.js', '/chat.js', '/comum.js']) assert.match((await pedir(porta, { caminho: c })).headers['content-type'], /javascript/, c);
   for (const c of ['/app.css', '/chat.css']) assert.match((await pedir(porta, { caminho: c })).headers['content-type'], /text\/css/, c);
   for (const c of ['/../../etc/passwd', '/%2e%2e/%2e%2e/etc/passwd', '/servidor.js', '/publico/app.js', '/api/conversa', '/chat/', '/chat.html', '/index.html']) {

@@ -351,6 +351,8 @@ function conversarComAgente({ aliado = null, runOnce = (...a) => require('../age
  * @param {number} [o.maxEnvio] v0.51.0: tamanho máximo de um arquivo recebido
  * @param {(nome: string) => boolean} [o.ligarFerramenta] v0.51.0: liga uma ferramenta sob demanda nesta execução
  * @param {string[]|null} [o.sugestoes] v0.52.0: as sugestões de conversa do aliado (no lugar das da página)
+ * @param {{ listar: () => {nome: string, descricao?: string}[], abrir: (nome: string|null) => {nome: string|null, conversar: Function, sugestoes?: string[]} }|null} [o.aliados]
+ *   v0.53.0: trocar de aliado pela página (um site só). Sem isto, o aliado é o da linha de comando.
  */
 function criarServidorSite({
   token = crypto.randomBytes(24).toString('base64url'),
@@ -366,11 +368,22 @@ function criarServidorSite({
   prazoPerguntaAteTerminarMs = PRAZO_PERGUNTA_ATE_TERMINAR_MS,
   ateTerminarPadrao = () => { try { return require('../config').loadConfig().modoAteTerminar === true; } catch { return false; } },
   sugestoes = null,
+  aliados = null,
 } = {}) {
   const { paraExibir, semControlesInvisiveis } = require('../ui/textoSeguro');
   // v0.52.0: as sugestões do aliado (ex.: o "treinador"); texto guardado pelo usuário, mas limpo e curto mesmo assim
-  const sugestoesDaPagina = (Array.isArray(sugestoes) ? sugestoes : [])
+  const limparSugestoes = (lista) => (Array.isArray(lista) ? lista : [])
     .map((s) => semControlesInvisiveis(String(s)).replace(/\s+/g, ' ').trim().slice(0, 160)).filter(Boolean).slice(0, 4);
+  const limparNome = (n) => (n ? semControlesInvisiveis(String(n)).slice(0, 80) : null);
+  // v0.53.0: com quem a página conversa agora (troca pela página com /api/aliado, se o servidor receber `aliados`)
+  let atual = { nome: limparNome(aliado), conversar, sugestoes: limparSugestoes(sugestoes) };
+  function listaDeAliados() {
+    if (!aliados) return null;
+    try {
+      return aliados.listar().filter((a) => a && typeof a.nome === 'string' && a.nome).slice(0, 50)
+        .map((a) => ({ nome: limparNome(a.nome), descricao: semControlesInvisiveis(String(a.descricao || '')).replace(/\s+/g, ' ').trim().slice(0, 140) }));
+    } catch { return []; }
+  }
   const conteudo = {};
   for (const [rota, [arquivo]] of Object.entries(ARQUIVOS)) conteudo[rota] = fs.readFileSync(path.join(PUBLICO, arquivo));
   let historico = [];
@@ -590,9 +603,10 @@ function criarServidorSite({
       let chave = { configurada: true, precisa: false };
       try { const e = chaves.estado(); chave = { configurada: Boolean(e.configurada), precisa: Boolean(e.precisa) }; } catch { /* sem config: nada a pedir */ }
       return json(res, 200, {
-        mensagens: comMidias(paraExibicao(historico)), ocupado, aliado: aliado ? semControlesInvisiveis(String(aliado)).slice(0, 80) : null,
+        mensagens: comMidias(paraExibicao(historico)), ocupado, aliado: atual.nome,
         chave, ateTerminarPadrao: Boolean(ateTerminarPadrao()),
-        ...(sugestoesDaPagina.length ? { sugestoes: sugestoesDaPagina } : {}),
+        ...(atual.sugestoes.length ? { sugestoes: atual.sugestoes } : {}),
+        ...(aliados ? { aliados: listaDeAliados() } : {}),
         ...(ocupado && andamento ? { andamento: retratoDoAndamento() } : {}),
         perguntas: [...pendentes].map(([id, p]) => ({ id, texto: p.texto })),
       });
@@ -606,7 +620,30 @@ function criarServidorSite({
       midias.clear(); // os arquivos ficam no disco; a página só deixa de mostrá-los
       return json(res, 200, { ok: true });
     }
+    if (caminho === '/api/aliado') return trocarAliado(res, corpo);
     return json(res, 404, { erro: 'não encontrado' });
+  }
+
+  /**
+   * v0.53.0: POST /api/aliado {nome} (null = o agente geral): troca com quem a página conversa, como reabrir o site com
+   * --aliado. Só um aliado que existe, nunca no meio de uma resposta, e a conversa começa do zero (cada um tem as
+   * suas ferramentas, a sua memória e as suas instruções: o histórico de um não vai para o outro).
+   */
+  function trocarAliado(res, corpo) {
+    if (!aliados) return json(res, 404, { erro: 'a troca de aliado não está ligada neste site' });
+    if (ocupado) return json(res, 409, { erro: 'espere a resposta terminar (ou pare) para trocar' });
+    const pedido = corpo.nome === null || corpo.nome === undefined || corpo.nome === '' ? null : corpo.nome;
+    if (pedido !== null && (typeof pedido !== 'string' || pedido.length > 80)) return json(res, 400, { erro: 'nome de aliado inválido' });
+    if (pedido !== null && !(listaDeAliados() || []).some((a) => a.nome === pedido)) return json(res, 404, { erro: 'esse aliado não existe (crie com: gemini-code aliados criar)' });
+    let novo;
+    try { novo = aliados.abrir(pedido); } catch (e) { return json(res, 400, { erro: `não deu para abrir o aliado: ${semControlesInvisiveis(String((e && e.message) || e)).slice(0, 200)}` }); }
+    if (!novo || typeof novo.conversar !== 'function') return json(res, 400, { erro: 'não deu para abrir o aliado' });
+    atual = { nome: limparNome(novo.nome), conversar: novo.conversar, sugestoes: limparSugestoes(novo.sugestoes) };
+    historico = [];
+    turnos = [];
+    midias.clear();
+    log(atual.nome ? `[site] agora com o aliado "${atual.nome}"` : '[site] agora com o agente geral');
+    return json(res, 200, { ok: true, aliado: atual.nome, sugestoes: atual.sugestoes });
   }
 
   /** POST /api/chave {chave}: confere com o Gemini e salva (como o "config set-key"). A chave nunca volta nem vai para o log. */
@@ -709,7 +746,7 @@ function criarServidorSite({
     });
     enviar({ tipo: 'estado', estado: 'pensando' });
     try {
-      const r = await conversar(texto, {
+      const r = await atual.conversar(texto, {
         historico,
         onText: (t) => {
           const limpo = semControlesInvisiveis(String(t));
