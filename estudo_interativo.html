@@ -199,6 +199,58 @@ main{max-width:860px;margin:0 auto;padding:18px 14px 120px}
 @keyframes toast{0%{opacity:0;transform:translate(-50%,-20px) scale(.6)}15%{opacity:1;transform:translate(-50%,0) scale(1.08)}25%{transform:translate(-50%,0) scale(1)}80%{opacity:1}100%{opacity:0;transform:translate(-50%,-30px)}}
 .confetti{position:fixed;inset:0;pointer-events:none;z-index:110}
 .foot{color:var(--mut);font-size:12px;text-align:center;margin-top:28px;line-height:1.6}
+/* ===== v2: modos, narrador, conquistas, simulado, resumão ===== */
+.kpis.k4{grid-template-columns:repeat(4,1fr)}
+.kpis.k4 .kpi{padding:10px 6px}
+.kpis.k4 .kpi b{font-size:18px}
+.modos{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.modo{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;padding:14px;border-radius:16px;background:var(--card);border:1px solid var(--line);transition:transform .2s,box-shadow .2s,border-color .2s;position:relative;overflow:hidden}
+.modo::before{content:"";position:absolute;inset:0 0 auto 0;height:3px;background:var(--c)}
+.modo:hover,.modo:focus-visible{border-color:var(--c);transform:translateY(-3px);box-shadow:0 10px 24px -8px var(--c)}
+.modo:active{transform:scale(.97)}
+.modo .mi{font-size:30px;filter:drop-shadow(0 0 8px var(--c))}
+.modo b{font-size:15px}
+.modo small{color:var(--mut);font-size:12px;line-height:1.35}
+.modo.wide{grid-column:1/-1}
+.modo .num{position:absolute;top:10px;right:10px;background:var(--bad);color:#fff;font-weight:900;font-size:12px;border-radius:999px;padding:3px 9px}
+.modo.vazio{opacity:.55}
+.toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:13px 14px;border-radius:14px;background:var(--card);border:1px solid var(--line);font-weight:800;margin-top:10px;text-align:left}
+.toggle small{display:block;color:var(--mut);font-weight:600;font-size:12px}
+.sw{width:48px;height:28px;border-radius:28px;background:#2a3463;position:relative;transition:.2s;flex:none}
+.sw::after{content:"";position:absolute;top:4px;left:4px;width:20px;height:20px;border-radius:50%;background:#fff;transition:.2s}
+.toggle.on .sw{background:var(--ok);box-shadow:0 0 12px var(--ok)}
+.toggle.on .sw::after{left:24px}
+.badges{display:grid;grid-template-columns:repeat(auto-fill,minmax(98px,1fr));gap:8px}
+.bdg{padding:10px 6px;border-radius:14px;background:var(--card);border:1px solid var(--line);text-align:center;font-size:11px;color:var(--mut);line-height:1.3}
+.bdg i{display:block;font-style:normal;font-size:28px;filter:grayscale(1) opacity(.3)}
+.bdg b{display:block;color:var(--mut);font-size:12px;margin:4px 0 2px}
+.bdg.on{border-color:var(--gold);background:linear-gradient(160deg,rgba(255,210,63,.12),var(--card));box-shadow:0 0 16px -6px var(--gold)}
+.bdg.on i{filter:drop-shadow(0 0 8px rgba(255,210,63,.6))}
+.bdg.on b{color:var(--gold)}
+.ouvir{position:absolute;top:16px;right:16px;z-index:2;padding:7px 12px;border-radius:999px;background:rgba(255,255,255,.08);border:1px solid var(--line);font-weight:900;font-size:13px}
+.ouvir.on{background:var(--c);color:#05080f;border-color:transparent;animation:pulse 1.2s infinite}
+.timer{height:9px;border-radius:9px;background:#1b2347;overflow:hidden;margin:14px 0 0}
+.timer i{display:block;height:100%;width:100%;background:linear-gradient(90deg,var(--bad),var(--gold),var(--ok));transform-origin:left;animation:tempo linear forwards}
+@keyframes tempo{to{transform:scaleX(0)}}
+.nota{font-family:Orbitron,Nunito,sans-serif;font-size:72px;font-weight:800;line-height:1;margin:8px 0 2px;color:var(--c);text-shadow:0 0 30px var(--c);animation:pop .7s cubic-bezier(.2,1.6,.4,1) both}
+.nota small{font-size:26px;color:var(--mut);text-shadow:none}
+.rev{text-align:left;margin-top:18px}
+.rev .ri{padding:12px 14px;border-radius:14px;background:var(--card);border:1px solid var(--line);border-left:4px solid var(--bad);margin-bottom:8px;font-size:14px;line-height:1.45}
+.rev .ri b.ok{color:var(--ok)}
+.rev .ri small{color:var(--mut)}
+.resumo .rt{display:flex;align-items:center;gap:8px;margin:22px 4px 10px;font-size:18px;font-weight:900;color:var(--c)}
+.resumo .rt span{flex:1}
+.resumo .rt small{display:block;color:var(--mut);font-size:12px;font-weight:700}
+.resumo .rt .ouvir{position:static;flex:none}
+.resumo .rc{padding:14px;border-radius:14px;background:var(--card);border:1px solid var(--line);border-left:4px solid var(--c);margin-bottom:8px;font-size:14px;line-height:1.5}
+.resumo .rc h4{font-size:15px;margin-bottom:4px}
+.resumo .rc table{width:100%;border-collapse:collapse;font-size:13px;margin-top:4px}
+.resumo .rc td,.resumo .rc th{border-bottom:1px solid var(--line);padding:4px 6px;text-align:left}
+.resumo .rc th{color:var(--c)}
+.resumo .rc ul{margin:4px 0 0 18px}
+.resumo .rc .box{margin-top:8px;font-size:13px}
+.btnrow{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:4px 0 6px}
+.toast.conq{top:124px;background:linear-gradient(135deg,var(--pur),var(--pink));color:#fff;box-shadow:0 0 30px rgba(255,45,149,.6);animation-duration:2.8s}
 @media (max-width:480px){.hud .chip.fire{display:none}.slide{padding:22px 18px}.slide .tx{font-size:16px}}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 </style>
@@ -1017,7 +1069,7 @@ const P = () => DB.players[DB.current];
 function novoJogador(nome, av) {
   const id = 'p' + Date.now().toString(36);
   DB.players[id] = {nome, av, xp:0, seen:{}, done:{}, combo:0, maxCombo:0, acertos:0, erros:0};
-  DB.current = id; salvar();
+  DB.current = id; norm(DB.players[id]); salvar();
 }
 
 /* ---------- Níveis ---------- */
@@ -1088,7 +1140,8 @@ function toast(txt) {
 }
 function ganharXP(qtd, motivo) {
   const p = P(); const antes = nivel(p.xp).n;
-  p.xp += qtd; salvar(); hud();
+  p.xp += qtd; marcaDia(); salvar(); hud();
+  setTimeout(checaConquistas, 700);
   toast('+' + qtd + ' XP' + (motivo ? ' • ' + motivo : '')); SFX.xp();
   const depois = nivel(p.xp);
   if (depois.n > antes) setTimeout(() => subiuNivel(depois), 500);
@@ -1121,7 +1174,7 @@ function telaPerfil(podeFechar) {
   ov.querySelectorAll('.avs button').forEach(b => b.onclick = () => {
     ov.querySelectorAll('.avs button').forEach(x => x.classList.remove('sel')); b.classList.add('sel'); av = b.textContent; SFX.swipe();
   });
-  ov.querySelectorAll('.plist button').forEach(b => b.onclick = () => { DB.current = b.dataset.id; salvar(); ov.remove(); hud(); home(); });
+  ov.querySelectorAll('.plist button').forEach(b => b.onclick = () => { DB.current = b.dataset.id; norm(P()); salvar(); ov.remove(); hud(); home(); });
   const criar = () => {
     const nome = $('#inNome').value.trim();
     if (!nome) { $('#inNome').focus(); $('#inNome').style.borderColor = 'var(--bad)'; SFX.no(); return; }
@@ -1140,6 +1193,7 @@ const totalTopicos = () => MATERIAS.reduce((s, m) => s + m.topicos.length, 0);
 const concluidos = () => Object.keys(P().done).length;
 const estrelasTot = () => Object.values(P().done).reduce((s, d) => s + d.stars, 0);
 const starsTxt = n => '⭐'.repeat(n) + '☆'.repeat(3 - n);
+const vibra = padrao => { try { if (navigator.vibrate) navigator.vibrate(padrao); } catch (e) {} };
 function diasPara(ddmm) {
   const [d, m] = ddmm.split('/').map(Number);
   const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
@@ -1147,9 +1201,94 @@ function diasPara(ddmm) {
 }
 const quando = n => n > 1 ? 'em ' + n + ' dias' : n === 1 ? 'AMANHÃ!' : n === 0 ? 'HOJE!' : 'já foi ✔';
 function tela(html, comNav) {
+  if (typeof calar === 'function') calar();
   $('#navbar').classList.toggle('hide', !comNav);
   app.innerHTML = '<div class="view">' + html + '</div>';
-  scrollTo({top: 0, behavior: 'instant' in window ? 'instant' : 'auto'});
+  scrollTo(0, 0);
+}
+
+/* ---------- Ids das perguntas + dados novos do jogador ---------- */
+const QIDX = {};
+MATERIAS.forEach(m => m.topicos.forEach(t => t.quiz.forEach((q, i) => { q.id = t.id + ':' + i; QIDX[q.id] = {q, m, t}; })));
+function norm(p) {
+  p.wrong = p.wrong || {}; p.badges = p.badges || {}; p.simu = p.simu || {};
+  p.streak = p.streak || 0; p.dominadas = p.dominadas || 0; p.relBest = p.relBest || 0;
+  return p;
+}
+Object.values(DB.players).forEach(norm);
+if (DB.narrador === undefined) DB.narrador = false;
+
+/* ---------- Sequência de dias estudando ---------- */
+const diaStr = d => d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+function marcaDia() {
+  const p = P(), hoje = diaStr(new Date());
+  if (p.lastDay === hoje) return;
+  const ontem = new Date(); ontem.setDate(ontem.getDate() - 1);
+  p.streak = p.lastDay === diaStr(ontem) ? p.streak + 1 : 1;
+  p.lastDay = hoje;
+  if (p.streak > 1) setTimeout(() => toast('🔥 ' + p.streak + ' dias seguidos estudando!'), 1900);
+}
+
+/* ---------- Conquistas ---------- */
+const CONQ = [
+  {id:'acerto1', e:'🎯', n:'Primeiro acerto', d:'Acerte 1 pergunta', ok: p => p.acertos >= 1},
+  {id:'fase1', e:'🏁', n:'Primeira fase', d:'Conclua 1 fase', ok: p => Object.keys(p.done).length >= 1},
+  {id:'combo5', e:'🔥', n:'Pegando fogo', d:'Combo x5', ok: p => p.maxCombo >= 5},
+  {id:'combo10', e:'☄️', n:'Imparável', d:'Combo x10', ok: p => p.maxCombo >= 10},
+  {id:'perf', e:'⭐', n:'Perfeição', d:'3 estrelas numa fase', ok: p => Object.values(p.done).some(d => d.stars === 3)},
+  {id:'fases10', e:'📚', n:'Maratonista', d:'Conclua 10 fases', ok: p => Object.keys(p.done).length >= 10},
+  {id:'tudo', e:'👑', n:'Zerou o jogo', d:'Conclua as 21 fases', ok: p => Object.keys(p.done).length >= totalTopicos()},
+  {id:'aprov', e:'📝', n:'Aprovado!', d:'Nota 7+ num simulado', ok: p => Object.values(p.simu).some(n => n >= 7)},
+  {id:'dez', e:'💯', n:'Nota 10', d:'Gabarite um simulado', ok: p => Object.values(p.simu).some(n => n >= 10)},
+  {id:'simus', e:'🎓', n:'Pronto pra AV2', d:'Nota 7+ nos 6 simulados', ok: p => MATERIAS.every(m => (p.simu[m.id] || 0) >= 7)},
+  {id:'erros', e:'🧠', n:'Aprendi com os erros', d:'Supere 5 erros', ok: p => p.dominadas >= 5},
+  {id:'rel', e:'⚡', n:'Raio veloz', d:'9+ no Relâmpago', ok: p => p.relBest >= 9},
+  {id:'streak3', e:'📆', n:'Constância', d:'3 dias seguidos', ok: p => p.streak >= 3},
+  {id:'xp1000', e:'💎', n:'Mil XP', d:'Junte 1.000 XP', ok: p => p.xp >= 1000}
+].concat(MATERIAS.map(m => ({id:'m_' + m.id, e:m.em, n:'Mestre: ' + m.nome, d:'3 estrelas em tudo', ok: p => m.topicos.every(t => p.done[t.id] && p.done[t.id].stars === 3)})));
+function checaConquistas() {
+  const p = P(); if (!p) return;
+  const novas = CONQ.filter(c => !p.badges[c.id] && c.ok(p));
+  if (!novas.length) return;
+  novas.forEach(c => p.badges[c.id] = Date.now()); salvar();
+  novas.forEach((c, i) => setTimeout(() => {
+    SFX.lvl(); confete(120); vibra([50, 30, 50]);
+    const t = document.createElement('div'); t.className = 'toast conq';
+    t.textContent = '🏅 Conquista: ' + c.e + ' ' + c.n;
+    document.body.appendChild(t); setTimeout(() => t.remove(), 2900);
+    ganharXP(25, 'conquista');
+  }, 600 + i * 2000));
+}
+
+/* ---------- Narrador (lê em voz alta) ---------- */
+const TTS = 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
+let vozPt = null;
+function pegaVoz() { try { const vs = speechSynthesis.getVoices(); vozPt = vs.find(v => /pt[-_]BR/i.test(v.lang)) || vs.find(v => /^pt/i.test(v.lang)) || null; } catch (e) {} }
+if (TTS) { pegaVoz(); try { speechSynthesis.onvoiceschanged = pegaVoz; } catch (e) {} }
+function paraFala(html) {
+  const el = document.createElement('div'); el.innerHTML = html;
+  el.querySelectorAll('li,td,th,br,div,h4').forEach(x => x.after(document.createTextNode('. ')));
+  return el.textContent
+    .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}\u{20E3}]/gu, ' ')
+    .replace(/→/g, ', ').replace(/×/g, ' vezes ').replace(/÷/g, ' dividido por ').replace(/[–—]/g, ', ')
+    .replace(/°C/g, ' graus Celsius').replace(/(\s*\.\s*){2,}/g, '. ').replace(/\s+/g, ' ').trim();
+}
+let falaBtn = null;
+function resetaBtn() { if (falaBtn) { falaBtn.classList.remove('on'); falaBtn.textContent = '🔊 Ouvir'; falaBtn = null; } }
+function calar() { if (TTS) try { speechSynthesis.cancel(); } catch (e) {} resetaBtn(); }
+function falar(html, btn) {
+  if (!TTS) return toast('Seu navegador não tem narração 😕');
+  calar();
+  try {
+    const u = new SpeechSynthesisUtterance(paraFala(html));
+    u.lang = 'pt-BR'; if (vozPt) u.voice = vozPt; u.rate = 1.05; u.pitch = 1.05;
+    if (btn) { falaBtn = btn; btn.classList.add('on'); btn.textContent = '⏹ Parar'; u.onend = u.onerror = () => { if (falaBtn === btn) resetaBtn(); }; }
+    speechSynthesis.speak(u);
+  } catch (e) { resetaBtn(); }
+}
+function botaoOuvir(btn, texto) {
+  if (!btn) return;
+  btn.onclick = e => { e.stopPropagation(); if (btn.classList.contains('on')) calar(); else falar(typeof texto === 'function' ? texto() : texto, btn); };
 }
 
 /* ---------- MENU PRINCIPAL ---------- */
@@ -1157,41 +1296,59 @@ function home() {
   const p = P();
   const mats = [...MATERIAS].sort((a, b) => diasPara(a.data) - diasPara(b.data));
   const prox = mats.find(m => diasPara(m.data) >= 0);
+  const nErros = Object.keys(p.wrong).filter(id => QIDX[id]).length;
+  const nConq = CONQ.filter(c => p.badges[c.id]).length;
   tela(
     '<section class="hero"><div class="big">🎓</div>' +
     '<h1 class="orb">Fala, ' + esc(p.nome) + '! ' + p.av + '</h1>' +
     '<p>' + (prox ? 'Próxima prova: <b>' + esc(prox.nome) + '</b> (' + prox.data + ') – ' + quando(diasPara(prox.data)) : 'Provas da AV2 encerradas! Revise quando quiser.') + '</p>' +
-    '<p style="font-size:13px;opacity:.8">Deslize os cards, responda os quizzes e suba de nível. Cada acerto vale XP! ⚡</p></section>' +
-    '<div class="kpis" style="margin-top:0"><div class="kpi" style="--c:var(--gold)"><b>' + p.xp + '</b><small>XP total</small></div>' +
+    '<p style="font-size:13px;opacity:.85">' + (p.streak > 1 ? '🔥 <b>' + p.streak + ' dias seguidos</b> estudando – não quebra a sequência! ' : 'Estude todo dia pra criar uma sequência 🔥. ') + 'Cada acerto vale XP ⚡</p></section>' +
+    '<div class="kpis k4" style="margin-top:0"><div class="kpi" style="--c:var(--gold)"><b>' + p.xp + '</b><small>XP</small></div>' +
     '<div class="kpi" style="--c:var(--ok)"><b>' + concluidos() + '/' + totalTopicos() + '</b><small>fases</small></div>' +
-    '<div class="kpi" style="--c:var(--pink)"><b>' + estrelasTot() + '</b><small>estrelas</small></div></div>' +
-    '<button class="gabbtn" id="btnRel" style="border-style:solid;color:var(--cyan);border-color:var(--cyan);background:linear-gradient(135deg,rgba(0,229,255,.15),rgba(168,85,247,.15))">⚡ DESAFIO RELÂMPAGO • 10 perguntas sorteadas de tudo</button>' +
+    '<div class="kpi" style="--c:var(--pink)"><b>' + estrelasTot() + '</b><small>estrelas</small></div>' +
+    '<div class="kpi" style="--c:#ff8a3d"><b>' + p.streak + '🔥</b><small>dias</small></div></div>' +
+    '<div class="sec-t">🕹️ Modos de jogo</div><div class="modos">' +
+    '<button class="modo" id="mRel" style="--c:var(--cyan)"><span class="mi">⚡</span><b>Desafio Relâmpago</b><small>10 perguntas de tudo, 20 s cada. Recorde: ' + p.relBest + '/10</small></button>' +
+    '<button class="modo' + (nErros ? '' : ' vazio') + '" id="mErr" style="--c:var(--pink)">' + (nErros ? '<span class="num">' + nErros + '</span>' : '') + '<span class="mi">🧠</span><b>Caderno de erros</b><small>' + (nErros ? 'Revise o que você errou e transforme em acerto!' : 'Nenhum erro ainda 😎') + '</small></button>' +
+    '</div>' +
+    (TTS ? '<button class="toggle' + (DB.narrador ? ' on' : '') + '" id="tgNar"><span>🎙️ Narrador automático<small>Lê os cards e as perguntas em voz alta</small></span><span class="sw"></span></button>' : '') +
     '<div class="sec-t">📅 Calendário da AV2 – Dezembro</div><div class="grid">' +
     mats.map(m => {
-      const feitos = m.topicos.filter(t => p.done[t.id]).length, d = diasPara(m.data);
+      const feitos = m.topicos.filter(t => p.done[t.id]).length, d = diasPara(m.data), nota = p.simu[m.id];
       return '<button class="mcard" data-m="' + m.id + '" style="--c:' + m.cor + '">' +
         '<span class="cd">' + quando(d) + '</span><div class="em">' + m.em + '</div>' +
         '<h3>' + esc(m.nome) + '</h3><div class="dt">📆 ' + m.dia + ', ' + m.data + ' • ' + m.topicos.length + ' fases</div>' +
         '<div class="prog"><i style="width:' + (feitos / m.topicos.length * 100) + '%"></i></div>' +
         '<div class="pt"><span>' + feitos + '/' + m.topicos.length + ' concluídas</span><span>' +
         m.topicos.reduce((s, t) => s + (p.done[t.id] ? p.done[t.id].stars : 0), 0) + ' ⭐</span></div>' +
-        '<span class="tag livro">📖 com gabarito do livro</span></button>';
+        '<span class="tag ' + (nota === undefined ? 'livro' : 'geral') + '">' + (nota === undefined ? '📝 simulado • 📄 resumão • 🔓 gabarito' : '📝 melhor nota no simulado: ' + nota + '/10') + '</span></button>';
     }).join('') + '</div>' +
+    '<div class="sec-t">🏅 Conquistas • ' + nConq + '/' + CONQ.length + '</div><div class="badges">' +
+    CONQ.map(c => '<div class="bdg' + (p.badges[c.id] ? ' on' : '') + '" title="' + esc(c.d) + '"><i>' + c.e + '</i><b>' + esc(c.n) + '</b>' + esc(c.d) + '</div>').join('') + '</div>' +
     '<p class="foot">Conteúdo da AV2 (4º bimestre) do 5º ano, montado a partir do boletim “Saiba +” e das páginas do livro.<br>' +
     'Seu progresso fica salvo neste aparelho. Toque em 👥 para trocar de jogador e ver o ranking da galera.</p>'
   );
   app.querySelectorAll('.mcard').forEach(b => b.onclick = () => { SFX.swipe(); materia(b.dataset.m); });
-  $('#btnRel').onclick = () => { SFX.swipe(); relampago(); };
+  $('#mRel').onclick = () => { SFX.swipe(); relampago(); };
+  $('#mErr').onclick = () => { SFX.swipe(); revisarErros(); };
+  if ($('#tgNar')) $('#tgNar').onclick = () => {
+    DB.narrador = !DB.narrador; salvar(); $('#tgNar').classList.toggle('on', DB.narrador); SFX.swipe();
+    if (DB.narrador) falar('Narrador ligado! Eu vou ler os cards pra você.');
+  };
 }
 
 /* ---------- TELA DA MATÉRIA ---------- */
 function materia(id) {
-  const m = MATERIAS.find(x => x.id === id), p = P();
+  const m = MATERIAS.find(x => x.id === id), p = P(), nota = p.simu[m.id];
   tela(
     '<button class="back" id="bk">◀ Menu</button>' +
     '<section class="hero" style="background:linear-gradient(135deg,' + m.cor + '44,rgba(18,26,51,.9));border-color:' + m.cor + '">' +
     '<div class="big">' + m.em + '</div><h1 class="orb">' + esc(m.nome) + '</h1>' +
     '<p>📆 Prova: ' + m.dia + ', ' + m.data + ' – ' + quando(diasPara(m.data)) + '</p></section>' +
+    '<div class="modos" style="margin-bottom:6px">' +
+    '<button class="modo" id="mSim" style="--c:' + m.cor + '"><span class="mi">📝</span><b>Simulado AV2</b><small>10 questões, 1 chance cada, nota de 0 a 10. ' + (nota === undefined ? 'Média: 7' : 'Melhor nota: <b>' + nota + '</b>') + '</small></button>' +
+    '<button class="modo" id="mRes" style="--c:' + m.cor + '"><span class="mi">📄</span><b>Resumão</b><small>Toda a matéria numa página só. Perfeito pra véspera!</small></button>' +
+    '</div>' +
     '<div class="sec-t">🎮 Fases</div>' +
     m.topicos.map((t, i) => {
       const d = p.done[t.id];
@@ -1203,10 +1360,33 @@ function materia(id) {
     (GABARITO[m.id] ? '<button class="gabbtn" id="gab">🔓 GABARITO DO LIVRO – ' + GABARITO[m.id].length + ' respostas</button>' : '')
   );
   $('#bk').onclick = () => { SFX.swipe(); home(); };
+  $('#mSim').onclick = () => { SFX.swipe(); simulado(m); };
+  $('#mRes').onclick = () => { SFX.swipe(); resumao(m.id); };
   app.querySelectorAll('.topic').forEach(b => b.onclick = () => {
     SFX.swipe(); const t = m.topicos.find(x => x.id === b.dataset.t); jogar(m, t);
   });
   if ($('#gab')) $('#gab').onclick = () => { SFX.swipe(); gabarito(m.id); };
+}
+
+/* ---------- RESUMÃO DA VÉSPERA ---------- */
+function resumao(id) {
+  const m = MATERIAS.find(x => x.id === id);
+  const txtTopico = t => t.titulo + '. ' + t.cards.map(c => c.t + '. ' + c.h + ' ' + (c.b || '') + ' ' + (c.d || '')).join(' ');
+  tela(
+    '<button class="back" id="bk">◀ ' + esc(m.nome) + '</button>' +
+    '<section class="hero" style="background:linear-gradient(135deg,' + m.cor + '44,rgba(18,26,51,.9));border-color:' + m.cor + '">' +
+    '<div class="big">📄</div><h1 class="orb">Resumão • ' + esc(m.nome) + '</h1>' +
+    '<p>Tudo que cai na prova numa página só. Leia na véspera e depois faça o simulado! 🧠</p></section>' +
+    '<div class="resumo" style="--c:' + m.cor + '">' +
+    m.topicos.map(t => '<div class="rt"><span>' + t.em + ' ' + esc(t.titulo) + '<small>' + t.pg + '</small></span>' +
+      (TTS ? '<button class="ouvir" data-t="' + t.id + '">🔊 Ouvir</button>' : '') + '</div>' +
+      t.cards.map(c => '<div class="rc"><h4>' + c.e + ' ' + c.t + '</h4>' + c.h +
+        (c.b ? '<div class="box">' + c.b + '</div>' : '') + (c.d ? '<div class="box dica">💡 ' + c.d + '</div>' : '') + '</div>').join('')).join('') +
+    '</div><button class="btn go" id="irSim" style="width:100%;margin-top:16px;--c:' + m.cor + '">📝 FAZER O SIMULADO AGORA</button>'
+  );
+  $('#bk').onclick = () => { SFX.swipe(); materia(id); };
+  $('#irSim').onclick = () => { SFX.swipe(); simulado(m); };
+  app.querySelectorAll('.rt .ouvir').forEach(b => botaoOuvir(b, () => txtTopico(m.topicos.find(t => t.id === b.dataset.t))));
 }
 
 /* ---------- GABARITO ---------- */
@@ -1231,9 +1411,13 @@ function gabarito(id) {
 /* ---------- DECK DE CARDS + QUIZ ---------- */
 const ELOGIOS = ['MANDOU BEM! 🔥','GÊNIO! 🧠','É ISSO AÍ! 🚀','ACERTOU EM CHEIO! 🎯','BRABO DEMAIS! 😎','INCRÍVEL! ⭐','PERFEITO! 💯','NINGUÉM SEGURA! ⚡'];
 const ERROS = ['Quase! Tenta de novo 💪','Errou, mas faz parte! 🤔','Ops! Olha de novo… 👀','Não foi dessa vez! Bora! 🎮','Hmm… essa não! Pensa mais um pouco 🧐'];
+const ERROS_FINAL = ['Errou essa! Mas agora você sabe 👇','Não foi dessa vez! Olha a certa 👇','Ops! Guarda essa pra prova 👇'];
 const sorteia = a => a[Math.floor(Math.random() * a.length)];
 const embaralha = a => { const b = [...a]; for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; };
-let D = null;   // estado da fase em andamento
+const SEG = 20;                       // segundos por pergunta no Relâmpago
+let D = null, TIMER = null;           // fase em andamento e cronômetro
+const pararTimer = () => { if (TIMER) { clearTimeout(TIMER); TIMER = null; } };
+const umaChance = () => D && (D.modo === 'simulado' || D.modo === 'relampago');
 
 function preparaQuiz(q, cor, rot) {
   return {tipo:'quiz', q, cor, rot, ordem: embaralha(q.o.map((_, i) => i)), erros: 0, ok: false};
@@ -1241,15 +1425,25 @@ function preparaQuiz(q, cor, rot) {
 function jogar(m, t) {
   const itens = t.cards.map((c, i) => ({tipo:'card', c, cor: m.cor, key: t.id + ':' + i}))
     .concat(embaralha(t.quiz).map(q => preparaQuiz(q, m.cor, m.em + ' ' + m.nome)));
-  iniciar({itens, cor: m.cor, titulo: t.titulo, m, t});
+  iniciar({modo:'fase', itens, cor: m.cor, titulo: t.titulo, m, t});
 }
 function relampago() {
-  const todas = [];
-  MATERIAS.forEach(m => m.topicos.forEach(t => t.quiz.forEach(q => todas.push(preparaQuiz(q, m.cor, m.em + ' ' + m.nome)))));
-  iniciar({itens: embaralha(todas).slice(0, 10), cor: '#00e5ff', titulo: 'Desafio Relâmpago', relampago: true});
+  const todas = Object.values(QIDX).map(x => preparaQuiz(x.q, x.m.cor, x.m.em + ' ' + x.m.nome));
+  iniciar({modo:'relampago', itens: embaralha(todas).slice(0, 10), cor: '#00e5ff', titulo: 'Desafio Relâmpago'});
+}
+function simulado(m) {
+  const pool = [];
+  m.topicos.forEach(t => t.quiz.forEach(q => pool.push(preparaQuiz(q, m.cor, t.em + ' ' + t.titulo))));
+  iniciar({modo:'simulado', itens: embaralha(pool).slice(0, 10), cor: m.cor, titulo: 'Simulado AV2 • ' + m.nome, m});
+}
+function revisarErros() {
+  const ids = embaralha(Object.keys(P().wrong).filter(id => QIDX[id])).slice(0, 10);
+  if (!ids.length) { toast('Nenhum erro pra revisar! 😎'); return; }
+  iniciar({modo:'erros', itens: ids.map(id => preparaQuiz(QIDX[id].q, QIDX[id].m.cor, QIDX[id].m.em + ' ' + QIDX[id].t.titulo)), cor: '#ff2d95', titulo: 'Caderno de erros'});
 }
 function iniciar(cfg) {
-  D = Object.assign(cfg, {i: 0, xp: 0, primeira: 0, nQuiz: cfg.itens.filter(x => x.tipo === 'quiz').length, combo: 0, maxCombo: 0, trava: false});
+  pararTimer();
+  D = Object.assign(cfg, {i: 0, xp: 0, primeira: 0, nQuiz: cfg.itens.filter(x => x.tipo === 'quiz').length, combo: 0, maxCombo: 0, trava: false, errados: []});
   tela('<div class="deckhead"><button class="back" id="bk">✕</button><div class="dots" id="dots">' +
     D.itens.map(x => '<i class="' + (x.tipo === 'quiz' ? 'q' : '') + '"></i>').join('') + '</div></div>' +
     '<div class="stage" id="stage"></div>', true);
@@ -1259,12 +1453,18 @@ function iniciar(cfg) {
   desenha(1);
 }
 function sair() {
-  const id = D && D.m ? D.m.id : null; D = null; SFX.swipe();
+  calar(); pararTimer(); SFX.swipe();
+  const id = D && D.m ? D.m.id : null; D = null;
   if (id) materia(id); else home();
+}
+function textoItem(it) {
+  if (it.tipo === 'card') return it.c.k + '. ' + it.c.t + '. ' + it.c.h + ' ' + (it.c.b || '') + ' ' + (it.c.d ? 'Dica: ' + it.c.d : '');
+  return it.q.q + it.ordem.map((oi, k) => '. Opção ' + 'ABCD'[k] + ': ' + it.q.o[oi]).join('');
 }
 
 function desenha(dir) {
   const it = D.itens[D.i], st = $('#stage');
+  pararTimer(); calar();
   st.style.setProperty('--c', it.cor);
   [...$('#dots').children].forEach((d, k) => d.classList.toggle('on', k <= D.i));
   let h;
@@ -1273,59 +1473,109 @@ function desenha(dir) {
     h = '<div class="kick">' + c.k + '</div><div class="emo">' + c.e + '</div><h2>' + c.t + '</h2>' +
       '<div class="tx">' + c.h + '</div>' + (c.b ? '<div class="box">' + c.b + '</div>' : '') +
       (c.d ? '<div class="box dica">💡 ' + c.d + '</div>' : '');
-    if (!D.relampago && !P().seen[it.key]) { P().seen[it.key] = 1; D.xp += 5; ganharXP(5, 'card novo'); }
+    if (D.modo === 'fase' && !P().seen[it.key]) { P().seen[it.key] = 1; D.xp += 5; ganharXP(5, 'card novo'); }
   } else {
-    const q = it.q, valor = 20;
-    h = '<span class="qbadge">🎯 QUIZ • VALE ' + valor + ' XP</span>' + (D.relampago ? '<div class="kick" style="margin-top:10px">' + it.rot + '</div>' : '') +
+    const q = it.q, valor = D.modo === 'simulado' ? 15 : 20;
+    const selo = {fase:'🎯 QUIZ', relampago:'⚡ RELÂMPAGO', simulado:'📝 SIMULADO', erros:'🧠 REVISÃO'}[D.modo];
+    h = '<span class="qbadge">' + selo + ' • VALE ' + valor + ' XP</span>' +
+      (D.modo !== 'fase' ? '<div class="kick" style="margin-top:10px">' + it.rot + '</div>' : '') +
+      (D.modo === 'relampago' && !it.ok ? '<div class="timer"><i style="animation-duration:' + SEG + 's"></i></div>' : '') +
       '<div class="qtx">' + q.q + '</div><div class="opts' + (it.ok ? ' lock' : '') + '" id="opts">' +
-      it.ordem.map((oi, k) => '<button class="opt' + (it.ok ? (oi === q.a ? ' right' : ' dim') : '') + '" data-oi="' + oi + '"><span class="L">' + 'ABCD'[k] + '</span><span>' + q.o[oi] + '</span></button>').join('') +
-      '</div><div id="fb">' + (it.ok ? '<div class="fb ok"><b>✅ Certinho!</b><br>' + q.x + '</div>' : '') + '</div>';
+      it.ordem.map((oi, k) => {
+        const cls = !it.ok ? '' : oi === q.a ? ' right' : it.escolha === oi ? ' wrong' : ' dim';
+        return '<button class="opt' + cls + '" data-oi="' + oi + '"><span class="L">' + 'ABCD'[k] + '</span><span>' + q.o[oi] + '</span></button>';
+      }).join('') + '</div><div id="fb">' + (it.ok ? (it.fb || '') : '') + '</div>';
   }
-  st.innerHTML = '<article class="slide ' + (dir > 0 ? 'anim-in-right' : 'anim-in-left') + '">' + h +
+  st.innerHTML = '<article class="slide ' + (dir > 0 ? 'anim-in-right' : 'anim-in-left') + '">' +
+    (TTS ? '<button class="ouvir" id="ouvir">🔊 Ouvir</button>' : '') + h +
     '<span class="pg">' + (D.i + 1) + ' / ' + D.itens.length + '</span></article>';
-  if (it.tipo === 'quiz' && !it.ok) st.querySelectorAll('.opt').forEach(b => b.onclick = () => responder(b, it));
+  if (it.tipo === 'quiz' && !it.ok) {
+    st.querySelectorAll('.opt').forEach(b => b.onclick = () => responder(b, it));
+    if (D.modo === 'relampago') { it.t0 = Date.now(); TIMER = setTimeout(() => esgotou(it), SEG * 1000); }
+  }
+  if (TTS) {
+    const ob = $('#ouvir'); botaoOuvir(ob, () => textoItem(it));
+    if (DB.narrador) setTimeout(() => { if (D && D.itens[D.i] === it) falar(textoItem(it), ob); }, 450);
+  }
   botoes();
 }
 function botoes() {
   const it = D.itens[D.i], nx = $('#btnNext');
-  $('#btnPrev').disabled = D.i === 0;
+  $('#btnPrev').disabled = D.i === 0 || D.modo === 'relampago';
   const bloqueado = it.tipo === 'quiz' && !it.ok;
   nx.disabled = bloqueado;
   nx.textContent = bloqueado ? '🔒 RESPONDA PRA AVANÇAR' : D.i === D.itens.length - 1 ? 'FINALIZAR 🏁' : 'AVANÇAR ▶';
   nx.classList.toggle('pulse', it.tipo === 'quiz' && it.ok);
 }
+function tremeSlide() {
+  const sl = $('#stage .slide'); if (!sl) return;
+  sl.classList.remove('flash-bad'); void sl.offsetWidth; sl.classList.add('flash-bad');
+}
+function revelaCerta(it) {
+  const o = $('#opts'); o.classList.add('lock');
+  o.querySelectorAll('.opt').forEach(b => { const v = +b.dataset.oi; if (v === it.q.a) b.classList.add('right'); else if (v !== it.escolha) b.classList.add('dim'); });
+}
+function registraErro(it) {
+  const p = P();
+  it.erros++; D.combo = 0; p.combo = 0; p.erros++;
+  p.wrong[it.q.id] = (p.wrong[it.q.id] || 0) + 1;
+  if (!D.errados.includes(it)) D.errados.push(it);
+  salvar(); hud();
+}
 function responder(b, it) {
+  if (it.ok) return;
   const q = it.q, oi = +b.dataset.oi, p = P(), fb = $('#fb');
   if (oi === q.a) {
+    pararTimer(); calar();
     it.ok = true;
     b.classList.add('right'); $('#opts').classList.add('lock');
     $('#opts').querySelectorAll('.opt').forEach(o => { if (o !== b) o.classList.add('dim'); });
-    let ganho = it.erros === 0 ? 20 : it.erros === 1 ? 10 : 5;
-    if (it.erros === 0) { D.primeira++; D.combo++; p.combo++; D.maxCombo = Math.max(D.maxCombo, D.combo); p.maxCombo = Math.max(p.maxCombo, p.combo); }
-    if (it.erros === 0 && D.combo >= 3) ganho += 5;
+    const primeira = it.erros === 0;
+    let ganho = D.modo === 'simulado' ? 15 : primeira ? 20 : it.erros === 1 ? 10 : 5, extra = '';
+    if (primeira) {
+      D.primeira++; D.combo++; p.combo++;
+      D.maxCombo = Math.max(D.maxCombo, D.combo); p.maxCombo = Math.max(p.maxCombo, p.combo);
+      if (p.wrong[q.id]) { delete p.wrong[q.id]; p.dominadas++; extra += ' <b style="color:var(--cyan)">🧠 ERRO SUPERADO!</b>'; }
+      if (D.combo >= 3) { ganho += 5; extra += ' <b style="color:#ff8a3d">🔥 COMBO x' + D.combo + '</b>'; }
+    }
+    if (D.modo === 'relampago' && Date.now() - it.t0 < 6000) { ganho += 5; extra += ' <b style="color:var(--gold)">⚡ RAPIDINHO!</b>'; }
     p.acertos++;
-    fb.innerHTML = '<div class="fb ok"><b>✅ ' + sorteia(ELOGIOS) + '</b>' + (D.combo >= 3 && it.erros === 0 ? ' <b style="color:#ff8a3d">🔥 COMBO x' + D.combo + '</b>' : '') + '<br>' + q.x + '</div>';
-    SFX.ok(); confete(it.erros === 0 ? 70 : 30); if (navigator.vibrate) navigator.vibrate(40);
-    D.xp += ganho; ganharXP(ganho, it.erros === 0 ? 'de primeira!' : 'acertou');
-    botoes();
+    it.fb = '<div class="fb ok"><b>✅ ' + sorteia(ELOGIOS) + '</b>' + extra + '<br>' + q.x + '</div>';
+    fb.innerHTML = it.fb;
+    SFX.ok(); confete(primeira ? 70 : 30); vibra(40);
+    D.xp += ganho; ganharXP(ganho, primeira ? 'de primeira!' : 'acertou');
   } else {
-    it.erros++; D.combo = 0; p.combo = 0; p.erros++; salvar(); hud();
+    registraErro(it);
     b.classList.remove('wrong'); void b.offsetWidth; b.classList.add('wrong'); b.disabled = true;
-    const sl = $('#stage .slide'); sl.classList.remove('flash-bad'); void sl.offsetWidth; sl.classList.add('flash-bad');
-    fb.innerHTML = '<div class="fb no"><b>❌ ' + sorteia(ERROS) + '</b><br>Ainda dá pra ganhar XP. Escolha outra opção!</div>';
-    SFX.no(); if (navigator.vibrate) navigator.vibrate([120, 60, 120]);
+    tremeSlide(); SFX.no(); vibra([120, 60, 120]);
+    if (umaChance()) {
+      pararTimer(); it.ok = true; it.escolha = oi; revelaCerta(it);
+      it.fb = '<div class="fb no"><b>❌ ' + sorteia(ERROS_FINAL) + '</b><br>Resposta certa: <b>' + q.o[q.a] + '</b>. ' + q.x + '</div>';
+      fb.innerHTML = it.fb;
+    } else {
+      fb.innerHTML = '<div class="fb no"><b>❌ ' + sorteia(ERROS) + '</b><br>Ainda dá pra ganhar XP. Escolha outra opção!</div>';
+    }
   }
+  botoes();
+}
+function esgotou(it) {
+  TIMER = null;
+  if (!D || D.itens[D.i] !== it || it.ok) return;
+  registraErro(it); it.ok = true; it.escolha = -1; revelaCerta(it);
+  it.fb = '<div class="fb no"><b>⏰ O TEMPO ACABOU!</b><br>Resposta certa: <b>' + it.q.o[it.q.a] + '</b>. ' + it.q.x + '</div>';
+  $('#fb').innerHTML = it.fb; tremeSlide(); SFX.no(); vibra([200]);
+  botoes();
 }
 function mover(delta) {
   if (!D || D.trava) return;
   const it = D.itens[D.i];
   if (delta > 0 && it.tipo === 'quiz' && !it.ok) {
     const o = $('#opts'); if (o) { o.style.animation = 'none'; void o.offsetWidth; o.style.animation = 'shake .4s'; }
-    if (navigator.vibrate) navigator.vibrate(60); return;
+    vibra(60); return;
   }
+  if (delta < 0 && (D.i === 0 || D.modo === 'relampago')) return;
   if (delta > 0 && D.i === D.itens.length - 1) return resultado();
-  if (delta < 0 && D.i === 0) return;
-  D.trava = true; SFX.swipe();
+  D.trava = true; SFX.swipe(); calar(); pararTimer();
   const s = $('#stage .slide');
   if (s) s.className = 'slide ' + (delta > 0 ? 'anim-out-left' : 'anim-out-right');
   setTimeout(() => { if (!D) return; D.i += delta; D.trava = false; desenha(delta); }, 280);
@@ -1351,43 +1601,80 @@ document.addEventListener('keydown', e => {
   }
 });
 
-/* ---------- RESULTADO ---------- */
+/* ---------- RESULTADOS ---------- */
+const revisao = lista => !lista.length ? '' :
+  '<div class="rev"><div class="sec-t" style="margin-top:0">📌 Pra revisar (já foram pro caderno de erros)</div>' +
+  lista.map(it => '<div class="ri">' + it.q.q + '<br><b class="ok">✔ ' + it.q.o[it.q.a] + '</b><br><small>' + it.q.x + '</small></div>').join('') + '</div>';
+
 function resultado() {
-  const p = P(), r = D.nQuiz ? D.primeira / D.nQuiz : 1;
-  const stars = r >= .9 ? 3 : r >= .6 ? 2 : 1;
+  calar(); pararTimer();
+  const p = P(), ctx = D;
+  if (ctx.modo === 'simulado') return resultadoSimulado(ctx);
+  const r = ctx.nQuiz ? ctx.primeira / ctx.nQuiz : 1, stars = r >= .9 ? 3 : r >= .6 ? 2 : 1;
   let bonus = 0;
-  if (!D.relampago) {
-    const antes = p.done[D.t.id];
+  if (ctx.modo === 'fase') {
+    const antes = p.done[ctx.t.id];
     if (!antes) bonus += 30;
     if (stars === 3 && (!antes || antes.stars < 3)) bonus += 50;
-    p.done[D.t.id] = {stars: Math.max(stars, antes ? antes.stars : 0), best: Math.max(D.primeira, antes ? antes.best : 0)};
-  } else if (stars === 3) bonus += 40;
+    p.done[ctx.t.id] = {stars: Math.max(stars, antes ? antes.stars : 0), best: Math.max(ctx.primeira, antes ? antes.best : 0)};
+  } else if (ctx.modo === 'relampago') {
+    if (ctx.primeira > p.relBest) { p.relBest = ctx.primeira; if (ctx.primeira >= 5) bonus += 20; }
+    if (stars === 3) bonus += 40;
+  } else if (ctx.modo === 'erros') bonus += 5 * ctx.primeira;
   salvar();
-  const ganhoFase = D.xp + bonus, frase = stars === 3 ? 'LENDÁRIO! Você é fera! 🏆' : stars === 2 ? 'Muito bom! Falta pouco pra perfeição! 💪' : 'Boa! Joga de novo pra pegar 3 estrelas! 🎮';
-  const ctx = D;
+  const titulo = {fase:'FASE CONCLUÍDA!', relampago:'DESAFIO CONCLUÍDO!', erros:'REVISÃO CONCLUÍDA!'}[ctx.modo];
+  const frase = stars === 3 ? 'LENDÁRIO! Você é fera! 🏆' : stars === 2 ? 'Muito bom! Falta pouco pra perfeição! 💪' : 'Boa! Joga de novo pra pegar 3 estrelas! 🎮';
   tela('<div class="result" style="--c:' + ctx.cor + '"><div class="trophy">' + (stars === 3 ? '🏆' : stars === 2 ? '🥈' : '🎖️') + '</div>' +
-    '<h1 class="orb" style="font-size:26px">FASE CONCLUÍDA!</h1><p style="color:var(--mut)">' + esc(ctx.titulo) + '</p>' +
+    '<h1 class="orb" style="font-size:26px">' + titulo + '</h1><p style="color:var(--mut)">' + esc(ctx.titulo) + '</p>' +
     '<div class="st">' + [0, 1, 2].map(k => '<span style="animation-delay:' + (.3 + k * .25) + 's">' + (k < stars ? '⭐' : '☆') + '</span>').join('') + '</div>' +
     '<p style="font-weight:900;font-size:18px">' + frase + '</p>' +
-    '<div class="kpis"><div class="kpi"><b>' + ctx.primeira + '/' + ctx.nQuiz + '</b><small>de primeira</small></div>' +
-    '<div class="kpi"><b>+' + ganhoFase + '</b><small>XP na fase</small></div>' +
+    '<div class="kpis"><div class="kpi"><b>' + ctx.primeira + '/' + ctx.nQuiz + '</b><small>' + (ctx.modo === 'relampago' ? 'acertos' : 'de primeira') + '</small></div>' +
+    '<div class="kpi"><b>+' + (ctx.xp + bonus) + '</b><small>XP aqui</small></div>' +
     '<div class="kpi"><b>x' + ctx.maxCombo + '</b><small>combo máx.</small></div></div>' +
     (bonus ? '<p style="color:var(--gold);font-weight:900">🎁 Bônus: +' + bonus + ' XP</p>' : '') +
+    (ctx.modo === 'relampago' ? '<p style="color:var(--mut)">Seu recorde: <b style="color:var(--cyan)">' + p.relBest + '/10</b></p>' : '') +
     '<button class="btn go" id="rep" style="width:100%;margin-top:14px">🔁 JOGAR DE NOVO</button>' +
-    (!ctx.relampago && GABARITO[ctx.m.id] ? '<button class="btn" id="gab" style="width:100%;margin-top:10px">🔓 Ver gabarito do livro</button>' : '') +
-    (!ctx.relampago ? '<button class="btn" id="vol" style="width:100%;margin-top:10px">◀ Voltar para ' + esc(ctx.m.nome) + '</button>' : '') +
-    '<button class="btn" id="men" style="width:100%;margin-top:10px">🏠 Menu</button></div>', false);
+    (ctx.modo === 'fase' && GABARITO[ctx.m.id] ? '<button class="btn" id="gab" style="width:100%;margin-top:10px">🔓 Ver gabarito do livro</button>' : '') +
+    (ctx.m ? '<button class="btn" id="vol" style="width:100%;margin-top:10px">◀ Voltar para ' + esc(ctx.m.nome) + '</button>' : '') +
+    '<button class="btn" id="men" style="width:100%;margin-top:10px">🏠 Menu</button>' + revisao(ctx.errados) + '</div>', false);
   D = null;
   SFX.win(); confete(stars === 3 ? 260 : 140);
-  if (bonus) setTimeout(() => ganharXP(bonus, 'bônus da fase'), 900);
-  $('#rep').onclick = () => ctx.relampago ? relampago() : jogar(ctx.m, ctx.t);
+  if (bonus) setTimeout(() => ganharXP(bonus, 'bônus'), 900); else checaConquistas();
+  $('#rep').onclick = () => ctx.modo === 'relampago' ? relampago() : ctx.modo === 'erros' ? revisarErros() : jogar(ctx.m, ctx.t);
   if ($('#gab')) $('#gab').onclick = () => gabarito(ctx.m.id);
   if ($('#vol')) $('#vol').onclick = () => materia(ctx.m.id);
   $('#men').onclick = () => home();
 }
+function resultadoSimulado(ctx) {
+  const p = P(), nota = Math.round(ctx.primeira / ctx.nQuiz * 100) / 10, antes = p.simu[ctx.m.id];
+  p.simu[ctx.m.id] = Math.max(nota, antes === undefined ? 0 : antes);
+  let bonus = 0;
+  if (nota >= 7 && (antes === undefined || antes < 7)) bonus += 30;
+  if (nota >= 10 && (antes === undefined || antes < 10)) bonus += 100;
+  salvar();
+  const msg = nota >= 9 ? '🏆 Nota de gênio! A AV2 que se prepare!' : nota >= 7 ? '✅ Aprovado! Acima da média 7!' : '📚 Abaixo da média 7. Revise os erros e tente de novo!';
+  tela('<div class="result" style="--c:' + ctx.cor + '"><div class="trophy">' + (nota >= 9 ? '🏆' : nota >= 7 ? '✅' : '📚') + '</div>' +
+    '<h1 class="orb" style="font-size:24px">SIMULADO CONCLUÍDO</h1><p style="color:var(--mut)">' + esc(ctx.m.nome) + ' • prova em ' + ctx.m.data + '</p>' +
+    '<div class="nota">' + String(nota).replace('.', ',') + '<small>/10</small></div>' +
+    '<p style="font-weight:900;font-size:18px">' + msg + '</p>' +
+    '<div class="kpis"><div class="kpi"><b>' + ctx.primeira + '</b><small>acertos</small></div>' +
+    '<div class="kpi"><b>' + (ctx.nQuiz - ctx.primeira) + '</b><small>erros</small></div>' +
+    '<div class="kpi"><b>' + String(p.simu[ctx.m.id]).replace('.', ',') + '</b><small>melhor nota</small></div></div>' +
+    (bonus ? '<p style="color:var(--gold);font-weight:900">🎁 Bônus: +' + bonus + ' XP</p>' : '') +
+    '<button class="btn go" id="rep" style="width:100%;margin-top:14px">🔁 NOVO SIMULADO</button>' +
+    '<div class="btnrow"><button class="btn" id="res">📄 Resumão</button><button class="btn" id="err">🧠 Meus erros</button></div>' +
+    '<button class="btn" id="vol" style="width:100%">◀ Voltar para ' + esc(ctx.m.nome) + '</button>' + revisao(ctx.errados) + '</div>', false);
+  D = null;
+  SFX.win(); confete(nota >= 7 ? 240 : 80);
+  if (bonus) setTimeout(() => ganharXP(bonus, 'bônus do simulado'), 900); else checaConquistas();
+  $('#rep').onclick = () => simulado(ctx.m);
+  $('#res').onclick = () => resumao(ctx.m.id);
+  $('#err').onclick = () => revisarErros();
+  $('#vol').onclick = () => materia(ctx.m.id);
+}
 
 /* ---------- INÍCIO ---------- */
-if (DB.current && DB.players[DB.current]) { hud(); home(); }
+if (DB.current && DB.players[DB.current]) { hud(); home(); setTimeout(checaConquistas, 800); }
 else { app.innerHTML = ''; telaPerfil(false); }
 </script>
 </body>
