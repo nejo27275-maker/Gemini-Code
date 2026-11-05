@@ -1,3 +1,46 @@
+## 0.53.2 — o microfone de verdade: o Chrome pergunta, o aviso diz onde está o bloqueio e o Termux ouve se o Chrome não deixar
+
+Você mandou o aviso "O navegador não deixou este site usar o microfone": o microfone continuava recusado.
+
+**Corrigido:**
+- **O site não pedia de verdade:** a 0.53.1 consultava a permissão e, quando ela dizia "bloqueado", parava ali sem
+  pedir. Agora, ao tocar no microfone, o site faz o pedido padrão do navegador ("Permitir que 127.0.0.1 use o
+  microfone?"). É esse pedido que faz o Chrome perguntar, e que diz por que recusou.
+- **O motivo exato:** cada recusa tem o seu aviso:
+  - **o site bloqueado** e, quando o ícone do endereço diz que o site não tem permissões, **o Chrome inteiro**
+    (Configurações do site › Microfone);
+  - **o Android não deu o microfone ao Chrome**;
+  - **o pedido fechou** sem resposta;
+  - **o reconhecimento de voz recusou** com o microfone já liberado: o app Google, outro app ouvindo ou outro navegador.
+
+  O fim do aviso traz o detalhe do navegador (`detalhe: ...`), que ajuda a achar o bloqueio.
+
+**Novo — ouvir pelo Termux:**
+- Rodando no Termux, se o navegador não deixar usar o microfone, o site ouve pelo app **Termux:API**, que tem a própria
+  permissão do microfone. A mensagem vai sozinha, como no ditado, e daí em diante, nesta aba, o microfone é o dele.
+  Tocar de novo cancela. Funciona no chat, na esfera e num navegador sem reconhecimento de voz.
+- **Precisa:** do app Termux:API (da mesma loja do Termux) e de `pkg install termux-api`. Na primeira vez, o Termux:API
+  pede a permissão: toque em Permitir e depois no microfone de novo.
+
+**Por dentro:**
+- **A rota nova:** `/api/ouvir` roda o `termux-speech-to-text`.
+  - **O comando:** sem argumentos, e só um que o agente não pode ter plantado (fora das pastas em que ele grava, como o
+    `bwrap`).
+  - **Os limites:** um por vez, nunca no meio de uma resposta, prazo de 45 s. Fechar a página, tocar de novo ou "Parar"
+    encerra o comando e o que ele abriu.
+  - **O que volta:** só o texto ouvido, limpo. Ele não vai para o log.
+- **O proxy do navegador:** quando a página desiste de um pedido, o pedido de saída também é cancelado. Antes ele ficava
+  aberto até o servidor responder.
+
+**Testes (+7):**
+- a rota, com um Termux falso;
+- o `termux-speech-to-text` trocado por scripts de verdade: o prazo e o cancelar, sem deixar processo órfão;
+- o programa plantado, que não roda;
+- o proxy;
+- num Chromium de verdade, cada recusa e o Termux no chat e na esfera.
+
+**Não testado:** o Chrome e o Termux:API de um celular de verdade.
+
 ## 0.53.1 — o erro do microfone aparece na tela, com o caminho certo
 
 Você contou que a permissão não ia e o site dizia que não tinha permissão.

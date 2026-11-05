@@ -296,15 +296,70 @@
   let falarRespostas = true;
   let ocupado = false;
 
-  function ouvir() {
-    if (ocupado) return;
+  // v0.53.1: cada erro com o seu caminho (o "service-not-allowed" não é o microfone: permitir não resolvia).
+  // v0.53.2: com o motivo exato do navegador junto.
+  function mostrarErroDeVoz(codigo, detalhe = '') {
+    const m = G.mensagemDeErroDeVoz(codigo);
+    if (!m || !m.grave) return; // "não ouvi nada" no modo contínuo só volta a ouvir
+    if (codigo !== 'network') { continuo = false; marcar('btn-continuo', false); }
+    estado('erro', m.titulo);
+    mostrarResposta(`${m.texto}${detalhe ? ` (detalhe: ${detalhe})` : ''}`);
+  }
+
+  // v0.53.2: quando o navegador não deixa, a esfera ouve pelo Termux:API (o servidor diz se tem: ouvirNoAparelho). Ele
+  // é outro app, com a sua própria permissão do microfone; daqui em diante, nesta aba, o microfone é o dele.
+  let ouvinte = null;
+  let usarAparelho = G.micPeloAparelho();
+  let preparando = false;
+
+  function recusou(codigo, detalhe) {
+    if (ouvinte && G.navegadorRecusou(codigo)) {
+      const primeiraVez = !usarAparelho;
+      usarAparelho = G.micPeloAparelho(true);
+      ouvirPeloAparelho(primeiraVez);
+      return;
+    }
+    mostrarErroDeVoz(codigo, detalhe);
+  }
+
+  async function ouvirPeloAparelho(primeiraVez = false) {
+    if (ocupado || !ouvinte || ouvinte.ouvindo) return;
+    pararFala();
+    estado('ouvindo', primeiraVez ? 'O navegador não deixou: ouvindo pelo Termux…' : 'Ouvindo pelo Termux…');
+    elOuvido.textContent = '';
+    const r = await ouvinte.ouvir();
+    if (estadoAtual !== 'ouvindo') return; // parou (Esc, o botão) enquanto ouvia
+    if (r.erro) {
+      // o Termux:API pediu a permissão dele: na próxima, é só falar; outro erro: na próxima, tenta o navegador de novo
+      if (r.motivo !== 'permissao') usarAparelho = G.micPeloAparelho(false);
+      continuo = false;
+      marcar('btn-continuo', false);
+      estado('erro', 'O Termux não ouviu');
+      mostrarResposta(r.erro);
+      return;
+    }
+    if (r.texto) { elOuvido.textContent = r.texto; enviar(r.texto); return; }
+    estado('ocioso');
+    if (continuo && !r.cancelado) setTimeout(() => { if (continuo && !ocupado && estadoAtual === 'ocioso') ouvir(); }, 400);
+  }
+
+  async function ouvir() {
+    if (ocupado || preparando || rec) return;
+    if (ouvinte && (usarAparelho || !Reconhecimento)) { ouvirPeloAparelho(); return; }
     if (!Reconhecimento) {
       estado('erro', 'Este navegador não ouve voz');
       mostrarResposta('O reconhecimento de voz precisa do Chrome (no PC ou no Android) ou do Edge. Você pode digitar aqui embaixo.');
       return;
     }
+    // v0.53.2: primeiro o pedido padrão do microfone (no Chrome do Android é ele que pergunta e diz por que recusou)
+    preparando = true;
+    let pedido;
+    try { pedido = await G.pedirMicrofone(); } finally { preparando = false; }
+    if (!pedido.ok) { recusou(pedido.codigo, pedido.detalhe); return; }
+    if (ocupado || rec) return;
     pararFala();
     let final = '';
+    let recusa = null;
     rec = new Reconhecimento();
     rec.lang = 'pt-BR';
     rec.interimResults = true;
@@ -322,16 +377,15 @@
       orbe.bater(0.9);
     };
     rec.onerror = (ev) => {
-      // v0.53.1: cada erro com o seu caminho (o "service-not-allowed" não é o microfone: permitir não resolvia)
-      const m = G.mensagemDeErroDeVoz(ev.error);
-      if (!m || !m.grave) return; // "não ouvi nada" no modo contínuo só volta a ouvir
-      if (ev.error !== 'network') { continuo = false; marcar('btn-continuo', false); }
-      estado('erro', m.titulo);
-      mostrarResposta(m.texto);
+      // o site já tem o microfone e mesmo assim "not-allowed": quem recusou foi o reconhecedor do Android (o app Google)
+      if (ev.error === 'not-allowed' && pedido.conferido) recusa = 'reconhecedor-recusou';
+      else if (G.navegadorRecusou(ev.error)) recusa = ev.error;
+      else mostrarErroDeVoz(ev.error);
     };
     rec.onend = () => {
       rec = null;
       desligarMicrofone();
+      if (recusa) { recusou(recusa); return; }
       const texto = final.trim();
       if (texto) enviar(texto);
       else if (estadoAtual === 'ouvindo') {
@@ -342,7 +396,11 @@
     try { rec.start(); } catch { rec = null; }
   }
 
-  function pararDeOuvir() { if (rec) { try { rec.abort(); } catch { /* já parou */ } rec = null; } desligarMicrofone(); }
+  function pararDeOuvir() {
+    if (rec) { try { rec.abort(); } catch { /* já parou */ } rec = null; }
+    if (ouvinte) ouvinte.cancelar(); // v0.53.2: pelo Termux também
+    desligarMicrofone();
+  }
 
   let vozEscolhida = null;
   function escolherVoz() {
@@ -592,6 +650,10 @@
         if (t && (m.quem === 'voce' || m.quem === 'agente')) registrar(m.quem, t);
       }
       if (depois) for (const n of [...elLista.children].slice(inicio)) elLista.insertBefore(n, depois);
+      if (d.ouvirNoAparelho === true && !ouvinte) { // v0.53.2: o microfone do Termux, quando o navegador não deixa
+        ouvinte = G.ouvinteDoAparelho(api);
+        $('btn-mic').dataset.aparelho = 'true';
+      }
       if (d.aliado) $('marca-modo').textContent = `aliado ${d.aliado}`;
       let lembrado = null;
       try { lembrado = sessionStorage.getItem('gc-ate-terminar'); } catch { /* sem armazenamento */ }

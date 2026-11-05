@@ -74,6 +74,26 @@ test('proxy: rede local barrada (IP, nome que resolve para ela e IPv6); com perm
   assert.equal(ok.corpo, 'segredo-local');
 });
 
+test('proxy: a página que desiste do pedido (fetch cancelado) cancela o pedido de saída também (v0.53.2)', async (t) => {
+  let fechouSemResposta = false;
+  let chegou;
+  const chegada = new Promise((r) => { chegou = r; });
+  // o destino nunca responde (como o /api/ouvir enquanto ouve)
+  const destino = http.createServer((req, res) => { res.on('close', () => { fechouSemResposta = !res.writableFinished; }); chegou(); });
+  const portaDestino = await escutar(destino);
+  const proxy = criarProxy({ permitirLocal: true });
+  const pProxy = await escutar(proxy);
+  t.after(() => { proxy.encerrar(); if (destino.closeAllConnections) destino.closeAllConnections(); destino.close(); });
+  const req = http.request({ host: '127.0.0.1', port: pProxy, method: 'POST', path: `http://127.0.0.1:${portaDestino}/api/ouvir`, headers: { host: `127.0.0.1:${portaDestino}` } });
+  req.on('error', () => {});
+  req.end('{}');
+  await chegada;
+  req.destroy(); // a página cancelou
+  const ate = Date.now() + 5000;
+  while (!fechouSemResposta && Date.now() < ate) await new Promise((r) => setTimeout(r, 20));
+  assert.equal(fechouSemResposta, true, 'o destino viu o pedido fechar (antes ficava aberto até ele responder)');
+});
+
 test('acharNavegador: caminho do config, PATH e "não achei"', () => {
   const pasta = fs.mkdtempSync(path.join(HOME_FALSO, 'bin-'));
   const falso = path.join(pasta, 'chromium');

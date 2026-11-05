@@ -1049,7 +1049,7 @@ async function main() {
         console.log(chalk.green(`Site do Gemini Code${aliado ? ` (começa com o aliado "${paraTerminal(aliado.agente.name)}")` : ''}:`));
         console.log(`  ${chalk.green(chat)}`);
         console.log(chalk.dim(`  Tudo nele: conversa, microfone, "Ouvir" nas respostas, foto e vídeo pelo clipe, os aliados no topo e o botão "Modo voz" (a esfera). Direto na esfera: ${voz}`));
-        console.log(chalk.dim('Só neste aparelho (127.0.0.1). A chave no fim do endereço (#t=...) muda a cada vez: não compartilhe. Voz: Chrome ou Edge. As confirmações das ferramentas aparecem na página. Ctrl+C para parar.'));
+        console.log(chalk.dim('Só neste aparelho (127.0.0.1). A chave no fim do endereço (#t=...) muda a cada vez: não compartilhe. Voz: Chrome ou Edge (no celular, se o Chrome não deixar, o site ouve pelo app Termux:API). As confirmações das ferramentas aparecem na página. Ctrl+C para parar.'));
         console.log(chalk.dim(`Fotos e vídeos que você mandar ficam em ${path.join(process.cwd(), site.PASTA_RECEBIDA)}, e o que o agente editar aparece na página.`));
         // v0.52.0: o site só precisa da chave do Gemini — sem ela, a própria página pede
         try {

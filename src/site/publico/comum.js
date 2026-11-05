@@ -22,11 +22,12 @@
   }
 
   function criarApi(token) {
-    return (caminho, corpo) => fetch(caminho, {
+    return (caminho, corpo, { signal } = {}) => fetch(caminho, {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
       body: JSON.stringify(corpo || {}),
       cache: 'no-store',
+      ...(signal ? { signal } : {}),
     });
   }
 
@@ -686,9 +687,18 @@
    * bloqueado; "service-not-allowed" NÃO é o microfone (o navegador não deixa usar o reconhecimento) — antes os dois
    * diziam "permita o microfone", e permitir não resolvia. @returns {{titulo, texto, grave}|null} (null = ignorar)
    */
-  function mensagemDeErroDeVoz(codigo) {
+  function mensagemDeErroDeVoz(codigo, { site } = {}) {
+    let s = site;
+    if (s === undefined) { try { s = location.host; } catch { s = ''; } }
+    s = String(s || 'este site').slice(0, 60);
     const M = {
-      'not-allowed': ['Microfone bloqueado', 'O navegador não deixou este site usar o microfone. No Chrome do celular: toque no ícone à esquerda do endereço, depois em Permissões › Microfone › Permitir, e recarregue a página. Se o Chrome não perguntar nada, libere o microfone para o próprio Chrome: Configurações do Android › Apps › Chrome › Permissões › Microfone › Permitir.'],
+      // v0.53.2: o caminho do Chrome inteiro (quando o ícone do endereço diz que o site "não tem permissões") e o motivo
+      // exato que o pedido do microfone dá: o site, o Android, o pedido fechado, o reconhecedor do Android
+      'not-allowed': ['Microfone bloqueado', `O Chrome bloqueou o microfone para ${s}. Libere assim: toque no ícone à esquerda do endereço › Permissões › Microfone › Permitir. Se lá disser que o site não tem permissões, o bloqueio é do Chrome inteiro: Chrome › ⋮ › Configurações › Configurações do site › Microfone › escolha "Os sites podem pedir para usar o microfone" (ou ligue "Perguntar primeiro") e tire ${s} dos bloqueados. Depois recarregue a página. Se nada disso aparecer, libere o microfone para o próprio Chrome: Configurações do Android › Apps › Chrome › Permissões › Microfone.`],
+      'mic-sistema': ['O Android não deu o microfone ao Chrome', 'Libere em Configurações do Android › Apps › Chrome › Permissões › Microfone › "Permitir só durante o uso do app" e recarregue a página.'],
+      'mic-fechado': ['O pedido do microfone fechou', 'O pedido sumiu sem resposta: toque no microfone de novo e escolha "Permitir".'],
+      'mic-ausente': ['Sem microfone', 'O navegador não achou nenhum microfone neste aparelho. Você pode digitar.'],
+      'reconhecedor-recusou': ['O reconhecimento de voz recusou', 'O site já tem o microfone, mas o reconhecimento de voz do Android não deixou ouvir. Confira o app Google com a permissão do microfone (Configurações do Android › Apps › Google › Permissões › Microfone), se nenhum outro app está ouvindo agora (Assistente, teclado por voz, o Termux) e se o link está aberto no Google Chrome, e não em outro navegador.'],
       'service-not-allowed': ['Reconhecimento de voz indisponível', 'Não é o microfone: este navegador não deixa usar o reconhecimento de voz. Abra o link no Chrome (e não dentro de outro app que abre links) e confira se o app Google está instalado e ativo, porque o Chrome do Android usa a voz do Google para entender o que você fala.'],
       'audio-capture': ['Sem acesso ao microfone', 'O microfone não respondeu: outro app pode estar usando (gravador, ligação, o Termux gravando) ou o Android não deu o microfone ao Chrome (Configurações do Android › Apps › Chrome › Permissões › Microfone).'],
       network: ['Sem conexão para entender a voz', 'O reconhecimento de voz do Chrome usa a internet. Confira a conexão ou digite.'],
@@ -700,9 +710,93 @@
     return { titulo: m[0], texto: m[1], grave: m[2] !== false };
   }
 
+  // ---------------------------------------------------------------------------
+  // v0.53.2: pedir o microfone de verdade, e ouvir pelo Termux quando o navegador não deixa
+  // ---------------------------------------------------------------------------
+  const ESTADOS_DA_PERMISSAO = { granted: 'liberada', denied: 'bloqueada', prompt: 'perguntar' };
+
+  /** O motivo que o getUserMedia deu, como um código de mensagemDeErroDeVoz. */
+  function codigoDoErroDeMicrofone(e) {
+    const nome = String((e && e.name) || '');
+    const msg = String((e && e.message) || '');
+    if (/NotAllowed|Security|PermissionDenied/i.test(nome)) return /system/i.test(msg) ? 'mic-sistema' : /dismiss/i.test(msg) ? 'mic-fechado' : 'not-allowed';
+    if (/NotFound|DevicesNotFound|Overconstrained/i.test(nome)) return 'mic-ausente';
+    if (/NotReadable|TrackStart|Abort/i.test(nome)) return 'audio-capture';
+    return 'not-allowed';
+  }
+
+  /**
+   * Pede o microfone pelo pedido padrão do navegador (getUserMedia) antes do reconhecimento de voz: no Chrome do
+   * Android é ele que mostra "Permitir que o site use o microfone?" e que diz POR QUE recusou (o site, o Chrome inteiro
+   * ou o Android). O microfone é solto na hora, porque o reconhecimento precisa dele livre. Já liberado, nem pede.
+   * Devolve { ok, conferido } ou { ok: false, codigo, detalhe }.
+   */
+  async function pedirMicrofone() {
+    let estado = '';
+    try {
+      const st = navigator.permissions && navigator.permissions.query ? await navigator.permissions.query({ name: 'microphone' }) : null;
+      estado = st && typeof st.state === 'string' ? st.state : '';
+    } catch { /* navegador sem essa consulta */ }
+    if (estado === 'granted') return { ok: true, conferido: true };
+    const md = navigator.mediaDevices;
+    if (!md || typeof md.getUserMedia !== 'function') return { ok: true, conferido: false }; // o reconhecimento pede
+    try {
+      const fluxo = await md.getUserMedia({ audio: true });
+      for (const faixa of fluxo.getTracks()) faixa.stop();
+      await new Promise((r) => setTimeout(r, 300)); // o Android solta o microfone para o reconhecimento
+      return { ok: true, conferido: true };
+    } catch (e) {
+      const nome = String((e && e.name) || 'erro').slice(0, 40);
+      const msg = String((e && e.message) || '').slice(0, 80);
+      const permissao = ESTADOS_DA_PERMISSAO[estado];
+      return { ok: false, codigo: codigoDoErroDeMicrofone(e), detalhe: `${nome}${msg ? `: ${msg}` : ''}${permissao ? `; permissão do site: ${permissao}` : ''}` };
+    }
+  }
+
+  /** Recusas do navegador em que ouvir pelo Termux:API (outro app, com a sua própria permissão) pode resolver. */
+  const RECUSAS = new Set(['not-allowed', 'service-not-allowed', 'audio-capture', 'mic-sistema', 'mic-ausente', 'reconhecedor-recusou', 'language-not-supported']);
+  const navegadorRecusou = (codigo) => RECUSAS.has(codigo);
+
+  /** Lembra (nesta aba, para o chat e a esfera) que o microfone é o do Termux. Sem valor: só lê. */
+  function micPeloAparelho(valor) {
+    try {
+      if (valor === undefined) return sessionStorage.getItem('gc-mic-aparelho') === '1';
+      if (valor) sessionStorage.setItem('gc-mic-aparelho', '1'); else sessionStorage.removeItem('gc-mic-aparelho');
+    } catch { /* sem armazenamento */ }
+    return Boolean(valor);
+  }
+
+  /**
+   * Ouvir pelo microfone do aparelho: o servidor roda o termux-speech-to-text (do Termux:API) e devolve só o texto.
+   * `ouvir()` devolve { texto } | { cancelado: true } | { erro, motivo }; `cancelar()` para na hora.
+   */
+  function ouvinteDoAparelho(api) {
+    let ctrl = null;
+    return {
+      get ouvindo() { return Boolean(ctrl); },
+      async ouvir() {
+        if (ctrl) return { cancelado: true };
+        const meu = new AbortController();
+        ctrl = meu;
+        try {
+          const r = await api('/api/ouvir', {}, { signal: meu.signal });
+          let d = {};
+          try { d = await r.json(); } catch { /* sem JSON */ }
+          if (meu.signal.aborted || d.cancelado) return { cancelado: true };
+          if (!r.ok) return { erro: String(d.erro || `o servidor respondeu ${r.status}`).slice(0, 500), motivo: String(d.motivo || '') };
+          return { texto: String(d.texto || '').trim() };
+        } catch {
+          return meu.signal.aborted ? { cancelado: true } : { erro: 'Sem conexão com o Gemini Code: o terminal com o site ainda está aberto?', motivo: 'conexao' };
+        } finally { if (ctrl === meu) ctrl = null; }
+      },
+      cancelar() { if (ctrl) ctrl.abort(); },
+    };
+  }
+
   window.GeminiSite = Object.freeze({
     lerToken, criarApi, eventos, analisarMarkdown, montarMarkdown, copiarTexto, linkSeguro,
     tamanhoLegivel, tipoDoArquivo, enviarArquivo, cartaoMidia, mostrarQuadro, MAX_ENVIO, cartaoChave, seloDoFim,
     paraFala, frases, podeFalar, falar, pararFala, mensagemDeErroDeVoz,
+    codigoDoErroDeMicrofone, pedirMicrofone, navegadorRecusou, micPeloAparelho, ouvinteDoAparelho,
   });
 })();

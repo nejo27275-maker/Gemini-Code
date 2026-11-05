@@ -23,21 +23,45 @@ vez**: abra o endereço completo e não compartilhe.
   - o **microfone** dita a mensagem: fale, e quando você parar ela vai. Uma mensagem falada ganha a resposta falada;
   - o **clipe** manda foto, vídeo ou áudio.
 - **Em cada resposta:** **Ouvir** lê a resposta em voz alta. Tocar de novo para.
-- **O microfone e a fala:** usam o reconhecimento e a voz do próprio navegador (Chrome ou Edge). Sem reconhecimento de
-  voz, o microfone não aparece.
+- **O microfone e a fala:** usam o reconhecimento e a voz do próprio navegador (Chrome ou Edge). No celular, se o
+  navegador não deixar usar o microfone, o site ouve pelo app **Termux:API** (v0.53.2, veja abaixo). Sem nenhum dos
+  dois, o microfone não aparece.
 - **Até a v0.52.0:** a voz e o chat eram duas páginas, e o aliado era fixo por execução. O `--chat` continua aceito,
   mas não precisa mais.
 
-### Se o microfone não funcionar (v0.53.1)
+### Se o microfone não funcionar (v0.53.1, v0.53.2)
 
-O site mostra o motivo na conversa, e cada caso tem um caminho:
+Ao tocar no microfone, o site faz o pedido padrão do navegador ("Permitir que 127.0.0.1 use o microfone?"). É esse
+pedido que faz o Chrome perguntar, e que diz por que recusou. O aviso aparece na conversa com o motivo exato no fim
+(`detalhe: ...`), e cada caso tem um caminho:
 
 | O aviso | O que fazer (Chrome no Android) |
 |---|---|
-| **Microfone bloqueado** | Toque no ícone à esquerda do endereço, depois em **Permissões › Microfone › Permitir**, e recarregue. Se o Chrome não perguntar nada, o Android não deu o microfone ao Chrome: **Configurações › Apps › Chrome › Permissões › Microfone › Permitir**. |
+| **Microfone bloqueado** | Toque no ícone à esquerda do endereço › **Permissões › Microfone › Permitir**, e recarregue. Se lá disser que o site não tem permissões, o bloqueio é do Chrome inteiro: **Chrome › ⋮ › Configurações › Configurações do site › Microfone**, escolha "Os sites podem pedir para usar o microfone" (ou ligue "Perguntar primeiro") e tire `127.0.0.1:8765` dos bloqueados. |
+| **O Android não deu o microfone ao Chrome** | **Configurações do Android › Apps › Chrome › Permissões › Microfone** › "Permitir só durante o uso do app", e recarregue. |
+| **O pedido do microfone fechou** | O pedido sumiu sem resposta: toque no microfone de novo e escolha **Permitir**. |
+| **O reconhecimento de voz recusou** | O site já tem o microfone; quem recusou foi o reconhecimento de voz do Android. Confira o app **Google** com a permissão do microfone (**Configurações do Android › Apps › Google › Permissões › Microfone**), se nenhum outro app está ouvindo (Assistente, teclado por voz, o Termux) e se o link está aberto no **Google Chrome**, e não em outro navegador. |
 | **Reconhecimento de voz indisponível** | Não é o microfone. Abra o link no **Chrome** (não dentro de outro app que abre links) e confira se o app **Google** está instalado e ativo: o Chrome do Android usa a voz do Google para entender a fala. |
 | **Sem acesso ao microfone** | Outro app está usando o microfone (gravador, ligação, o Termux gravando), ou o Chrome está sem a permissão do Android (veja acima). |
 | **Sem conexão para entender a voz** | O reconhecimento do Chrome usa a internet. |
+
+A porta é sempre a mesma (8765, a não ser que você use `--porta`), então a permissão dada uma vez vale nas próximas.
+
+### Ouvir pelo Termux quando o navegador não deixa (v0.53.2)
+
+Rodando o site no Termux, se o navegador recusar o microfone, o site passa a ouvir pelo app **Termux:API**, que tem
+a sua própria permissão do microfone (o Chrome não entra). Na primeira vez aparece "agora eu ouço pelo Termux:API";
+daí em diante, nesta aba, o microfone é o dele. Tocar de novo no microfone cancela.
+
+- **Para funcionar:** instale o app **Termux:API** (da mesma loja de onde veio o Termux; o pacote sozinho não basta) e
+  rode `pkg install termux-api`. Na primeira vez, o Termux:API pede a permissão do microfone: toque em **Permitir** e
+  depois no microfone de novo.
+- **Se o Termux não responder:** o aviso diz o caminho (o app instalado, a permissão em **Configurações do Android ›
+  Apps › Termux:API › Permissões › Microfone**). Na próxima vez, o site tenta o navegador de novo.
+- **Como é feito:** o servidor roda o `termux-speech-to-text` sem argumentos (nada da página entra no comando), só um
+  por vez e nunca no meio de uma resposta, com prazo de 45 s. Fechar a página, tocar de novo ou "Parar" encerra o
+  comando e o que ele abriu. Só o texto ouvido volta para a página, e ele não vai para o log. O programa só vale se
+  estiver fora das pastas em que o agente grava (como o `bwrap`): um plantado no projeto não roda.
 
 Sem o microfone, dá para digitar normalmente, e o "Ouvir" continua lendo as respostas.
 
@@ -213,3 +237,11 @@ O modo site roda o agente com as ferramentas dele, então o servidor é fechado:
     O comando `site` foi testado de verdade, com a lista de aliados do usuário.
   - **Simulados:** o reconhecimento e a síntese de voz, porque aqui não há microfone, alto-falante nem internet.
   - **Não testado:** o microfone de um celular de verdade.
+- O microfone de verdade e o Termux (v0.53.2):
+  - **Testado:** num Chromium de verdade, com o pedido do microfone **simulado** (cada recusa: o site, o Android, o
+    pedido fechado, o reconhecedor) e com um Termux **falso** no servidor: o Chrome recusa, o site ouve pelo Termux, a
+    mensagem vai sozinha, tocar de novo cancela e o servidor encerra o comando, no chat e na esfera. O
+    `termux-speech-to-text` foi trocado por scripts de verdade: o último parcial, o pedido de permissão, o prazo e o
+    cancelar, sem deixar processo órfão.
+  - **Não testado:** o Chrome e o Termux:API de um celular de verdade. Em algumas versões do Android, o reconhecimento
+    pelo Termux:API pode não ouvir com o Chrome na frente; nesse caso o aviso diz o que conferir.

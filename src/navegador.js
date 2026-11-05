@@ -129,6 +129,9 @@ function criarProxy({ permitirLocal = false, aoBloquear = () => {} } = {}) {
       });
       ida.on('error', () => res.destroy());
       req.on('error', () => ida.destroy());
+      // v0.53.2: a página desistiu (fetch cancelado, aba fechada): o pedido de saída é cancelado também, em vez de
+      // ficar aberto até o servidor responder
+      res.on('close', () => { if (!res.writableFinished) ida.destroy(); });
       req.pipe(ida);
     }, (err) => {
       recusar(alvo.hostname, err);

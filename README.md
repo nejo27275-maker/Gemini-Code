@@ -147,6 +147,9 @@ gemini-code site --voz --abrir              # abre direto no modo voz (a esfera)
 - **No topo:** você escolhe com quem conversar (o agente geral ou um aliado) e abre o modo voz, com a mesma conversa.
 - **Na caixa de mensagem:** o microfone dita, e a resposta de uma mensagem falada vem falada.
 - **Em cada resposta:** o botão "Ouvir".
+- **O microfone (v0.53.2):** o site faz o pedido padrão do navegador, que faz o Chrome perguntar. Se ele recusar, o
+  aviso diz onde está o bloqueio (o site, o Chrome inteiro, o Android ou o app Google). No celular, o site passa a ouvir
+  pelo app **Termux:API** (`pkg install termux-api` e o app da mesma loja do Termux).
 
 O terminal mostra um link só.
 

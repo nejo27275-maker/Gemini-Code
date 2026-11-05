@@ -410,32 +410,83 @@
 
   // v0.53.1: o erro do microfone aparece NA TELA (antes só o leitor de tela ouvia) e no lugar do anterior
   let avisoDoMic = null;
-  function erroDoMic(codigo) {
+  function mostrarAvisoDoMic(texto) {
+    if (avisoDoMic) avisoDoMic.remove();
+    avisoDoMic = aviso(texto, 'msg-alerta');
+  }
+  function erroDoMic(codigo, detalhe = '') {
     const m = G.mensagemDeErroDeVoz(codigo);
     if (!m) return;
     anunciar(`${m.titulo}. ${m.texto}`);
     if (!m.grave) { avisarNaBandeja(m.texto); return; }
-    if (avisoDoMic) avisoDoMic.remove();
-    avisoDoMic = aviso(`${m.titulo}: ${m.texto}`, 'msg-alerta');
+    // v0.53.2: o motivo exato do navegador vai junto (ajuda a achar onde está o bloqueio)
+    mostrarAvisoDoMic(`${m.titulo}: ${m.texto}${detalhe ? ` (detalhe: ${detalhe})` : ''}`);
+  }
+
+  // v0.53.2: quando o navegador não deixa, o site ouve pelo Termux:API (o servidor diz se tem: ouvirNoAparelho). Ele é
+  // outro app, com a sua própria permissão do microfone; daqui em diante, nesta aba, o microfone é o dele.
+  let ouvinte = null;
+  let usarAparelho = G.micPeloAparelho();
+  const textoDoCampo = elTexto.placeholder;
+
+  function recusou(codigo, detalhe) {
+    if (ouvinte && G.navegadorRecusou(codigo)) {
+      if (!usarAparelho) avisarNaBandeja('O navegador não deixou usar o microfone: agora eu ouço pelo Termux:API. Fale.');
+      usarAparelho = G.micPeloAparelho(true);
+      ouvirPeloAparelho();
+      return;
+    }
+    erroDoMic(codigo, detalhe);
+  }
+
+  async function ouvirPeloAparelho() {
+    if (ocupado || !ouvinte || ouvinte.ouvindo) return;
+    if (avisoDoMic) { avisoDoMic.remove(); avisoDoMic = null; }
+    pararDeFalar();
+    elMic.setAttribute('aria-pressed', 'true');
+    app.dataset.ouvindo = 'true';
+    elTexto.placeholder = 'Ouvindo pelo Termux… fale (toque no microfone para cancelar)';
+    anunciar('Ouvindo pelo Termux… fale; quando você parar, a mensagem vai.');
+    const r = await ouvinte.ouvir();
+    elMic.setAttribute('aria-pressed', 'false');
+    delete app.dataset.ouvindo;
+    elTexto.placeholder = textoDoCampo;
+    if (r.cancelado) { anunciar('Parei de ouvir.'); return; }
+    if (r.erro) {
+      // o Termux:API pediu a permissão dele: na próxima, é só falar; outro erro: na próxima, tenta o navegador de novo
+      if (r.motivo !== 'permissao') usarAparelho = G.micPeloAparelho(false);
+      anunciar(`O Termux não ouviu. ${r.erro}`);
+      mostrarAvisoDoMic(`O Termux não ouviu: ${r.erro}`);
+      return;
+    }
+    if (!r.texto) { avisarNaBandeja('Não ouvi nada. Toque no microfone e fale perto do celular.'); return; }
+    // o que a pessoa digitou enquanto ouvia fica, antes do que foi ouvido
+    elTexto.value = [elTexto.value.trim(), r.texto].filter(Boolean).join(' ');
+    ajustarAltura();
+    falarProxima = true;
+    if (!mandar(elTexto.value)) falarProxima = false;
   }
 
   let preparando = false;
   async function ditar() {
     if (rec) { try { rec.stop(); } catch { /* já parou */ } return; } // tocar de novo: manda o que já ouviu
-    const R = Reconhecimento();
-    if (!R) { erroDoMic('service-not-allowed'); return; }
+    if (ouvinte && ouvinte.ouvindo) { ouvinte.cancelar(); return; } // pelo Termux, tocar de novo cancela
     if (ocupado || !token || preparando) return;
-    // microfone já bloqueado para o site: explica como liberar, em vez de tentar e falhar calado
+    const R = Reconhecimento();
+    if (ouvinte && (usarAparelho || !R)) { ouvirPeloAparelho(); return; }
+    if (!R) { erroDoMic('service-not-allowed'); return; }
+    // v0.53.2: primeiro o pedido padrão do microfone. No Chrome do Android é ele que pergunta "Permitir?" e diz por que
+    // recusou; já liberado, nem pergunta. (Na v0.53.1, uma consulta que dizia "bloqueado" parava aqui sem nem pedir.)
     preparando = true;
-    try {
-      const st = navigator.permissions && navigator.permissions.query ? await navigator.permissions.query({ name: 'microphone' }) : null;
-      if (st && st.state === 'denied') { erroDoMic('not-allowed'); return; }
-    } catch { /* navegador sem essa consulta: tenta assim mesmo */ } finally { preparando = false; }
+    let pedido;
+    try { pedido = await G.pedirMicrofone(); } finally { preparando = false; }
+    if (!pedido.ok) { recusou(pedido.codigo, pedido.detalhe); return; }
     if (rec || ocupado) return;
     if (avisoDoMic) { avisoDoMic.remove(); avisoDoMic = null; }
     pararDeFalar();
     const antes = elTexto.value.trim();
     let final = '';
+    let recusa = null;
     rec = new R();
     rec.lang = 'pt-BR';
     rec.interimResults = true;
@@ -455,11 +506,17 @@
       elTexto.value = [antes, (final + parcial).trim()].filter(Boolean).join(' ');
       ajustarAltura();
     };
-    rec.onerror = (ev) => erroDoMic(ev.error);
+    rec.onerror = (ev) => {
+      // o site já tem o microfone e mesmo assim "not-allowed": quem recusou foi o reconhecedor do Android (o app Google)
+      if (ev.error === 'not-allowed' && pedido.conferido) recusa = 'reconhecedor-recusou';
+      else if (G.navegadorRecusou(ev.error)) recusa = ev.error;
+      else erroDoMic(ev.error);
+    };
     rec.onend = () => {
       rec = null;
       elMic.setAttribute('aria-pressed', 'false');
       delete app.dataset.ouvindo;
+      if (recusa) { elTexto.value = antes; ajustarAltura(); recusou(recusa); return; }
       if (!final.trim()) { elTexto.value = antes; ajustarAltura(); return; }
       falarProxima = true;
       if (!mandar(elTexto.value)) falarProxima = false;
@@ -539,6 +596,13 @@
       if (!r.ok) { if (r.status === 401) semChave(); return; }
       d = await r.json();
     } catch { return; /* sem conexão: a página segue vazia */ }
+    // v0.53.2: o servidor ouve pelo Termux:API: o microfone aparece mesmo sem o reconhecimento do navegador
+    if (d.ouvirNoAparelho === true && !ouvinte) {
+      ouvinte = G.ouvinteDoAparelho(api);
+      elMic.hidden = false;
+      elMic.dataset.aparelho = 'true';
+      elMic.title = 'Falar: dite a mensagem (se o navegador não deixar usar o microfone, ouço pelo Termux:API)';
+    }
     if (Array.isArray(d.aliados)) montarAliados(d.aliados, d.aliado); // v0.53.0: o seletor no lugar do subtítulo
     else if (d.aliado) elSubtitulo.textContent = `Chat com o aliado "${d.aliado}"`;
     trocarSugestoes(Array.isArray(d.sugestoes) && d.sugestoes.length ? d.sugestoes : SUGESTOES_PADRAO);
@@ -656,7 +720,8 @@
   });
   document.addEventListener('keydown', (ev) => {
     if (ev.key !== 'Escape') return;
-    if (ocupado) { ev.preventDefault(); parar(); } else if (botaoFalando || (G.podeFalar() && window.speechSynthesis.speaking)) pararDeFalar();
+    if (ocupado) { ev.preventDefault(); parar(); } else if (ouvinte && ouvinte.ouvindo) ouvinte.cancelar();
+    else if (botaoFalando || (G.podeFalar() && window.speechSynthesis.speaking)) pararDeFalar();
   });
   for (const b of document.querySelectorAll('.sugestao')) b.addEventListener('click', () => enviar(b.textContent));
 

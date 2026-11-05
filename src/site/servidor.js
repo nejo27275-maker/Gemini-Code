@@ -91,6 +91,94 @@ function chavesPadrao() {
   };
 }
 
+// v0.53.2: ouvir pelo microfone do aparelho com o Termux:API, quando o navegador não deixa (o Chrome recusa o
+// microfone, ou não tem reconhecimento de voz). O app Termux:API tem a sua própria permissão do microfone. Sem o app,
+// o termux-speech-to-text fica pendurado para sempre: por isso o prazo, e quem para mata o comando e o que ele abriu.
+// Sem argumentos: nada da página entra no comando.
+const PRAZO_OUVIR_MS = 45000;
+/**
+ * A saída do termux-speech-to-text: os parciais, um por linha, cada um com tudo o que ouviu até ali (vale o último).
+ * Sem a permissão do microfone, o Termux:API escreve o pedido no lugar do texto (e abre a janela para permitir).
+ */
+function lerSaidaDoTermux(saida) {
+  const linhas = String(saida || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (linhas.some((l) => /^Please grant the following permissions? to use this command/i.test(l))) return { texto: '', permissao: true };
+  return { texto: linhas.length ? linhas[linhas.length - 1] : '', permissao: false };
+}
+/** Troca os controles C0 (e o DEL) por espaço: o texto ouvido vai para o modelo e para o log do terminal. */
+const semControlesC0 = (t) => Array.from(String(t), (c) => { const cp = c.codePointAt(0); return cp < 0x20 || cp === 0x7f ? ' ' : c; }).join('');
+/**
+ * O termux-speech-to-text roda quando a pessoa toca no microfone, fora de qualquer sandbox: como o bwrap e o python3
+ * (src/sandbox.js, acharProgramaConfiavel), só um que o modelo não pode ter plantado (fora do projeto, da temporária e
+ * das pastas liberadas). No Termux ele fica em $PREFIX/bin.
+ */
+function programaDoTermux() {
+  if (process.platform === 'win32' || process.env.GEMINI_CODE_FORCE_NO_TERMUX_API === '1') return null;
+  try {
+    const sb = require('../sandbox');
+    let extras = [];
+    try { extras = require('../config').loadConfig().pastasGravaveis || []; } catch { /* sem config: só as áreas de sempre */ }
+    return sb.acharProgramaConfiavel('termux-speech-to-text', { proibidas: sb.areasDoModelo({ extras }) });
+  } catch { return null; }
+}
+// nenhum fica ouvindo depois que o gemini-code sai (Ctrl+C no terminal)
+const ouvintesVivos = new Set();
+let saidaVigiada = false;
+function matarOuvinte(filho) {
+  if (process.platform !== 'win32') require('../sandbox').matarDescendentes(filho.pid, 'SIGKILL');
+  try { filho.kill('SIGKILL'); } catch { /* já saiu */ }
+}
+/** Ouve pelo programa dado (o termux-speech-to-text) e devolve o texto. `signal` cancela; o prazo também. */
+function ouvirCom(programa, { signal, prazoMs = PRAZO_OUVIR_MS } = {}) {
+  return new Promise((resolve, reject) => {
+    let filho;
+    try { filho = require('child_process').spawn(programa, [], { stdio: ['ignore', 'pipe', 'ignore'] }); } catch (e) { reject(e); return; }
+    if (!saidaVigiada) { saidaVigiada = true; process.on('exit', () => { for (const f of ouvintesVivos) matarOuvinte(f); }); }
+    ouvintesVivos.add(filho);
+    let saida = '';
+    let motivo = null;
+    let fim = false;
+    const matar = (m) => { if (fim || motivo) return; motivo = m; matarOuvinte(filho); };
+    const timer = setTimeout(() => matar('prazo'), prazoMs);
+    const aoAbortar = () => matar('cancelado');
+    if (signal) { if (signal.aborted) aoAbortar(); else signal.addEventListener('abort', aoAbortar, { once: true }); }
+    filho.stdout.setEncoding('utf8');
+    filho.stdout.on('data', (d) => { if (saida.length < 1024 * 1024) saida += d; });
+    const terminar = (erro, codigo) => {
+      if (fim) return;
+      fim = true;
+      clearTimeout(timer);
+      if (signal) signal.removeEventListener('abort', aoAbortar);
+      ouvintesVivos.delete(filho);
+      if (motivo) { reject(Object.assign(new Error(motivo === 'prazo' ? 'o Termux:API não respondeu' : 'cancelado'), { prazo: motivo === 'prazo', cancelado: motivo === 'cancelado' })); return; }
+      if (erro) { reject(erro); return; }
+      const lido = lerSaidaDoTermux(saida);
+      if (lido.permissao) { reject(Object.assign(new Error('o Termux:API pediu a permissão do microfone'), { permissao: true })); return; }
+      if (codigo !== 0 && !lido.texto) { reject(new Error(`o termux-speech-to-text saiu com o código ${codigo}`)); return; }
+      resolve(lido.texto);
+    };
+    filho.on('error', (e) => terminar(e));
+    filho.on('close', (codigo) => terminar(null, codigo));
+    // morto por nós (prazo, cancelar): termina na saída, sem esperar o cano (algo que escapou ainda pode segurá-lo)
+    filho.on('exit', () => { if (motivo) { terminar(null, null); try { filho.stdout.destroy(); } catch { /* já fechou */ } } });
+  });
+}
+/** O que a página mostra quando o Termux não ouviu (sem detalhes do sistema: só o caminho para resolver). */
+function erroDeOuvir(e) {
+  if (e && e.permissao) return 'O Termux:API pediu a permissão do microfone: toque em "Permitir" na janela que abriu e depois no microfone de novo. Se a janela não abriu: Configurações do Android › Apps › Termux:API › Permissões › Microfone › Permitir.';
+  if (e && e.prazo) return 'O Termux não respondeu: confira se o app Termux:API está instalado (da mesma loja do Termux; o pacote sozinho não basta) e se ele tem a permissão do microfone (Configurações do Android › Apps › Termux:API › Permissões).';
+  return 'Não consegui ouvir pelo Termux: confira o app Termux:API (da mesma loja do Termux) e a permissão do microfone dele (Configurações do Android › Apps › Termux:API › Permissões), e rode "pkg install termux-api".';
+}
+function ouvirPadrao() {
+  return {
+    disponivel: () => Boolean(programaDoTermux()),
+    ouvir: ({ signal } = {}) => {
+      const programa = programaDoTermux();
+      return programa ? ouvirCom(programa, { signal }) : Promise.reject(new Error('termux-speech-to-text não encontrado'));
+    },
+  };
+}
+
 /** Erro do agente que é a chave (falta ou foi recusada): a página mostra de novo o pedido da chave. */
 const erroDeChave = (msg) => /Nenhuma API key|chave recusada|API key not valid|API_KEY_INVALID/i.test(String(msg || ''));
 
@@ -369,6 +457,7 @@ function criarServidorSite({
   ateTerminarPadrao = () => { try { return require('../config').loadConfig().modoAteTerminar === true; } catch { return false; } },
   sugestoes = null,
   aliados = null,
+  ouvirNoAparelho = ouvirPadrao(),
 } = {}) {
   const { paraExibir, semControlesInvisiveis } = require('../ui/textoSeguro');
   // v0.52.0: as sugestões do aliado (ex.: o "treinador"); texto guardado pelo usuário, mas limpo e curto mesmo assim
@@ -395,6 +484,14 @@ function criarServidorSite({
   const midias = new Map();
   let turnos = [];
   let enviando = false;
+  // v0.53.2: o microfone do aparelho pelo Termux:API (um por vez; a disponibilidade é conferida uma vez)
+  let ouvindo = false;
+  let disponibilidadeOuvir = null;
+  const podeOuvirNoAparelho = () => {
+    if (!ouvirNoAparelho) return Promise.resolve(false);
+    if (!disponibilidadeOuvir) disponibilidadeOuvir = Promise.resolve().then(() => ouvirNoAparelho.disponivel()).then(Boolean, () => false);
+    return disponibilidadeOuvir;
+  };
   // v0.52.0: o que a resposta em andamento já fez (para a página que voltar no meio, no modo até terminar)
   let andamento = null;
   let tentativasChave = [];
@@ -536,6 +633,7 @@ function criarServidorSite({
 
   /** Para a conversa em andamento (se houver): o agente para no próximo ponto seguro e a pergunta aberta vira "não". */
   function parar(motivo) {
+    if (ouvindo) ouvindo.abort(); // v0.53.2: "Parar" também encerra o microfone do Termux
     if (!parador) return false;
     if (!parador.signal.aborted) {
       parador.abort();
@@ -607,6 +705,7 @@ function criarServidorSite({
         chave, ateTerminarPadrao: Boolean(ateTerminarPadrao()),
         ...(atual.sugestoes.length ? { sugestoes: atual.sugestoes } : {}),
         ...(aliados ? { aliados: listaDeAliados() } : {}),
+        ouvirNoAparelho: await podeOuvirNoAparelho(),
         ...(ocupado && andamento ? { andamento: retratoDoAndamento() } : {}),
         perguntas: [...pendentes].map(([id, p]) => ({ id, texto: p.texto })),
       });
@@ -621,6 +720,7 @@ function criarServidorSite({
       return json(res, 200, { ok: true });
     }
     if (caminho === '/api/aliado') return trocarAliado(res, corpo);
+    if (caminho === '/api/ouvir') return ouvirPeloAparelho(res);
     return json(res, 404, { erro: 'não encontrado' });
   }
 
@@ -644,6 +744,30 @@ function criarServidorSite({
     midias.clear();
     log(atual.nome ? `[site] agora com o aliado "${atual.nome}"` : '[site] agora com o agente geral');
     return json(res, 200, { ok: true, aliado: atual.nome, sugestoes: atual.sugestoes });
+  }
+
+  /**
+   * v0.53.2: POST /api/ouvir — ouve pelo microfone do aparelho (Termux:API) e devolve só o texto. Para quando o navegador
+   * não deixa usar o microfone. Um por vez, nunca no meio de uma resposta, com prazo; o texto não vai para o log.
+   * A página cancela fechando o pedido (ou "Parar"): o termux-speech-to-text é encerrado na hora.
+   */
+  async function ouvirPeloAparelho(res) {
+    if (!(await podeOuvirNoAparelho())) return json(res, 404, { erro: 'o microfone pelo Termux não está disponível: instale o app Termux:API (da mesma loja do Termux) e rode "pkg install termux-api"' });
+    if (ocupado) return json(res, 409, { erro: 'espere a resposta terminar' });
+    if (ouvindo) return json(res, 409, { erro: 'já estou ouvindo' });
+    const ctrl = new AbortController();
+    ouvindo = ctrl;
+    let terminou = false;
+    res.on('close', () => { if (!terminou) ctrl.abort(); });
+    log('[site] ouvindo pelo microfone do aparelho (Termux:API)');
+    try {
+      const ouvido = await ouvirNoAparelho.ouvir({ signal: ctrl.signal });
+      const texto = semControlesInvisiveis(semControlesC0(ouvido || '')).replace(/\s+/g, ' ').trim().slice(0, 4000);
+      return json(res, 200, { texto });
+    } catch (e) {
+      if (ctrl.signal.aborted) return res.writableEnded || res.destroyed ? undefined : json(res, 200, { texto: '', cancelado: true });
+      return json(res, 502, { erro: erroDeOuvir(e), motivo: e && e.permissao ? 'permissao' : e && e.prazo ? 'prazo' : 'falhou' });
+    } finally { terminou = true; ouvindo = false; }
   }
 
   /** POST /api/chave {chave}: confere com o Gemini e salva (como o "config set-key"). A chave nunca volta nem vai para o log. */
@@ -802,4 +926,5 @@ module.exports = {
   criarServidorSite, conversarComAgente, paraExibicao, CSP, MAX_TEXTO, AVISO_INTERROMPIDO,
   PASTA_RECEBIDA, MAX_ENVIO, TIPOS_ENVIO, nomeDoEnvio, assinaturaOk, tamanhoLegivel,
   modeloDoSite, chavesPadrao, erroDeChave,
+  lerSaidaDoTermux, ouvirCom, ouvirPadrao, erroDeOuvir, PRAZO_OUVIR_MS,
 };
