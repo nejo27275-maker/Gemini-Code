@@ -1,0 +1,31 @@
+{
+ "name": "Estudo Gamer • AV2 do 5º ano",
+ "short_name": "Estudo Gamer",
+ "description": "App de estudos gamificado para a AV2 de dezembro do 5º ano: trilhas, simulados, gabarito, chefão, duelo e muito mais.",
+ "lang": "pt-BR",
+ "dir": "ltr",
+ "start_url": "./",
+ "scope": "./",
+ "display": "standalone",
+ "orientation": "portrait",
+ "background_color": "#070a14",
+ "theme_color": "#070a14",
+ "icons": [
+  {
+   "src": "../icons/eg-192.png",
+   "sizes": "192x192",
+   "type": "image/png"
+  },
+  {
+   "src": "../icons/eg-512.png",
+   "sizes": "512x512",
+   "type": "image/png"
+  },
+  {
+   "src": "../icons/eg-maskable-512.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "maskable"
+  }
+ ]
+}

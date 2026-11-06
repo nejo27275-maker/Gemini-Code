@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#070a14">
+<title>Estudos Gamer • Estudo Gamer e Missão Saber</title>
+<meta name="description" content="Dois apps de estudo gamificados e gratuitos: Estudo Gamer (AV2 do 5º ano) e Missão Saber (vários assuntos do Ensino Fundamental).">
+<meta property="og:title" content="Estudos Gamer">
+<meta property="og:description" content="Estude jogando: trilhas, desafios, chefões e muito mais.">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/hub-192.png">
+<link rel="apple-touch-icon" href="icons/hub-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Nunito:wght@600;800;900&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#070a14;--card:#121a33;--line:#26305a;--txt:#e8ecff;--mut:#8e98c8;--cyan:#00e5ff;--pur:#a855f7;--gold:#ffd23f;--amb:#fbbf24;--esm:#34d399}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{min-height:100vh;background:radial-gradient(1200px 600px at 10% -10%,rgba(168,85,247,.25),transparent 60%),radial-gradient(900px 500px at 110% 10%,rgba(0,229,255,.18),transparent 60%),var(--bg);
+  color:var(--txt);font-family:Nunito,system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.45}
+.wrap{max-width:560px;margin:0 auto;padding:28px 18px calc(36px + env(safe-area-inset-bottom))}
+.topo{text-align:center;margin-bottom:22px}
+.logo{font-size:64px;line-height:1;filter:drop-shadow(0 0 18px rgba(0,229,255,.45));animation:bob 3s ease-in-out infinite}
+@keyframes bob{50%{transform:translateY(-6px)}}
+h1{font-family:Orbitron,Nunito,sans-serif;font-size:clamp(26px,7vw,36px);margin-top:10px;background:linear-gradient(90deg,var(--cyan),var(--pur));-webkit-background-clip:text;background-clip:text;color:transparent}
+.topo p{color:#cdd3ff;margin-top:6px;font-size:16px}
+.app{display:flex;align-items:center;gap:14px;padding:16px;border-radius:22px;background:var(--card);border:1px solid var(--line);color:inherit;text-decoration:none;margin-bottom:14px;
+  position:relative;overflow:hidden;transition:transform .18s,border-color .18s,box-shadow .18s}
+.app::before{content:"";position:absolute;inset:0 0 auto 0;height:4px;background:var(--c)}
+.app:hover,.app:focus-visible{transform:translateY(-3px);border-color:var(--c);box-shadow:0 10px 30px -12px var(--c);outline:none}
+.app.eg{--c:var(--cyan)} .app.ms{--c:var(--amb)}
+.ic img{width:66px;height:66px;border-radius:18px;display:block}
+.tx{flex:1;min-width:0}
+.tx b{display:block;font-size:clamp(17px,4.8vw,20px);font-family:Orbitron,Nunito,sans-serif;line-height:1.2}
+.tx small{display:block;color:var(--c);font-weight:900;font-size:13px;margin-top:2px}
+.tx i{display:block;font-style:normal;color:var(--mut);font-size:13.5px;margin-top:4px}
+.go{flex:none;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;font-size:17px;background:var(--c);color:#05080f;box-shadow:0 0 16px -4px var(--c)}
+.card{padding:16px;border-radius:20px;background:rgba(18,26,51,.8);border:1px solid var(--line);margin-top:14px}
+.card h2{font-size:17px;margin-bottom:6px}
+.card p,.card li{color:#cdd3ff;font-size:14.5px}
+.card ol{padding-left:20px;margin-top:6px}
+footer{text-align:center;color:var(--mut);font-size:12.5px;margin-top:22px}
+@media (max-width:380px){.ic img{width:54px;height:54px}.app{gap:11px;padding:14px}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header class="topo"><div class="logo">📚</div><h1>Estudos Gamer</h1><p>Escolha o seu app e bora estudar jogando!</p></header>
+  <a class="app eg" href="estudo-gamer/"><span class="ic"><img src="icons/eg-192.png" alt=""></span>
+    <span class="tx"><b>Estudo Gamer</b><small>AV2 de dezembro • 5º ano</small><i>As 6 matérias da AV2 em trilhas, com simulados, gabarito, chefão, duelo e muito mais.</i></span><span class="go" aria-hidden="true">▶</span></a>
+  <a class="app ms" href="missao-saber/"><span class="ic"><img src="icons/ms-192.png" alt=""></span>
+    <span class="tx"><b>Missão Saber</b><small>6 matérias • 30 assuntos</small><i>Aprenda de tudo: frações, planetas, Egito, estados e capitais, inglês e mais.</i></span><span class="go" aria-hidden="true">▶</span></a>
+  <section class="card"><h2>📲 Instale no celular</h2>
+    <p id="instTxt">Abra o app que você quer e use o menu do navegador:</p>
+    <ol id="instPassos"><li>No <b>Android</b> (Chrome): menu <b>⋮</b> → <b>Instalar app</b> ou <b>Adicionar à tela inicial</b>.</li>
+      <li>No <b>iPhone</b> (Safari): <b>Compartilhar</b> ⬆️ → <b>Adicionar à Tela de Início</b>.</li></ol>
+    <p style="margin-top:6px">Depois da primeira visita, os apps funcionam até <b>sem internet</b>.</p></section>
+  <section class="card"><h2>💾 Seu progresso</h2><p>Fica salvo neste aparelho. Para levar para outro celular ou computador, use <b>Perfil → Código da conta</b> e, no outro aparelho, <b>Restaurar</b>.</p></section>
+  <section class="card"><h2>🤖 Tutor com IA</h2><p>Aqui no site, o tutor funciona no <b>modo offline</b>: procura as respostas no conteúdo do app. A IA de verdade funciona quando o app é aberto pelo link do claude.ai.</p></section>
+  <footer>Feito para estudar brincando • funciona no celular e no computador</footer>
+</main>
+<script>
+if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
+</script>
+</body>
+</html>
