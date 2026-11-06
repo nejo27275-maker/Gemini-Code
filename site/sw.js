@@ -4,7 +4,7 @@
 /* global self, caches */
 'use strict';
 
-const VERSAO = 'd811a002ce35';
+const VERSAO = '9f68277b2fdc';
 const CACHE = 'estudos-' + VERSAO;
 const ARQUIVOS = [
   './', './index.html',

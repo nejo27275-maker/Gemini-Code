@@ -31,16 +31,16 @@ h1{font-family:Orbitron,Nunito,sans-serif;font-size:clamp(26px,7vw,36px);margin-
 .app.eg{--c:var(--cyan)} .app.ms{--c:var(--amb)}
 .ic img{width:66px;height:66px;border-radius:18px;display:block}
 .tx{flex:1;min-width:0}
-.tx b{display:block;font-size:20px;font-family:Orbitron,Nunito,sans-serif}
+.tx b{display:block;font-size:clamp(17px,4.8vw,20px);font-family:Orbitron,Nunito,sans-serif;line-height:1.2}
 .tx small{display:block;color:var(--c);font-weight:900;font-size:13px;margin-top:2px}
 .tx i{display:block;font-style:normal;color:var(--mut);font-size:13.5px;margin-top:4px}
-.go{flex:none;font-family:Orbitron,Nunito,sans-serif;font-weight:800;font-size:13px;padding:10px 12px;border-radius:14px;background:var(--c);color:#05080f}
+.go{flex:none;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;font-size:17px;background:var(--c);color:#05080f;box-shadow:0 0 16px -4px var(--c)}
 .card{padding:16px;border-radius:20px;background:rgba(18,26,51,.8);border:1px solid var(--line);margin-top:14px}
 .card h2{font-size:17px;margin-bottom:6px}
 .card p,.card li{color:#cdd3ff;font-size:14.5px}
 .card ol{padding-left:20px;margin-top:6px}
 footer{text-align:center;color:var(--mut);font-size:12.5px;margin-top:22px}
-@media (max-width:380px){.go{display:none}.ic img{width:56px;height:56px}}
+@media (max-width:380px){.ic img{width:54px;height:54px}.app{gap:11px;padding:14px}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -48,9 +48,9 @@ footer{text-align:center;color:var(--mut);font-size:12.5px;margin-top:22px}
 <main class="wrap">
   <header class="topo"><div class="logo">📚</div><h1>Estudos Gamer</h1><p>Escolha o seu app e bora estudar jogando!</p></header>
   <a class="app eg" href="estudo-gamer/"><span class="ic"><img src="icons/eg-192.png" alt=""></span>
-    <span class="tx"><b>Estudo Gamer</b><small>AV2 de dezembro • 5º ano</small><i>As 6 matérias da AV2 em trilhas, com simulados, gabarito, chefão, duelo e muito mais.</i></span><span class="go">JOGAR ▶</span></a>
+    <span class="tx"><b>Estudo Gamer</b><small>AV2 de dezembro • 5º ano</small><i>As 6 matérias da AV2 em trilhas, com simulados, gabarito, chefão, duelo e muito mais.</i></span><span class="go" aria-hidden="true">▶</span></a>
   <a class="app ms" href="missao-saber/"><span class="ic"><img src="icons/ms-192.png" alt=""></span>
-    <span class="tx"><b>Missão Saber</b><small>6 matérias • 30 assuntos</small><i>Aprenda de tudo: frações, planetas, Egito, estados e capitais, inglês e mais.</i></span><span class="go">JOGAR ▶</span></a>
+    <span class="tx"><b>Missão Saber</b><small>6 matérias • 30 assuntos</small><i>Aprenda de tudo: frações, planetas, Egito, estados e capitais, inglês e mais.</i></span><span class="go" aria-hidden="true">▶</span></a>
   <section class="card"><h2>📲 Instale no celular</h2>
     <p id="instTxt">Abra o app que você quer e use o menu do navegador:</p>
     <ol id="instPassos"><li>No <b>Android</b> (Chrome): menu <b>⋮</b> → <b>Instalar app</b> ou <b>Adicionar à tela inicial</b>.</li>
