@@ -1,0 +1,31 @@
+{
+ "name": "Missão Saber • Aprenda vários assuntos",
+ "short_name": "Missão Saber",
+ "description": "App de estudos gamificado com 6 matérias e 30 assuntos do Ensino Fundamental: aprenda jogando.",
+ "lang": "pt-BR",
+ "dir": "ltr",
+ "start_url": "./",
+ "scope": "./",
+ "display": "standalone",
+ "orientation": "portrait",
+ "background_color": "#070a14",
+ "theme_color": "#070a14",
+ "icons": [
+  {
+   "src": "../icons/ms-192.png",
+   "sizes": "192x192",
+   "type": "image/png"
+  },
+  {
+   "src": "../icons/ms-512.png",
+   "sizes": "512x512",
+   "type": "image/png"
+  },
+  {
+   "src": "../icons/ms-maskable-512.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "maskable"
+  }
+ ]
+}

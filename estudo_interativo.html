@@ -5502,6 +5502,20 @@ function resumoSemana(sem, meu, pos) {
     [{t: 'BORA PRA MAIS UMA! 🚀', cor: 'var(--gold)'}], f));
 }
 
+/* ---------- Instalar como app (quando aberto como site) ---------- */
+let PEDIDO_INSTALA = null;
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); PEDIDO_INSTALA = e; const b = $('#pInstala'); if (b) b.classList.remove('hide'); });
+addEventListener('appinstalled', () => { PEDIDO_INSTALA = null; toast('📲 App instalado! Procure o ícone na tela inicial.'); });
+const appInstalado = () => { try { return matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; } catch (e) { return false; } };
+function instalarApp() {
+  if (PEDIDO_INSTALA) { const p = PEDIDO_INSTALA; PEDIDO_INSTALA = null; p.prompt(); p.userChoice.then(c => { if (c && c.outcome === 'accepted') SFX.win(); }).catch(() => {}); return; }
+  const ios = /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  janela('<div class="big">📲</div><h2 class="orb">Instalar no celular</h2><p style="text-align:left;line-height:1.6">' +
+    (ios ? '1. Abra esta página no <b>Safari</b>.<br>2. Toque em <b>Compartilhar</b> (o quadrado com a setinha ⬆️).<br>3. Escolha <b>Adicionar à Tela de Início</b>.'
+      : '1. Toque no menu do navegador (<b>⋮</b>).<br>2. Escolha <b>Instalar app</b> ou <b>Adicionar à tela inicial</b>.') +
+    '<br><br>Depois da primeira visita, o app funciona até <b>sem internet</b> 🚀</p>', [{t: 'ENTENDI 👍'}]);
+}
+
 
 /* ---------- ABA LIGA (ranking da semana) ---------- */
 function hash01(s) { let h = 2166136261; for (const c of s) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967295; }
@@ -5561,6 +5575,7 @@ function abaPerfil() {
     (TTS ? '<button class="toggle' + (DB.narrador ? ' on' : '') + '" id="tNar"><span>🎙️ Narrador automático<small>Lê os cards e as perguntas em voz alta</small></span><span class="sw"></span></button>' : '') +
     '<button class="toggle' + (DB.grande ? ' on' : '') + '" id="tGr"><span>🔎 Letras maiores<small>Aumenta o tamanho de tudo na tela</small></span><span class="sw"></span></button>' +
     '<button class="toggle' + (DB.calmo ? ' on' : '') + '" id="tCalmo"><span>😌 Modo calmo<small>Menos animações e sem confete</small></span><span class="sw"></span></button>' +
+    (window.SITE && !appInstalado() ? '<button class="btn w" id="pInstala" style="margin-top:10px">📲 Instalar o app no celular</button>' : '') +
     '<button class="btn w" id="pShare" style="margin-top:10px">📤 Copiar meu progresso para mandar à turma</button>' +
     '<div class="sec-t">🏅 Conquistas • ' + nConq + '/' + CONQ.length + '</div><div class="badges">' +
     CONQ.map(c => '<div class="bdg' + (p.badges[c.id] ? ' on' : '') + '"><i>' + c.e + '</i><b>' + esc(c.n) + '</b>' + esc(c.d) + '</div>').join('') + '</div>' +
@@ -5570,6 +5585,7 @@ function abaPerfil() {
     '<p class="foot">' + APP.fonte + '<br>Seu progresso fica salvo neste aparelho' + (NUVEM && NUVEM.db ? ' e na nuvem da sua conta' : '') + '.</p></div>';
   $('#pTroca').onclick = () => telaPerfil(true);
   ligaEstilo(); ligaMolduras(); ligaFotoPerfil(); ligaConta(); ligaAtalhos();
+  if ($('#pInstala')) $('#pInstala').onclick = () => { SFX.tap(); instalarApp(); };
   $('#tCalmo').onclick = () => { DB.calmo = !DB.calmo; salvar(); aplicaTema(); $('#tCalmo').classList.toggle('on', DB.calmo); SFX.tap(); };
   $('#pShare').onclick = () => compartilhar();
   $('#tGr').onclick = () => { DB.grande = !DB.grande; salvar(); aplicaTema(); $('#tGr').classList.toggle('on', DB.grande); SFX.tap(); };
@@ -5599,7 +5615,7 @@ function telaPerfil(podeFechar) {
   const criar = () => {
     const nome = $('#inNome').value.trim();
     if (!nome) { $('#inNome').focus(); $('#inNome').style.borderColor = 'var(--bad)'; SFX.no(); return; }
-    novoJogador(nome, av); P().ligaSem = semanaStr(); salvar(); ov.remove(); aplicaTema(); hud(); mostraAba('trilha', true); SFX.win(); confete(90);
+    novoJogador(nome, av); P().ligaSem = semanaStr(); DB.visto = 'v7'; salvar(); ov.remove(); aplicaTema(); hud(); mostraAba('trilha', true); SFX.win(); confete(90);
     comemora(fim => janela('<div class="mascote">' + APP.botEm + '</div><h2 class="orb">Oi, ' + esc(nome) + '!</h2><p style="text-align:left">Eu sou o <b>' + APP.bot + '</b>, seu tutor. Funciona assim:<br><br>' +
       '🗺️ Siga a <b>trilha</b>: cada lição libera a próxima.<br>❤️ Errar tira uma <b>vida</b> (elas voltam com o tempo).<br>🔁 O que você errar <b>volta</b> no fim da lição.<br>' +
       '🔥 Estude todo dia para manter a <b>ofensiva</b>.<br>' + APP.botEm + ' Eu monto seu <b>plano do dia</b> e te ajudo com dicas!</p>', [{t: 'BORA! 🚀'}], fim));
