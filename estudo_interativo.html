@@ -146,6 +146,7 @@ main{max-width:640px;margin:0 auto;padding:14px 14px calc(96px + var(--safeB))}
 .pop small{display:block;color:var(--mut);margin:3px 0 10px;font-size:13px;line-height:1.4}
 .mascote{font-size:44px;margin:2px 0;animation:bob 3s ease-in-out infinite;filter:drop-shadow(0 0 12px rgba(0,229,255,.5))}
 @keyframes bob{50%{transform:translateY(-7px) rotate(3deg)}}
+
 /* ===== botões ===== */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:14px 18px;border-radius:16px;font-weight:900;font-size:15px;
   background:var(--card);border:1px solid var(--line);transition:transform .12s,opacity .2s,filter .2s}
@@ -386,6 +387,7 @@ main{max-width:640px;margin:0 auto;padding:14px 14px calc(96px + var(--safeB))}
 .foot{color:var(--mut);font-size:12px;text-align:center;margin-top:24px;line-height:1.6}
 @media (max-width:420px){.st{padding:5px 7px;font-size:13px}.me .lvl{max-width:90px}.tx{font-size:16px}}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
 /* ===== v4: alerta de prova, missões, loja de estilo, foto, corretor ===== */
 .alerta{display:flex;align-items:center;gap:12px;padding:14px;border-radius:18px;margin-bottom:12px;background:linear-gradient(135deg,rgba(255,59,92,.25),rgba(255,138,61,.15));border:1px solid var(--bad);box-shadow:0 0 24px -8px var(--bad);animation:viewIn .4s}
 .alerta .ai{font-size:34px;animation:bump 1.6s infinite}
@@ -436,6 +438,24 @@ main{max-width:640px;margin:0 auto;padding:14px 14px calc(96px + var(--safeB))}
 .top2 .acoes{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 html.grande body{zoom:1.12}
 .lcard,.hero{overflow:clip}  /* o enfeite do canto não pode rolar o conteúdo */
+
+/* ===== v5: exemplo passo a passo e cartões de memória ===== */
+.passos{margin-top:14px;padding:12px;border-radius:16px;background:rgba(255,210,63,.07);border:1px dashed rgba(255,210,63,.5)}
+.passos .ph2{font-size:12px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);margin-bottom:6px}
+.passo{display:flex;gap:10px;align-items:flex-start;padding:7px 0;font-size:15.5px;line-height:1.45;animation:viewIn .3s}
+.passo b{flex:none;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:var(--gold);color:#1a1000;font-size:13px}
+.passos .btn{margin-top:6px;padding:10px 14px;font-size:14px;border-color:var(--gold);color:var(--gold)}
+.fcw{perspective:1100px;margin-top:6px}
+.fc{position:relative;height:270px;transition:transform .55s cubic-bezier(.2,.9,.25,1.05);transform-style:preserve-3d;cursor:pointer}
+.fc.virado{transform:rotateY(180deg)}
+.fc>div{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:24px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:22px;text-align:center;border:2px solid var(--line);box-shadow:var(--sh)}
+.fc .fa{background:linear-gradient(160deg,var(--card2),var(--card))}
+.fc .fb2{background:linear-gradient(160deg,var(--card2),var(--card));border-color:var(--c);transform:rotateY(180deg);box-shadow:0 0 30px -10px var(--c)}
+.fc b{font-size:clamp(22px,6vw,30px);line-height:1.25}
+.fc small{color:var(--mut);font-weight:900;font-size:12px;text-transform:uppercase;letter-spacing:.1em}
+.fc .fb2 small{color:var(--c)}
+.fc i{font-style:normal;color:var(--mut);font-size:13px}
+
 </style>
 </head>
 <body>
@@ -463,6 +483,16 @@ html.grande body{zoom:1.12}
 </section>
 <canvas class="confetti" id="confetti"></canvas>
 <script>
+/* ===== Configuração deste app ===== */
+const APP = {chave: 'estudoGamer.av2.v1', nome: 'Estudo Gamer', emoji: '🎮', sub: 'AV2 de Dezembro • 5º Ano', bot: 'Byte', botEm: '🤖',
+  publico: 'do 5º ano', idade: '10–11 anos', objetivo: 'estudando para a prova AV2 de dezembro', sobre: 'das matérias da AV2 ou dos assuntos extras',
+  prova: 'Simulado AV2', provaCurta: 'Simulado', provaDesc: '10 questões no formato da AV2', provaFim: 'SIMULADO CONCLUÍDO', provaFrase: 'A AV2 que se prepare!',
+  grupoProvas: 'Simulados da AV2 e provas finais', conqProvas: 'Pronto pra AV2', ultimoTitulo: 'Imortal do 5º Ano', liga: 'Liga Neon',
+  fonte: 'Conteúdo da AV2 (4º bimestre) do 5º ano, feito a partir do boletim “Saiba +” e das páginas do livro, mais assuntos extras de revisão.',
+  share: 'AV2 do 5º ano', fotoDica: 'até de outra matéria ou da AV1!', temaNome: 'Ciano Neon', cor1: '#00e5ff', cor2: '#a855f7', libExtra: true,
+  sugestoes: ['Me explica o ciclo da água', 'Discurso direto e indireto: qual a diferença?', 'Como calcular probabilidade?', 'O que é patrimônio imaterial?',
+    'Quais os tipos de poluição da água?', 'Was ou were?', 'Como funciona um circuito elétrico?', 'Dicas para a prova de amanhã']};
+
 /* =====================================================================
    CONTEÚDO — AV2 (Dezembro) • 5º Ano • 4º Bimestre
    Card: {e: emoji, k: chamada, t: título, h: texto (HTML), b: caixa, d: dica}
@@ -1237,6 +1267,7 @@ const GABARITO = {
  ]
 };
 
+
 /* ===== EXERCÍCIOS EXTRAS por unidade =====
    p: pares para ligar [esquerda, direita]
    l: lacunas [frase com ___, opções, índice da certa, explicação]
@@ -1376,6 +1407,549 @@ const EXTRA = {
   m:['The opposite of right is wrong','A knife is a tool']}
 };
 
+
+/* =====================================================================
+   BIBLIOTECA DE ASSUNTOS (Ensino Fundamental, nível 5º/6º ano)
+   Card: {e, k, t, h, b?, d?, ck?: [pergunta, opções, certa, explicação], passos?: [...]}
+   ===================================================================== */
+const LIB = [];
+LIB.push({id: 'lmat', nome: 'Matemática', em: '🧮', cor: '#ffd23f', topicos: [
+ {id: 'lmat1', titulo: 'Frações', pg: 'nível 5º/6º ano', em: '🍕',
+  cards: [
+   {e: '🍕', k: 'O que é', t: 'Fração é uma parte do inteiro',
+    h: 'Quando dividimos algo em <b>partes iguais</b>, cada pedaço é uma fração do inteiro. Uma pizza cortada em 8 pedaços iguais: cada pedaço é <b>1/8</b> (um oitavo).',
+    b: 'Se você comeu 3 pedaços, comeu <b>3/8</b> da pizza.',
+    ck: ['Uma barra de chocolate tem 4 pedaços iguais e você comeu 1. Que fração comeu?', ['1/4', '4/1', '1/2', '3/4'], 0, '1 pedaço de 4 = 1/4.']},
+   {e: '🔢', k: 'Os nomes', t: 'Numerador e denominador',
+    h: 'Na fração <b>3/8</b>:<ul><li><b>8</b> é o <b>denominador</b>: em quantas partes iguais o inteiro foi dividido.</li><li><b>3</b> é o <b>numerador</b>: quantas partes estamos considerando.</li></ul>',
+    d: 'Truque: o <b>D</b>enominador fica embaixo (<b>D</b>e baixo).',
+    ck: ['Em 5/9, qual é o denominador?', ['9', '5', '14', '45'], 0, 'O denominador fica embaixo: 9.']},
+   {e: '🟰', k: 'Equivalentes', t: 'Frações que valem o mesmo',
+    h: '<b>1/2 = 2/4 = 4/8</b>: são <b>frações equivalentes</b>, representam a mesma quantidade. Para achar uma, multiplique (ou divida) <b>em cima e embaixo pelo mesmo número</b>.',
+    passos: ['Comece com 1/2.', 'Multiplique em cima e embaixo por 3: (1 × 3) / (2 × 3).', 'Resultado: 3/6, que vale o mesmo que 1/2! ✅'],
+    ck: ['Qual fração é equivalente a 1/2?', ['3/6', '1/3', '2/3', '3/4'], 0, '1 × 3 = 3 e 2 × 3 = 6: 3/6.']},
+   {e: '⚖️', k: 'Comparar', t: 'Qual fração é maior?',
+    h: 'Com o <b>mesmo denominador</b>, é maior a que tem o <b>maior numerador</b>: 5/8 &gt; 3/8.<br>Com o <b>mesmo numerador</b>, é maior a que tem o <b>menor denominador</b>: 1/2 &gt; 1/4 (metade é mais que um quarto!).',
+    ck: ['Qual é maior: 1/3 ou 1/5?', ['1/3', '1/5', 'São iguais', 'Não dá para saber'], 0, 'Mesmo numerador: o menor denominador dá o pedaço maior.']},
+   {e: '➕', k: 'Fazendo contas', t: 'Somar e achar fração de uma quantidade',
+    h: '<b>Somar com o mesmo denominador:</b> some só os numeradores e mantenha o denominador: 2/7 + 3/7 = <b>5/7</b>.',
+    passos: ['Quanto é 3/4 de 20?', 'Divida pelo denominador: 20 ÷ 4 = 5.', 'Multiplique pelo numerador: 5 × 3 = 15.', 'Resposta: 3/4 de 20 = 15 ✅'],
+    ck: ['Quanto é 1/5 de 30?', ['6', '5', '25', '150'], 0, '30 ÷ 5 = 6.']}
+  ],
+  quiz: [
+   {q: 'Uma pizza foi cortada em 6 partes iguais e Ana comeu 2. Que fração ela comeu?', o: ['2/6', '6/2', '2/4', '4/6'], a: 0, x: '2 partes de 6: 2/6 (que é o mesmo que 1/3).'},
+   {q: 'Em 7/10, o numerador é…', o: ['7', '10', '17', '3'], a: 0, x: 'O numerador fica em cima.'},
+   {q: 'Qual destas é equivalente a 2/3?', o: ['4/6', '2/6', '3/2', '4/3'], a: 0, x: '2 × 2 = 4 e 3 × 2 = 6.'},
+   {q: '3/8 + 4/8 = ?', o: ['7/8', '7/16', '1/8', '12/8'], a: 0, x: 'Mesmo denominador: some os numeradores.'},
+   {q: 'Quanto é 1/4 de 40?', o: ['10', '4', '36', '160'], a: 0, x: '40 ÷ 4 = 10.'},
+   {q: 'Qual fração é a MAIOR?', o: ['1/2', '1/3', '1/4', '1/8'], a: 0, x: 'Mesmo numerador: vence o menor denominador.'}
+  ]},
+ {id: 'lmat2', titulo: 'Porcentagem', pg: 'nível 5º/6º ano', em: '💯',
+  cards: [
+   {e: '💯', k: 'O que é', t: 'Porcentagem quer dizer “por cem”',
+    h: 'O símbolo <b>%</b> quer dizer “de cada 100”. <b>30%</b> significa 30 de cada 100. Se 30% de uma escola gosta de futebol, de cada 100 alunos, 30 gostam.',
+    ck: ['O que significa 45%?', ['45 de cada 100', '45 de cada 10', '4,5 de cada 100', '45 inteiros'], 0, '% = por cem.']},
+   {e: '🍫', k: 'As famosas', t: 'Porcentagens que viram frações',
+    h: '<table><tr><td><b>100%</b></td><td>o todo</td></tr><tr><td><b>50%</b></td><td>metade (1/2)</td></tr><tr><td><b>25%</b></td><td>um quarto (1/4)</td></tr><tr><td><b>10%</b></td><td>um décimo (1/10)</td></tr></table>',
+    ck: ['50% é o mesmo que…', ['metade', 'um quarto', 'o dobro', 'um décimo'], 0, '50% = 1/2.']},
+   {e: '🧮', k: 'Calcular', t: 'O truque dos 10%',
+    h: 'Para achar <b>10%</b> de um número, divida por 10. Depois é só multiplicar!',
+    passos: ['Quanto é 30% de 80?', '10% de 80 = 80 ÷ 10 = 8.', '30% é 3 vezes 10%: 8 × 3 = 24.', 'Resposta: 30% de 80 = 24 ✅'],
+    ck: ['Quanto é 10% de 150?', ['15', '1,5', '150', '10'], 0, '150 ÷ 10 = 15.']},
+   {e: '🏷️', k: 'No dia a dia', t: 'Calculando descontos',
+    h: 'Um tênis custa <b>R$ 200</b> e está com <b>20% de desconto</b>. Quanto ele vai custar?',
+    passos: ['10% de 200 = 20.', '20% = 2 × 20 = R$ 40 de desconto.', 'Preço final: 200 − 40 = R$ 160 ✅'],
+    d: 'Desconto = você paga <b>menos</b>. Aumento = paga <b>mais</b>.',
+    ck: ['Uma bola custa R$ 50 e tem 10% de desconto. Quanto fica?', ['R$ 45', 'R$ 40', 'R$ 55', 'R$ 5'], 0, '10% de 50 = 5; 50 − 5 = 45.']}
+  ],
+  quiz: [
+   {q: '25% de 40 é…', o: ['10', '25', '4', '15'], a: 0, x: '25% = 1/4; 40 ÷ 4 = 10.'},
+   {q: '50% de 18 é…', o: ['9', '18', '36', '5'], a: 0, x: 'Metade de 18 = 9.'},
+   {q: 'Quanto é 20% de 60?', o: ['12', '6', '20', '30'], a: 0, x: '10% = 6; 20% = 12.'},
+   {q: 'Um jogo de R$ 100 com 30% de desconto custa…', o: ['R$ 70', 'R$ 30', 'R$ 130', 'R$ 97'], a: 0, x: '30% de 100 = 30; 100 − 30 = 70.'},
+   {q: '100% de uma pizza é…', o: ['a pizza inteira', 'metade', 'um pedaço', 'nada'], a: 0, x: '100% = o todo.'},
+   {q: 'Numa turma de 20 alunos, 50% são meninas. Quantas meninas?', o: ['10', '5', '15', '50'], a: 0, x: 'Metade de 20 = 10.'}
+  ]},
+ {id: 'lmat3', titulo: 'Geometria: perímetro e área', pg: 'nível 5º/6º ano', em: '📐',
+  cards: [
+   {e: '🔺', k: 'Figuras planas', t: 'Conheça as figuras',
+    h: '<ul><li>🔺 <b>Triângulo</b>: 3 lados.</li><li>⬛ <b>Quadrado</b>: 4 lados iguais e 4 ângulos retos.</li><li>▭ <b>Retângulo</b>: 4 lados, lados opostos iguais, 4 ângulos retos.</li><li>⚪ <b>Círculo</b>: redondo, sem lados.</li></ul>',
+    ck: ['Qual figura tem 4 lados iguais e 4 ângulos retos?', ['Quadrado', 'Triângulo', 'Círculo', 'Pentágono'], 0, 'Quadrado: 4 lados iguais.']},
+   {e: '📏', k: 'Perímetro', t: 'O contorno da figura',
+    h: '<b>Perímetro</b> é a <b>soma de todos os lados</b>, como se você desse uma volta em torno da figura.',
+    passos: ['Um retângulo tem lados de 5 cm e 3 cm.', 'Ele tem 2 lados de 5 cm e 2 lados de 3 cm.', '5 + 3 + 5 + 3 = 16 cm de perímetro ✅'],
+    ck: ['Um quadrado tem lado de 4 cm. Qual é o perímetro?', ['16 cm', '8 cm', '4 cm', '12 cm'], 0, '4 + 4 + 4 + 4 = 16 cm.']},
+   {e: '🟩', k: 'Área', t: 'O espaço de dentro',
+    h: '<b>Área</b> é o tamanho da superfície: quantos quadradinhos cabem dentro. No <b>retângulo</b> e no <b>quadrado</b>: <b>área = base × altura</b>. A unidade é <b>cm²</b> (centímetro quadrado) ou <b>m²</b>.',
+    passos: ['Retângulo com base 5 cm e altura 3 cm.', 'Área = 5 × 3.', 'Área = 15 cm² ✅ (cabem 15 quadradinhos de 1 cm)'],
+    ck: ['Qual é a área de um retângulo de 6 m por 2 m?', ['12 m²', '8 m²', '16 m²', '14 m²'], 0, '6 × 2 = 12 m².']},
+   {e: '🏠', k: 'No dia a dia', t: 'Para que serve?',
+    h: '<ul><li>🧵 <b>Perímetro</b>: quanto de cerca, fita ou rodapé eu preciso.</li><li>🧱 <b>Área</b>: quanto de piso, grama ou tinta eu preciso.</li></ul>',
+    d: 'Contorno = perímetro. Dentro = área.',
+    ck: ['Para saber quanto piso comprar, eu calculo a…', ['área', 'perímetro', 'altura', 'metade'], 0, 'O piso cobre a superfície: área.']}
+  ],
+  quiz: [
+   {q: 'Um triângulo tem quantos lados?', o: ['3', '4', '5', '0'], a: 0, x: 'Tri = três.'},
+   {q: 'Qual é o perímetro de um retângulo de 8 cm por 2 cm?', o: ['20 cm', '16 cm', '10 cm', '18 cm'], a: 0, x: '8 + 2 + 8 + 2 = 20 cm.'},
+   {q: 'Qual é a área de um quadrado de lado 5 cm?', o: ['25 cm²', '20 cm²', '10 cm²', '15 cm²'], a: 0, x: '5 × 5 = 25 cm².'},
+   {q: 'Para cercar um jardim, calculo o…', o: ['perímetro', 'área', 'volume', 'peso'], a: 0, x: 'A cerca vai no contorno.'},
+   {q: 'Uma unidade de área é…', o: ['m²', 'm', 'kg', 'L'], a: 0, x: 'Área usa unidades “ao quadrado”.'},
+   {q: 'Qual figura não tem lados?', o: ['Círculo', 'Quadrado', 'Triângulo', 'Retângulo'], a: 0, x: 'O círculo é redondo.'}
+  ]}
+]});
+LIB.push({id: 'lpor', nome: 'Português', em: '📚', cor: '#ff2d95', topicos: [
+ {id: 'lpor1', titulo: 'Classes de palavras', pg: 'nível 5º/6º ano', em: '🏷️',
+  cards: [
+   {e: '🏷️', k: 'Substantivo', t: 'Dá nome às coisas',
+    h: '<b>Substantivo</b> nomeia seres, objetos, lugares e sentimentos: <b>menino, cachorro, escola, Brasil, alegria</b>.<ul><li><b>Próprio</b>: nome específico, com letra maiúscula (Maria, Recife).</li><li><b>Comum</b>: nome geral (menina, cidade).</li></ul>',
+    ck: ['Qual palavra é um substantivo próprio?', ['Brasil', 'cidade', 'bonito', 'correr'], 0, 'Nome específico, com letra maiúscula.']},
+   {e: '🎨', k: 'Adjetivo', t: 'Dá qualidade',
+    h: '<b>Adjetivo</b> mostra como é o substantivo: <b>bonito, alto, feliz, azul, gelado</b>.<br>Ex.: “O cachorro <b>peludo</b> é <b>brincalhão</b>.”',
+    ck: ['Em “a casa amarela”, o adjetivo é…', ['amarela', 'casa', 'a', 'nenhum'], 0, 'Amarela diz como é a casa.']},
+   {e: '🏃', k: 'Verbo', t: 'Ação, estado ou fenômeno',
+    h: '<b>Verbo</b> indica <b>ação</b> (correr, estudar), <b>estado</b> (ser, estar, ficar) ou <b>fenômeno da natureza</b> (chover, ventar). Ele muda com o tempo:<ul><li>Passado: eu <b>estudei</b></li><li>Presente: eu <b>estudo</b></li><li>Futuro: eu <b>estudarei</b></li></ul>',
+    ck: ['Qual palavra é um verbo?', ['pular', 'mesa', 'alegre', 'janela'], 0, 'Pular é uma ação.']},
+   {e: '🅰️', k: 'Artigo', t: 'Acompanha o substantivo',
+    h: '<b>Artigos</b> vêm antes do substantivo: <b>o, a, os, as</b> (definidos) e <b>um, uma, uns, umas</b> (indefinidos).',
+    d: 'Teste rápido: se dá para colocar “o” ou “a” antes da palavra, ela provavelmente é um substantivo!',
+    ck: ['Em “uma bola nova”, qual é o artigo?', ['uma', 'bola', 'nova', 'não tem'], 0, 'Uma = artigo indefinido.']}
+  ],
+  quiz: [
+   {q: 'Em “O gato preto dorme”, qual palavra é o verbo?', o: ['dorme', 'gato', 'preto', 'O'], a: 0, x: 'Dormir é uma ação.'},
+   {q: 'Qual é um substantivo comum?', o: ['cidade', 'Paris', 'Ana', 'Amazonas'], a: 0, x: 'Nome geral, não específico.'},
+   {q: 'Na frase “A menina feliz cantou”, o adjetivo é…', o: ['feliz', 'menina', 'cantou', 'A'], a: 0, x: 'Feliz diz como a menina está.'},
+   {q: '“Chover” é um verbo que indica…', o: ['fenômeno da natureza', 'estado', 'qualidade', 'lugar'], a: 0, x: 'Chuva é um fenômeno da natureza.'},
+   {q: 'Qual destes é um artigo definido?', o: ['os', 'uns', 'umas', 'um'], a: 0, x: 'Definidos: o, a, os, as.'},
+   {q: '“Eu estudarei amanhã.” O verbo está no…', o: ['futuro', 'passado', 'presente', 'nenhum tempo'], a: 0, x: 'Amanhã: futuro.'}
+  ]},
+ {id: 'lpor2', titulo: 'Pontuação', pg: 'nível 5º/6º ano', em: '❗',
+  cards: [
+   {e: '⏺️', k: 'Ponto final', t: 'O fim da frase',
+    h: 'O <b>ponto final (.)</b> encerra uma frase que afirma ou nega algo: “Hoje está calor.” “Eu não gosto de chuva.”',
+    ck: ['Qual sinal encerra uma frase que só afirma algo?', ['ponto final', 'interrogação', 'exclamação', 'vírgula'], 0, 'Frase que afirma termina com ponto final.']},
+   {e: '❓', k: 'Interrogação e exclamação', t: 'Perguntar e se emocionar',
+    h: '<ul><li><b>?</b> Ponto de interrogação: perguntas. “Você vem?”</li><li><b>!</b> Ponto de exclamação: emoção, susto, alegria ou ordem. “Que lindo!”</li></ul>',
+    ck: ['“Que susto___” Qual sinal completa?', ['!', '?', '.', ','], 0, 'Emoção = exclamação.']},
+   {e: '〰️', k: 'Vírgula', t: 'Pausas e listas',
+    h: 'A <b>vírgula (,)</b> separa itens de uma lista e marca pausas: “Comprei arroz, feijão, ovos e leite.” Também separa quem é chamado: “<b>Pedro,</b> venha cá!”',
+    ck: ['Onde vai a vírgula em “Comprei maçã banana e uva”?', ['depois de maçã', 'depois de uva', 'antes de comprei', 'não vai vírgula'], 0, 'Maçã, banana e uva.']},
+   {e: '💬', k: 'Dois-pontos e travessão', t: 'Falas e explicações',
+    h: '<ul><li><b>Dois-pontos (:)</b> anunciam uma fala, uma lista ou uma explicação.</li><li><b>Travessão (–)</b> marca a fala do personagem num diálogo.</li><li><b>Reticências (...)</b> mostram que o pensamento ficou no ar.</li></ul>',
+    b: 'A mãe perguntou:<br>– Já fez a lição?',
+    ck: ['Qual sinal marca a fala do personagem num diálogo?', ['travessão', 'vírgula', 'ponto final', 'reticências'], 0, '– Já fez a lição?']}
+  ],
+  quiz: [
+   {q: 'Qual sinal usamos no fim de uma pergunta?', o: ['?', '!', '.', ','], a: 0, x: 'Pergunta = interrogação.'},
+   {q: '“Oba, ganhamos___” Qual sinal combina?', o: ['!', '?', ',', ':'], a: 0, x: 'Alegria = exclamação.'},
+   {q: 'A vírgula serve para…', o: ['separar itens de uma lista', 'fazer perguntas', 'terminar o texto', 'mostrar a fala'], a: 0, x: 'Também marca pausas.'},
+   {q: 'Os dois-pontos (:) podem anunciar…', o: ['uma fala ou uma lista', 'o fim do texto', 'uma pergunta', 'um susto'], a: 0, x: 'Ex.: “Ele disse:”.'},
+   {q: 'As reticências (...) indicam…', o: ['um pensamento que ficou no ar', 'uma pergunta', 'uma ordem', 'o fim do livro'], a: 0, x: 'Algo que não foi terminado.'},
+   {q: 'Qual frase está pontuada corretamente?', o: ['Você vai à festa?', 'Você vai à festa!.', 'Você, vai à festa', 'Você vai, à festa?'], a: 0, x: 'Pergunta termina com ponto de interrogação.'}
+  ]},
+ {id: 'lpor3', titulo: 'Ortografia: S, SS, Ç, X e CH', pg: 'nível 5º/6º ano', em: '✍️',
+  cards: [
+   {e: '🐍', k: 'S entre vogais', t: 'S com som de Z',
+    h: 'Entre duas vogais, o <b>S</b> tem som de <b>Z</b>: ca<b>s</b>a, me<b>s</b>a, ro<b>s</b>a, a<b>s</b>a.',
+    ck: ['Em “casa”, o S tem som de…', ['Z', 'S', 'X', 'CH'], 0, 'Entre vogais, o S soa como Z.']},
+   {e: '💨', k: 'SS', t: 'Som de S entre vogais',
+    h: 'Para ter som de <b>S</b> entre duas vogais, use <b>SS</b>: pa<b>ss</b>eio, o<b>ss</b>o, pá<b>ss</b>aro, ma<b>ss</b>a.',
+    ck: ['Complete: pá___aro', ['ss', 's', 'ç', 'c'], 0, 'Som de S entre vogais: SS.']},
+   {e: '🦢', k: 'Ç (cê-cedilha)', t: 'Só antes de A, O e U',
+    h: 'O <b>Ç</b> tem som de S e só aparece antes de <b>a, o, u</b>: ca<b>ç</b>a, po<b>ç</b>o, a<b>ç</b>úcar.<ul><li>❌ Nunca antes de E ou I (use C: cebola, cinema).</li><li>❌ Nunca no começo da palavra.</li></ul>',
+    ck: ['Qual palavra está escrita certo?', ['açúcar', 'açeite', 'çapato', 'çinema'], 0, 'Ç só antes de a, o, u, e nunca no início.']},
+   {e: '❎', k: 'X ou CH', t: 'Dicas para acertar',
+    h: '<ul><li>Depois de <b>ditongo</b> (duas vogais juntas na sílaba), use <b>X</b>: ca<b>ix</b>a, pe<b>ix</b>e, fr<b>oux</b>o.</li><li>Depois de <b>en-</b>, geralmente <b>X</b>: en<b>x</b>ada, en<b>x</b>urrada (exceção: <b>encher</b>).</li><li>Na dúvida, consulte o dicionário! 📖</li></ul>',
+    ck: ['Complete: pei___e', ['x', 'ch', 's', 'ss'], 0, 'Depois do ditongo “ei”: X.']}
+  ],
+  quiz: [
+   {q: 'Complete: pa___eio', o: ['ss', 's', 'ç', 'x'], a: 0, x: 'Som de S entre vogais: SS.'},
+   {q: 'Qual está correta?', o: ['cebola', 'çebola', 'sebola', 'ssebola'], a: 0, x: 'Antes de E usa-se C.'},
+   {q: 'Em “rosa”, o S soa como…', o: ['Z', 'S', 'X', 'CH'], a: 0, x: 'Entre vogais, S tem som de Z.'},
+   {q: 'Complete: cai___a', o: ['x', 'ch', 'ss', 'ç'], a: 0, x: 'Depois do ditongo “ai”: X.'},
+   {q: 'Complete: po___o (buraco com água)', o: ['ç', 'ss', 's', 'x'], a: 0, x: 'Poço: Ç antes de O.'},
+   {q: 'Qual palavra está ERRADA?', o: ['çapato', 'caçador', 'pedaço', 'moça'], a: 0, x: 'Nenhuma palavra começa com Ç: o certo é sapato.'}
+  ]}
+]});
+
+
+LIB.push({id: 'lcie', nome: 'Ciências', em: '🔬', cor: '#22ff88', topicos: [
+ {id: 'lcie1', titulo: 'Sistema Solar', pg: 'nível 5º/6º ano', em: '🪐',
+  cards: [
+   {e: '☀️', k: 'O Sol', t: 'Nossa estrela',
+    h: 'O <b>Sol</b> é uma <b>estrela</b>: uma enorme bola de gás muito quente que produz luz e calor. Os planetas giram ao redor dele.',
+    ck: ['O Sol é…', ['uma estrela', 'um planeta', 'um satélite', 'um cometa'], 0, 'O Sol é a estrela do nosso sistema.']},
+   {e: '🪐', k: 'Os planetas', t: '8 planetas, em ordem',
+    h: 'Do mais perto para o mais longe do Sol:<br><b>Mercúrio, Vênus, Terra, Marte, Júpiter, Saturno, Urano e Netuno.</b>',
+    d: 'Frase para lembrar: “<b>M</b>inha <b>V</b>ó <b>T</b>em <b>M</b>uitas <b>J</b>oias, <b>S</b>ó <b>U</b>sa <b>N</b>ovas.”',
+    ck: ['Qual planeta é o mais próximo do Sol?', ['Mercúrio', 'Vênus', 'Terra', 'Netuno'], 0, 'Mercúrio é o primeiro.']},
+   {e: '🌍', k: 'Movimentos da Terra', t: 'Rotação e translação',
+    h: '<ul><li>🔄 <b>Rotação</b>: a Terra gira em torno de si mesma em cerca de <b>24 horas</b> → <b>dia e noite</b>.</li><li>☀️ <b>Translação</b>: a Terra dá a volta no Sol em cerca de <b>365 dias</b> → <b>um ano</b>.</li></ul>',
+    ck: ['O movimento que forma o dia e a noite é a…', ['rotação', 'translação', 'órbita da Lua', 'gravidade'], 0, 'Rotação: a Terra gira em torno de si mesma.']},
+   {e: '🌙', k: 'A Lua', t: 'Nosso satélite natural',
+    h: 'A <b>Lua</b> gira ao redor da Terra e não tem luz própria: ela <b>reflete a luz do Sol</b>. Suas fases são <b>nova, crescente, cheia e minguante</b>.',
+    b: 'Curiosidades: <b>Júpiter</b> é o maior planeta; <b>Vênus</b> é o mais quente; <b>Plutão</b> hoje é chamado de <b>planeta-anão</b>.',
+    ck: ['A Lua brilha porque…', ['reflete a luz do Sol', 'tem luz própria', 'é uma estrela', 'pega fogo'], 0, 'Ela reflete a luz do Sol.']}
+  ],
+  quiz: [
+   {q: 'Quantos planetas tem o Sistema Solar?', o: ['8', '9', '7', '10'], a: 0, x: 'Plutão passou a ser planeta-anão.'},
+   {q: 'Qual é o maior planeta?', o: ['Júpiter', 'Terra', 'Marte', 'Mercúrio'], a: 0, x: 'Júpiter é um gigante gasoso.'},
+   {q: 'A translação da Terra dura cerca de…', o: ['365 dias', '24 horas', '30 dias', '1 semana'], a: 0, x: 'Uma volta no Sol = um ano.'},
+   {q: 'Qual planeta vem logo depois da Terra?', o: ['Marte', 'Vênus', 'Júpiter', 'Saturno'], a: 0, x: 'Mercúrio, Vênus, Terra, Marte…'},
+   {q: 'A Lua é um…', o: ['satélite natural', 'planeta', 'estrela', 'asteroide'], a: 0, x: 'Ela gira ao redor da Terra.'},
+   {q: 'O dia e a noite acontecem por causa da…', o: ['rotação da Terra', 'translação da Terra', 'fase da Lua', 'chuva'], a: 0, x: 'A Terra gira em torno de si em 24 horas.'}
+  ]},
+ {id: 'lcie2', titulo: 'Corpo humano', pg: 'nível 5º/6º ano', em: '🫀',
+  cards: [
+   {e: '🍎', k: 'Sistema digestório', t: 'Transformando comida em energia',
+    h: 'O caminho do alimento: <b>boca</b> (mastiga) → <b>esôfago</b> → <b>estômago</b> (digere) → <b>intestino delgado</b> (absorve os nutrientes) → <b>intestino grosso</b> (absorve água e forma as fezes).',
+    ck: ['Onde a maior parte dos nutrientes é absorvida?', ['intestino delgado', 'esôfago', 'boca', 'intestino grosso'], 0, 'O intestino delgado absorve os nutrientes.']},
+   {e: '🫁', k: 'Sistema respiratório', t: 'O caminho do ar',
+    h: 'O ar entra pelo <b>nariz</b> → <b>traqueia</b> → <b>brônquios</b> → <b>pulmões</b>. Nos pulmões, o corpo pega o <b>oxigênio</b> e solta o <b>gás carbônico</b>. O <b>diafragma</b> é o músculo que ajuda a respirar.',
+    ck: ['Qual gás o corpo precisa pegar do ar?', ['oxigênio', 'gás carbônico', 'fumaça', 'vapor'], 0, 'Inspiramos oxigênio e soltamos gás carbônico.']},
+   {e: '🫀', k: 'Sistema circulatório', t: 'O sangue viajando',
+    h: 'O <b>coração</b> é uma bomba que empurra o <b>sangue</b> pelo corpo.<ul><li><b>Artérias</b>: levam o sangue <b>do coração</b> para o corpo.</li><li><b>Veias</b>: trazem o sangue <b>de volta</b> ao coração.</li></ul>O sangue leva <b>oxigênio e nutrientes</b> para todas as células.',
+    ck: ['Os vasos que levam o sangue para fora do coração são as…', ['artérias', 'veias', 'unhas', 'costelas'], 0, 'Artérias saem do coração.']},
+   {e: '💪', k: 'Saúde', t: 'Cuidando do corpo',
+    h: '<ul><li>🥦 Comer frutas e verduras e beber água.</li><li>⚽ Fazer exercícios.</li><li>😴 Dormir bem.</li><li>🧼 Lavar as mãos.</li></ul>',
+    d: 'Os sistemas trabalham <b>juntos</b>: a comida dá nutrientes, os pulmões dão oxigênio e o sangue entrega tudo!',
+    ck: ['Qual hábito ajuda a saúde?', ['dormir bem', 'passar o dia sem beber água', 'não lavar as mãos', 'comer só doce'], 0, 'Dormindo, o corpo se recupera.']}
+  ],
+  quiz: [
+   {q: 'Qual órgão bombeia o sangue?', o: ['coração', 'pulmão', 'estômago', 'fígado'], a: 0, x: 'O coração é a bomba do corpo.'},
+   {q: 'O ar passa pela traqueia e chega aos…', o: ['pulmões', 'rins', 'intestinos', 'ossos'], a: 0, x: 'Nariz → traqueia → brônquios → pulmões.'},
+   {q: 'O alimento sai da boca e passa pelo…', o: ['esôfago', 'pulmão', 'coração', 'nariz'], a: 0, x: 'O esôfago liga a boca ao estômago.'},
+   {q: 'As veias levam o sangue…', o: ['de volta ao coração', 'para fora do coração', 'para o estômago', 'só para a pele'], a: 0, x: 'Veias voltam; artérias saem.'},
+   {q: 'O intestino grosso absorve principalmente…', o: ['água', 'oxigênio', 'sangue', 'ar'], a: 0, x: 'E forma as fezes.'},
+   {q: 'Quando soltamos o ar (expiramos), eliminamos…', o: ['gás carbônico', 'oxigênio puro', 'água sólida', 'nutrientes'], a: 0, x: 'Pegamos oxigênio e soltamos gás carbônico.'}
+  ]},
+ {id: 'lcie3', titulo: 'Ecossistemas e cadeia alimentar', pg: 'nível 5º/6º ano', em: '🦁',
+  cards: [
+   {e: '🌳', k: 'Ecossistema', t: 'Seres vivos + ambiente',
+    h: 'Um <b>ecossistema</b> é o conjunto dos <b>seres vivos</b> (plantas, animais, fungos, bactérias) e do <b>ambiente</b> onde vivem (água, solo, ar, luz). Uma lagoa, uma floresta e até um aquário são ecossistemas.',
+    ck: ['Um ecossistema tem…', ['seres vivos e o ambiente', 'só animais', 'só plantas', 'só água'], 0, 'Seres vivos + ambiente.']},
+   {e: '🌱', k: 'Produtores', t: 'Quem faz o próprio alimento',
+    h: 'As <b>plantas</b> são <b>produtoras</b>: fazem o próprio alimento pela <b>fotossíntese</b>, usando luz do Sol, água e gás carbônico.',
+    ck: ['As plantas fazem o próprio alimento pela…', ['fotossíntese', 'digestão', 'respiração das raízes', 'chuva'], 0, 'Fotossíntese.']},
+   {e: '🐛', k: 'Consumidores', t: 'Quem come quem',
+    h: '<ul><li>🐰 <b>Consumidor primário</b>: come plantas (herbívoro).</li><li>🦊 <b>Consumidor secundário</b>: come o herbívoro.</li><li>🦅 <b>Consumidor terciário</b>: come o consumidor secundário.</li></ul>',
+    b: 'Exemplo: 🌿 capim → 🦗 gafanhoto → 🐸 sapo → 🐍 cobra',
+    ck: ['Na cadeia capim → gafanhoto → sapo, o gafanhoto é…', ['consumidor primário', 'produtor', 'decompositor', 'consumidor secundário'], 0, 'Ele come a planta: primário.']},
+   {e: '🍄', k: 'Decompositores', t: 'Os recicladores da natureza',
+    h: '<b>Fungos e bactérias</b> são <b>decompositores</b>: transformam restos de seres mortos em nutrientes que voltam para o solo e ajudam as plantas a crescer.',
+    d: 'Na cadeia alimentar, a seta (→) aponta para <b>quem come</b>: ela mostra o caminho da energia.',
+    ck: ['Quem são os decompositores?', ['fungos e bactérias', 'plantas', 'leões', 'pássaros'], 0, 'Fungos e bactérias reciclam os restos.']}
+  ],
+  quiz: [
+   {q: 'Toda cadeia alimentar começa com um…', o: ['produtor', 'carnívoro', 'decompositor', 'consumidor terciário'], a: 0, x: 'Sempre uma planta (ou alga).'},
+   {q: 'Um animal que só come plantas é…', o: ['herbívoro', 'carnívoro', 'decompositor', 'produtor'], a: 0, x: 'Herbívoro = come plantas.'},
+   {q: 'Em “capim → zebra → leão”, o leão é…', o: ['consumidor secundário', 'produtor', 'consumidor primário', 'decompositor'], a: 0, x: 'Ele come o herbívoro.'},
+   {q: 'Fungos e bactérias que reciclam restos são…', o: ['decompositores', 'produtores', 'herbívoros', 'predadores'], a: 0, x: 'Eles devolvem nutrientes ao solo.'},
+   {q: 'Para a fotossíntese, a planta precisa de…', o: ['luz, água e gás carbônico', 'só terra', 'só sombra', 'carne'], a: 0, x: 'Com isso ela produz alimento e libera oxigênio.'},
+   {q: 'Se os sapos sumirem de um ecossistema, os gafanhotos podem…', o: ['aumentar muito', 'sumir na mesma hora', 'virar plantas', 'não mudar nada'], a: 0, x: 'Sem predador, a população cresce e o equilíbrio se perde.'}
+  ]}
+]});
+LIB.push({id: 'lgeo', nome: 'Geografia', em: '🗺️', cor: '#00e5ff', topicos: [
+ {id: 'lgeo1', titulo: 'Regiões do Brasil', pg: 'nível 5º/6º ano', em: '🇧🇷',
+  cards: [
+   {e: '🇧🇷', k: 'Divisão', t: '26 estados + Distrito Federal',
+    h: 'O Brasil tem <b>26 estados</b> e o <b>Distrito Federal</b>, onde fica <b>Brasília</b>, a capital do país. O IBGE divide o país em <b>5 regiões</b>: <b>Norte, Nordeste, Centro-Oeste, Sudeste e Sul</b>.',
+    ck: ['Quantas regiões tem o Brasil?', ['5', '4', '26', '7'], 0, 'Norte, Nordeste, Centro-Oeste, Sudeste e Sul.']},
+   {e: '🌴', k: 'Norte e Nordeste', t: 'A maior em área e a com mais estados',
+    h: '<ul><li>🌳 <b>Norte</b>: a <b>maior região em área</b>, com grande parte da Floresta Amazônica (AM, PA, AC, RO, RR, AP e TO).</li><li>☀️ <b>Nordeste</b>: a região com <b>mais estados (9)</b>, famosa pelo litoral, pelo forró e pela Caatinga.</li></ul>',
+    ck: ['Qual região tem mais estados?', ['Nordeste', 'Norte', 'Sul', 'Sudeste'], 0, 'O Nordeste tem 9 estados.']},
+   {e: '🏙️', k: 'Centro-Oeste, Sudeste e Sul', t: 'Cerrado, cidades grandes e frio',
+    h: '<ul><li>🐂 <b>Centro-Oeste</b>: Cerrado e Pantanal, grande produção agrícola; é onde fica o Distrito Federal.</li><li>🏙️ <b>Sudeste</b>: a região <b>mais populosa</b> (SP, RJ, MG e ES).</li><li>❄️ <b>Sul</b>: a região <b>mais fria</b> (PR, SC e RS).</li></ul>',
+    ck: ['Qual é a região mais populosa?', ['Sudeste', 'Norte', 'Centro-Oeste', 'Sul'], 0, 'Sudeste: SP, RJ, MG e ES.']}
+  ],
+  quiz: [
+   {q: 'Qual é a capital do Brasil?', o: ['Brasília', 'Rio de Janeiro', 'São Paulo', 'Salvador'], a: 0, x: 'Brasília fica no Distrito Federal.'},
+   {q: 'A maior região em área é a…', o: ['Norte', 'Sul', 'Sudeste', 'Nordeste'], a: 0, x: 'Ela tem grande parte da Amazônia.'},
+   {q: 'O Rio Grande do Sul fica na região…', o: ['Sul', 'Sudeste', 'Norte', 'Nordeste'], a: 0, x: 'Sul: PR, SC e RS.'},
+   {q: 'Pernambuco e Bahia ficam no…', o: ['Nordeste', 'Norte', 'Sul', 'Centro-Oeste'], a: 0, x: 'Dois dos 9 estados nordestinos.'},
+   {q: 'Quantos estados o Brasil tem, sem contar o DF?', o: ['26', '27', '5', '20'], a: 0, x: '26 estados + Distrito Federal.'},
+   {q: 'O Distrito Federal fica na região…', o: ['Centro-Oeste', 'Sudeste', 'Norte', 'Sul'], a: 0, x: 'Junto com MT, MS e GO.'}
+  ]},
+ {id: 'lgeo2', titulo: 'Biomas brasileiros', pg: 'nível 5º/6º ano', em: '🌿',
+  cards: [
+   {e: '🌳', k: 'Amazônia', t: 'A maior floresta tropical',
+    h: 'A <b>Amazônia</b> é o <b>maior bioma</b> do Brasil: floresta tropical úmida, muita chuva, rios enormes e uma biodiversidade gigante (onça-pintada, boto-cor-de-rosa, arara…).',
+    ck: ['Qual é o maior bioma do Brasil?', ['Amazônia', 'Pampa', 'Caatinga', 'Pantanal'], 0, 'A Amazônia.']},
+   {e: '🌵', k: 'Cerrado e Caatinga', t: 'Savana e semiárido',
+    h: '<ul><li>🌾 <b>Cerrado</b>: no centro do país, árvores de galhos tortos e casca grossa; é chamado de “berço das águas” por ter muitas nascentes.</li><li>🌵 <b>Caatinga</b>: no Nordeste, clima <b>semiárido</b> (pouca chuva), plantas como o <b>mandacaru</b>. Só existe no Brasil!</li></ul>',
+    ck: ['Qual bioma só existe no Brasil e tem clima semiárido?', ['Caatinga', 'Amazônia', 'Pampa', 'Mata Atlântica'], 0, 'A Caatinga é exclusivamente brasileira.']},
+   {e: '🦜', k: 'Mata Atlântica, Pantanal e Pampa', t: 'Litoral, áreas alagadas e campos',
+    h: '<ul><li>🌴 <b>Mata Atlântica</b>: no litoral, é o bioma <b>mais desmatado</b>; restam só pedaços.</li><li>🐊 <b>Pantanal</b>: a maior planície <b>alagável</b> do mundo (MT e MS), cheia de jacarés e aves.</li><li>🐎 <b>Pampa</b>: campos com vegetação rasteira, no Rio Grande do Sul.</li></ul>',
+    ck: ['Qual bioma fica alagado em boa parte do ano?', ['Pantanal', 'Caatinga', 'Cerrado', 'Pampa'], 0, 'Pantanal: planície alagável.']}
+  ],
+  quiz: [
+   {q: 'O mandacaru é uma planta típica da…', o: ['Caatinga', 'Amazônia', 'Mata Atlântica', 'Pampa'], a: 0, x: 'Ela aguenta a seca do semiárido.'},
+   {q: 'O bioma mais desmatado do Brasil é a…', o: ['Mata Atlântica', 'Amazônia', 'Pantanal', 'Pampa'], a: 0, x: 'Restam só pedaços dela.'},
+   {q: 'O Cerrado é chamado de “berço das águas” porque…', o: ['tem muitas nascentes', 'fica no mar', 'neva muito', 'não tem rios'], a: 0, x: 'Muitos rios nascem lá.'},
+   {q: 'O Pampa fica principalmente no…', o: ['Rio Grande do Sul', 'Amazonas', 'Ceará', 'Pará'], a: 0, x: 'Campos do Sul.'},
+   {q: 'Quantos biomas o Brasil tem?', o: ['6', '3', '10', '2'], a: 0, x: 'Amazônia, Cerrado, Caatinga, Mata Atlântica, Pantanal e Pampa.'},
+   {q: 'O boto-cor-de-rosa vive nos rios da…', o: ['Amazônia', 'Caatinga', 'Pampa', 'cidade'], a: 0, x: 'Ele é um símbolo da Amazônia.'}
+  ]},
+ {id: 'lgeo3', titulo: 'Orientação e mapas', pg: 'nível 5º/6º ano', em: '🧭',
+  cards: [
+   {e: '🧭', k: 'Pontos cardeais', t: 'Norte, Sul, Leste e Oeste',
+    h: 'Os 4 <b>pontos cardeais</b> são <b>Norte (N), Sul (S), Leste (L) e Oeste (O)</b>. O Sol <b>nasce</b> do lado <b>leste</b> e se <b>põe</b> do lado <b>oeste</b>.',
+    d: 'Truque: aponte o braço direito para onde o Sol nasce (leste). Sua frente é o norte, suas costas o sul, e o braço esquerdo aponta o oeste!',
+    ck: ['O Sol nasce do lado…', ['leste', 'oeste', 'norte', 'sul'], 0, 'Nasce no leste e se põe no oeste.']},
+   {e: '✳️', k: 'Rosa dos ventos', t: 'Os pontos colaterais',
+    h: 'Entre os cardeais ficam os <b>pontos colaterais</b>: <b>Nordeste (NE)</b>, <b>Sudeste (SE)</b>, <b>Sudoeste (SO)</b> e <b>Noroeste (NO)</b>. A <b>rosa dos ventos</b> mostra todos eles.',
+    ck: ['Entre o norte e o leste fica o…', ['nordeste', 'noroeste', 'sudeste', 'sudoeste'], 0, 'Norte + leste = nordeste.']},
+   {e: '🗺️', k: 'Elementos do mapa', t: 'Título, legenda e escala',
+    h: '<ul><li>📌 <b>Título</b>: diz o que o mapa mostra.</li><li>🔣 <b>Legenda</b>: explica os símbolos e as cores.</li><li>📏 <b>Escala</b>: mostra quanto o lugar real foi reduzido (ex.: 1 cm no mapa = 10 km no real).</li><li>🧭 <b>Rosa dos ventos</b>: mostra as direções.</li></ul>',
+    passos: ['Se 1 cm no mapa = 10 km na realidade…', '…e duas cidades estão a 3 cm no mapa,', 'a distância real é 3 × 10 = 30 km ✅'],
+    ck: ['O elemento do mapa que explica os símbolos é a…', ['legenda', 'escala', 'rosa dos ventos', 'título'], 0, 'A legenda explica símbolos e cores.']}
+  ],
+  quiz: [
+   {q: 'O Sol se põe do lado…', o: ['oeste', 'leste', 'norte', 'sul'], a: 0, x: 'Nasce no leste, se põe no oeste.'},
+   {q: 'Entre o sul e o oeste fica o…', o: ['sudoeste', 'sudeste', 'noroeste', 'nordeste'], a: 0, x: 'Sul + oeste = sudoeste.'},
+   {q: 'A escala de um mapa serve para…', o: ['comparar o tamanho do mapa com o real', 'mostrar o norte', 'explicar as cores', 'dar nome ao mapa'], a: 0, x: 'Ela mostra quanto o lugar foi reduzido.'},
+   {q: 'Os pontos cardeais são…', o: ['norte, sul, leste e oeste', 'nordeste e sudeste', 'direita e esquerda', 'em cima e embaixo'], a: 0, x: 'Os colaterais ficam entre eles.'},
+   {q: 'Se 1 cm no mapa = 10 km, então 3 cm valem…', o: ['30 km', '13 km', '3 km', '10 km'], a: 0, x: '3 × 10 = 30 km.'},
+   {q: 'O que a rosa dos ventos mostra?', o: ['as direções', 'as cidades', 'as cores do mapa', 'a população'], a: 0, x: 'Pontos cardeais e colaterais.'}
+  ]}
+]});
+
+
+LIB.push({id: 'lhis', nome: 'História', em: '🏛️', cor: '#ff8a3d', topicos: [
+ {id: 'lhis1', titulo: 'Povos indígenas e a chegada dos portugueses', pg: 'nível 5º/6º ano', em: '🛶',
+  cards: [
+   {e: '🪶', k: 'Antes de 1500', t: 'Os primeiros habitantes',
+    h: 'Muito antes dos europeus chegarem, o território já era habitado por <b>milhões de indígenas</b>, de muitos povos diferentes (como os <b>Tupi</b>, os <b>Guarani</b> e muitos outros), cada um com língua, costumes e conhecimentos próprios.',
+    d: 'Muitas palavras do português vêm de línguas indígenas: <b>pipoca, mandioca, jabuti, Ipiranga</b>.',
+    ck: ['Quem já vivia aqui antes de 1500?', ['povos indígenas', 'portugueses', 'espanhóis', 'ingleses'], 0, 'Milhões de indígenas, de muitos povos.']},
+   {e: '⛵', k: '1500', t: 'A chegada de Cabral',
+    h: 'Em <b>22 de abril de 1500</b>, a esquadra de <b>Pedro Álvares Cabral</b> chegou ao litoral da atual Bahia. A terra foi chamada primeiro de <b>Ilha de Vera Cruz</b>.',
+    ck: ['Quem comandava a esquadra portuguesa que chegou em 1500?', ['Pedro Álvares Cabral', 'Dom Pedro I', 'Tiradentes', 'Zumbi'], 0, 'Pedro Álvares Cabral.']},
+   {e: '🌳', k: 'A primeira riqueza', t: 'O pau-brasil',
+    h: 'A primeira atividade econômica dos portugueses foi tirar o <b>pau-brasil</b>, árvore de madeira avermelhada usada para tingir tecidos. Os indígenas cortavam a madeira em troca de objetos: era o <b>escambo</b> (troca sem dinheiro).',
+    b: 'O nome <b>Brasil</b> vem do pau-brasil!',
+    ck: ['O que era o escambo?', ['troca sem dinheiro', 'um tipo de navio', 'uma cidade', 'uma lei'], 0, 'Troca de produtos sem usar dinheiro.']}
+  ],
+  quiz: [
+   {q: 'Em que ano os portugueses chegaram ao Brasil?', o: ['1500', '1822', '1889', '1492'], a: 0, x: 'Em 22 de abril de 1500.'},
+   {q: 'O nome Brasil vem do…', o: ['pau-brasil', 'rio Brasil', 'rei do Brasil', 'mar'], a: 0, x: 'A árvore de madeira avermelhada.'},
+   {q: 'O primeiro nome dado à terra foi…', o: ['Ilha de Vera Cruz', 'Nova Lisboa', 'Terra do Sol', 'Ilha do Ouro'], a: 0, x: 'Os portugueses pensaram que era uma ilha.'},
+   {q: 'Pipoca e mandioca são palavras de origem…', o: ['indígena', 'inglesa', 'japonesa', 'alemã'], a: 0, x: 'Vêm de línguas indígenas.'},
+   {q: 'Trocar madeira por objetos, sem dinheiro, é…', o: ['escambo', 'imposto', 'salário', 'compra online'], a: 0, x: 'Escambo = troca.'},
+   {q: 'Os indígenas que viviam aqui eram…', o: ['muitos povos diferentes', 'um povo só', 'todos iguais', 'europeus'], a: 0, x: 'Com línguas e costumes variados.'}
+  ]},
+ {id: 'lhis2', titulo: 'Brasil Colônia', pg: 'nível 5º/6º ano', em: '🏚️',
+  cards: [
+   {e: '🗺️', k: 'Organização', t: 'Capitanias e Governo-Geral',
+    h: 'Em <b>1534</b>, o rei de Portugal dividiu o território em grandes faixas de terra, as <b>capitanias hereditárias</b>, entregues a pessoas de confiança (os donatários). Depois, em <b>1549</b>, criou o <b>Governo-Geral</b>, com sede em <b>Salvador</b>, a primeira capital.',
+    ck: ['Qual foi a primeira capital do Brasil?', ['Salvador', 'Brasília', 'Rio de Janeiro', 'São Paulo'], 0, 'Salvador, sede do Governo-Geral.']},
+   {e: '🍬', k: 'Economia', t: 'A cana-de-açúcar',
+    h: 'O <b>açúcar</b> virou a grande riqueza da colônia. Nos <b>engenhos</b>, principalmente no <b>Nordeste</b>, a cana era moída e transformada em açúcar, que era vendido para a Europa.',
+    ck: ['Onde a cana virava açúcar?', ['nos engenhos', 'nas fábricas de carro', 'nas minas', 'nos navios'], 0, 'Nos engenhos de açúcar.']},
+   {e: '⛓️', k: 'Escravidão', t: 'Trabalho forçado e resistência',
+    h: 'Os engenhos usavam o trabalho de pessoas <b>escravizadas</b>: indígenas e, principalmente, <b>africanos</b> trazidos à força. Eles resistiram de muitas formas, como nos <b>quilombos</b>. O mais famoso foi o <b>Quilombo dos Palmares</b>, liderado por <b>Zumbi</b>.',
+    d: 'O <b>20 de novembro</b>, Dia da Consciência Negra, homenageia Zumbi dos Palmares.',
+    ck: ['Como se chamavam as comunidades formadas por quem fugia da escravidão?', ['quilombos', 'capitanias', 'engenhos', 'vilas reais'], 0, 'Quilombos, como Palmares.']},
+   {e: '⛏️', k: 'Ouro', t: 'O ciclo do ouro',
+    h: 'No século XVIII, encontraram muito <b>ouro</b> em <b>Minas Gerais</b>. Surgiram cidades como <b>Ouro Preto</b>, e a capital passou para o <b>Rio de Janeiro</b> em 1763.',
+    ck: ['Em que região foi encontrado muito ouro?', ['Minas Gerais', 'Rio Grande do Sul', 'Amazonas', 'Ceará'], 0, 'Minas Gerais, no século XVIII.']}
+  ],
+  quiz: [
+   {q: 'As capitanias hereditárias foram criadas em…', o: ['1534', '1500', '1822', '1888'], a: 0, x: 'Faixas de terra entregues a donatários.'},
+   {q: 'A grande riqueza da colônia nos primeiros séculos foi o…', o: ['açúcar', 'café', 'petróleo', 'algodão doce'], a: 0, x: 'Produzido nos engenhos.'},
+   {q: 'Zumbi foi líder do…', o: ['Quilombo dos Palmares', 'Governo-Geral', 'Império', 'engenho real'], a: 0, x: 'Símbolo da resistência à escravidão.'},
+   {q: 'O Dia da Consciência Negra é…', o: ['20 de novembro', '22 de abril', '7 de setembro', '15 de novembro'], a: 0, x: 'Homenagem a Zumbi dos Palmares.'},
+   {q: 'A capital passou de Salvador para o Rio de Janeiro em…', o: ['1763', '1500', '1960', '1822'], a: 0, x: 'Por causa do ouro de Minas Gerais.'},
+   {q: 'A cidade de Ouro Preto surgiu por causa do…', o: ['ouro', 'açúcar', 'pau-brasil', 'petróleo'], a: 0, x: 'Ciclo do ouro, século XVIII.'}
+  ]},
+ {id: 'lhis3', titulo: 'Independência e República', pg: 'nível 5º/6º ano', em: '📜',
+  cards: [
+   {e: '👑', k: '1808', t: 'A família real no Brasil',
+    h: 'Em <b>1808</b>, a família real portuguesa fugiu de Napoleão e veio para o <b>Rio de Janeiro</b>. O Brasil mudou muito: abriu os portos e ganhou bibliotecas, escolas e o Jardim Botânico.',
+    ck: ['Para onde a família real veio em 1808?', ['Rio de Janeiro', 'Salvador', 'Brasília', 'Recife'], 0, 'Rio de Janeiro.']},
+   {e: '⚔️', k: '1822', t: 'A Independência',
+    h: 'Em <b>7 de setembro de 1822</b>, às margens do riacho do <b>Ipiranga</b> (São Paulo), <b>Dom Pedro I</b> declarou a Independência do Brasil. O país virou um <b>Império</b>, com Dom Pedro I como imperador.',
+    ck: ['Quem declarou a Independência do Brasil?', ['Dom Pedro I', 'Pedro Álvares Cabral', 'Princesa Isabel', 'Deodoro da Fonseca'], 0, 'Dom Pedro I, em 7 de setembro de 1822.']},
+   {e: '🕊️', k: '1888', t: 'O fim da escravidão',
+    h: 'Em <b>13 de maio de 1888</b>, a <b>Princesa Isabel</b> assinou a <b>Lei Áurea</b>, que acabou com a escravidão no Brasil. A luta das pessoas escravizadas e dos abolicionistas foi fundamental.',
+    ck: ['A Lei Áurea, de 1888…', ['acabou com a escravidão', 'criou a República', 'declarou a Independência', 'criou Brasília'], 0, 'Foi a abolição da escravidão.']},
+   {e: '🏛️', k: '1889', t: 'A República',
+    h: 'Em <b>15 de novembro de 1889</b>, o <b>Marechal Deodoro da Fonseca</b> proclamou a <b>República</b>. O Brasil deixou de ter imperador e passou a ter <b>presidente</b>.',
+    ck: ['Quem proclamou a República?', ['Marechal Deodoro da Fonseca', 'Dom Pedro II', 'Tiradentes', 'Getúlio Vargas'], 0, 'Deodoro da Fonseca, em 1889.']}
+  ],
+  quiz: [
+   {q: 'A Independência do Brasil foi em…', o: ['7 de setembro de 1822', '15 de novembro de 1889', '22 de abril de 1500', '13 de maio de 1888'], a: 0, x: 'O Grito do Ipiranga.'},
+   {q: 'A Proclamação da República foi em…', o: ['15 de novembro de 1889', '7 de setembro de 1822', '1500', '1808'], a: 0, x: 'Com o Marechal Deodoro da Fonseca.'},
+   {q: 'Quem assinou a Lei Áurea?', o: ['Princesa Isabel', 'Dom Pedro I', 'Cabral', 'Zumbi'], a: 0, x: 'Em 13 de maio de 1888.'},
+   {q: 'Depois da Independência, o Brasil virou um…', o: ['Império', 'República', 'Colônia', 'Estado de Minas'], a: 0, x: 'Com Dom Pedro I como imperador.'},
+   {q: 'Por que a família real veio ao Brasil em 1808?', o: ['fugindo de Napoleão', 'para passear', 'para descobrir o Brasil', 'para uma festa'], a: 0, x: 'Napoleão invadiu Portugal.'},
+   {q: 'Na República, quem governa o país é o…', o: ['presidente', 'imperador', 'rei', 'donatário'], a: 0, x: 'O Brasil deixou de ter imperador.'}
+  ]}
+]});
+LIB.push({id: 'ling', nome: 'Inglês', em: '🇬🇧', cor: '#a855f7', topicos: [
+ {id: 'ling1', titulo: 'Colors and numbers', pg: 'nível 5º/6º ano', em: '🌈',
+  cards: [
+   {e: '🌈', k: 'Colors', t: 'As cores em inglês',
+    h: '<table><tr><td>🔴 red</td><td>vermelho</td></tr><tr><td>🔵 blue</td><td>azul</td></tr><tr><td>🟡 yellow</td><td>amarelo</td></tr><tr><td>🟢 green</td><td>verde</td></tr><tr><td>⚫ black</td><td>preto</td></tr><tr><td>⚪ white</td><td>branco</td></tr><tr><td>🟠 orange</td><td>laranja</td></tr><tr><td>🟣 purple</td><td>roxo</td></tr><tr><td>🩷 pink</td><td>rosa</td></tr><tr><td>🟤 brown</td><td>marrom</td></tr></table>',
+    ck: ['Como se diz “verde” em inglês?', ['green', 'red', 'blue', 'gray'], 0, 'Green = verde.']},
+   {e: '🔢', k: 'Numbers 1–10', t: 'Contando até dez',
+    h: '<b>1</b> one • <b>2</b> two • <b>3</b> three • <b>4</b> four • <b>5</b> five • <b>6</b> six • <b>7</b> seven • <b>8</b> eight • <b>9</b> nine • <b>10</b> ten',
+    ck: ['“Seven” é o número…', ['7', '6', '8', '9'], 0, 'Seven = 7.']},
+   {e: '🔟', k: 'Numbers 11–20', t: 'De onze a vinte',
+    h: '<b>11</b> eleven • <b>12</b> twelve • <b>13</b> thirteen • <b>14</b> fourteen • <b>15</b> fifteen • <b>16</b> sixteen • <b>17</b> seventeen • <b>18</b> eighteen • <b>19</b> nineteen • <b>20</b> twenty',
+    d: 'De 13 a 19, todos terminam em <b>-teen</b>!',
+    ck: ['Como se escreve 15?', ['fifteen', 'fifty', 'five', 'fiveteen'], 0, 'Fifteen = 15 (fifty é 50!).']}
+  ],
+  quiz: [
+   {q: '“Yellow” é…', o: ['amarelo', 'azul', 'vermelho', 'roxo'], a: 0, x: 'Yellow = amarelo.'},
+   {q: 'Como se diz “preto”?', o: ['black', 'white', 'brown', 'blue'], a: 0, x: 'Black = preto.'},
+   {q: '“Twelve” é o número…', o: ['12', '20', '2', '11'], a: 0, x: 'Twelve = 12.'},
+   {q: 'Como se diz 3 em inglês?', o: ['three', 'tree', 'third', 'thirty'], a: 0, x: 'Three = 3 (tree é árvore!).'},
+   {q: '“Purple” é…', o: ['roxo', 'rosa', 'laranja', 'marrom'], a: 0, x: 'Purple = roxo.'},
+   {q: 'Qual número é “twenty”?', o: ['20', '12', '2', '30'], a: 0, x: 'Twenty = 20.'}
+  ]},
+ {id: 'ling2', titulo: 'Family and animals', pg: 'nível 5º/6º ano', em: '🐶',
+  cards: [
+   {e: '👨‍👩‍👧', k: 'Family', t: 'A família',
+    h: '<table><tr><td>mother / mom</td><td>mãe</td></tr><tr><td>father / dad</td><td>pai</td></tr><tr><td>sister</td><td>irmã</td></tr><tr><td>brother</td><td>irmão</td></tr><tr><td>grandmother</td><td>avó</td></tr><tr><td>grandfather</td><td>avô</td></tr><tr><td>aunt / uncle</td><td>tia / tio</td></tr><tr><td>cousin</td><td>primo / prima</td></tr></table>',
+    ck: ['“Brother” é…', ['irmão', 'irmã', 'primo', 'avô'], 0, 'Brother = irmão.']},
+   {e: '🐶', k: 'Animals', t: 'Os animais',
+    h: '<table><tr><td>🐶 dog</td><td>cachorro</td></tr><tr><td>🐱 cat</td><td>gato</td></tr><tr><td>🐦 bird</td><td>pássaro</td></tr><tr><td>🐟 fish</td><td>peixe</td></tr><tr><td>🐴 horse</td><td>cavalo</td></tr><tr><td>🐮 cow</td><td>vaca</td></tr><tr><td>🐵 monkey</td><td>macaco</td></tr><tr><td>🦁 lion</td><td>leão</td></tr></table>',
+    ck: ['Como se diz “cavalo”?', ['horse', 'house', 'cow', 'dog'], 0, 'Horse = cavalo (house = casa!).']},
+   {e: '🗣️', k: 'Speaking', t: 'Falando da família',
+    h: '<ul><li><b>This is my mother.</b> = Esta é minha mãe.</li><li><b>I have a dog.</b> = Eu tenho um cachorro.</li><li><b>I have two brothers.</b> = Eu tenho dois irmãos.</li></ul>',
+    ck: ['“I have a cat” significa…', ['Eu tenho um gato', 'Eu sou um gato', 'Eu vi um gato', 'Eu quero um gato'], 0, 'Have = ter.']}
+  ],
+  quiz: [
+   {q: '“Grandmother” é…', o: ['avó', 'avô', 'mãe', 'tia'], a: 0, x: 'Grandmother = avó.'},
+   {q: 'Como se diz “gato”?', o: ['cat', 'dog', 'car', 'cut'], a: 0, x: 'Cat = gato.'},
+   {q: '“Aunt” é…', o: ['tia', 'tio', 'prima', 'avó'], a: 0, x: 'Aunt = tia; uncle = tio.'},
+   {q: '“Fish” é…', o: ['peixe', 'pássaro', 'foca', 'fogo'], a: 0, x: 'Fish = peixe.'},
+   {q: '“This is my father” quer dizer…', o: ['Este é meu pai', 'Esta é minha mãe', 'Meu pai é alto', 'Eu tenho um pai'], a: 0, x: 'Father = pai.'},
+   {q: 'Como se diz “irmã”?', o: ['sister', 'brother', 'cousin', 'son'], a: 0, x: 'Sister = irmã.'}
+  ]},
+ {id: 'ling3', titulo: 'Greetings and days of the week', pg: 'nível 5º/6º ano', em: '👋',
+  cards: [
+   {e: '👋', k: 'Greetings', t: 'Cumprimentos',
+    h: '<ul><li><b>Hello! / Hi!</b> = Olá! / Oi!</li><li><b>Good morning</b> = Bom dia</li><li><b>Good afternoon</b> = Boa tarde</li><li><b>Good evening</b> = Boa noite (ao chegar)</li><li><b>Good night</b> = Boa noite (ao ir dormir)</li><li><b>Goodbye / Bye</b> = Tchau</li></ul>',
+    ck: ['Como dizer “bom dia”?', ['Good morning', 'Good night', 'Goodbye', 'Good afternoon'], 0, 'Morning = manhã.']},
+   {e: '🙂', k: 'Conversation', t: 'Como você está?',
+    h: '<ul><li><b>How are you?</b> = Como você está?</li><li><b>I’m fine, thank you!</b> = Estou bem, obrigado(a)!</li><li><b>What’s your name?</b> = Qual é o seu nome?</li><li><b>My name is Ana.</b> = Meu nome é Ana.</li><li><b>Nice to meet you!</b> = Prazer em conhecer!</li></ul>',
+    ck: ['“What’s your name?” pergunta…', ['o seu nome', 'a sua idade', 'onde você mora', 'como você está'], 0, 'Name = nome.']},
+   {e: '📅', k: 'Days of the week', t: 'Os dias da semana',
+    h: '<b>Monday</b> segunda • <b>Tuesday</b> terça • <b>Wednesday</b> quarta • <b>Thursday</b> quinta • <b>Friday</b> sexta • <b>Saturday</b> sábado • <b>Sunday</b> domingo',
+    d: 'Em inglês, os dias da semana sempre começam com <b>letra maiúscula</b>!',
+    ck: ['“Friday” é…', ['sexta-feira', 'segunda-feira', 'sábado', 'quinta-feira'], 0, 'Friday = sexta.']}
+  ],
+  quiz: [
+   {q: '“Good night” usamos…', o: ['na hora de dormir', 'de manhã', 'ao chegar à tarde', 'no almoço'], a: 0, x: 'Good evening é ao chegar à noite.'},
+   {q: 'Como responder “How are you?”', o: ['I’m fine, thank you!', 'My name is Ana.', 'Goodbye!', 'I’m ten.'], a: 0, x: 'Fine = bem.'},
+   {q: '“Sunday” é…', o: ['domingo', 'sábado', 'segunda', 'sexta'], a: 0, x: 'Sun = sol: domingo.'},
+   {q: 'Qual dia vem depois de Monday?', o: ['Tuesday', 'Thursday', 'Sunday', 'Friday'], a: 0, x: 'Segunda → terça.'},
+   {q: '“Nice to meet you!” significa…', o: ['Prazer em conhecer!', 'Até amanhã!', 'Bom apetite!', 'Feliz aniversário!'], a: 0, x: 'Usamos ao conhecer alguém.'},
+   {q: 'Como se diz “quarta-feira”?', o: ['Wednesday', 'Tuesday', 'Thursday', 'Weekend'], a: 0, x: 'Wednesday = quarta.'}
+  ]}
+]});
+
+
+/* ===== Exercícios extras da biblioteca (pares, lacunas, frases para montar) ===== */
+const EXTRA_LIB = {
+ lmat1: {p: [['Numerador', 'partes consideradas'], ['Denominador', 'partes iguais do inteiro'], ['1/2', 'metade'], ['1/4', 'um quarto'], ['3/6', 'equivalente a 1/2'], ['2/7 + 3/7', '5/7']],
+  l: [['Na fração 3/8, o ___ é 8.', ['denominador', 'numerador', 'inteiro'], 0, 'O denominador fica embaixo.'],
+      ['1/2 é o mesmo que ___.', ['2/4', '1/4', '2/3'], 0, 'Multiplique em cima e embaixo por 2.'],
+      ['1/4 de 20 é ___.', ['5', '4', '80'], 0, '20 ÷ 4 = 5.']],
+  m: ['Metade é o mesmo que um meio', 'O denominador fica embaixo']},
+ lmat2: {p: [['50%', 'metade'], ['25%', 'um quarto'], ['10%', 'dividir por 10'], ['100%', 'o todo'], ['Desconto', 'pagar menos'], ['Aumento', 'pagar mais']],
+  l: [['10% de 70 é ___.', ['7', '70', '0,7'], 0, '70 ÷ 10 = 7.'],
+      ['25% de 80 é ___.', ['20', '25', '40'], 0, '80 ÷ 4 = 20.'],
+      ['O símbolo % significa “por ___”.', ['cem', 'dez', 'mil'], 0, 'Por cento = por cem.']],
+  m: ['Cinquenta por cento é metade', 'Desconto é pagar menos']},
+ lmat3: {p: [['Perímetro', 'soma dos lados'], ['Área', 'espaço de dentro'], ['Triângulo', '3 lados'], ['Quadrado', '4 lados iguais'], ['cm²', 'unidade de área'], ['Cercar o jardim', 'calcular o perímetro']],
+  l: [['A área do retângulo é base × ___.', ['altura', 'perímetro', 'lado do triângulo'], 0, 'Área = base × altura.'],
+      ['Um quadrado de lado 3 cm tem perímetro de ___ cm.', ['12', '9', '6'], 0, '3 + 3 + 3 + 3 = 12.'],
+      ['Para comprar piso, calculo a ___.', ['área', 'altura', 'escala'], 0, 'O piso cobre a superfície.']],
+  m: ['Perímetro é a soma dos lados', 'Área é base vezes altura']},
+ lpor1: {p: [['Substantivo', 'dá nome'], ['Adjetivo', 'dá qualidade'], ['Verbo', 'indica ação'], ['Artigo', 'vem antes do substantivo'], ['Substantivo próprio', 'letra maiúscula'], ['Chover', 'fenômeno da natureza']],
+  l: [['“Bonito” é um ___.', ['adjetivo', 'verbo', 'artigo'], 0, 'Dá qualidade.'],
+      ['“Correr” é um ___.', ['verbo', 'substantivo', 'adjetivo'], 0, 'Indica ação.'],
+      ['“Recife” é um substantivo ___.', ['próprio', 'comum', 'coletivo'], 0, 'Nome específico, com letra maiúscula.']],
+  m: ['O cachorro peludo corre', 'A menina feliz estuda']},
+ lpor2: {p: [['Ponto final', 'encerra a frase'], ['Interrogação', 'faz pergunta'], ['Exclamação', 'mostra emoção'], ['Vírgula', 'separa itens'], ['Travessão', 'marca a fala'], ['Reticências', 'pensamento no ar']],
+  l: [['Você gosta de pizza___', ['?', '!', '.'], 0, 'É uma pergunta.'],
+      ['Que dia lindo___', ['!', '?', ','], 0, 'Emoção: exclamação.'],
+      ['Comprei pão___ leite e queijo.', [',', '?', '!'], 0, 'A vírgula separa os itens.']],
+  m: ['Você vai à escola hoje?', 'Que alegria!']},
+ lpor3: {p: [['Casa', 'S com som de Z'], ['Pássaro', 'SS entre vogais'], ['Açúcar', 'Ç antes de U'], ['Peixe', 'X depois de ditongo'], ['Cebola', 'C antes de E'], ['Enxada', 'X depois de EN']],
+  l: [['Complete: ma___a de bolo', ['ss', 'ç', 's'], 0, 'Massa: som de S entre vogais.'],
+      ['Complete: cora___ão', ['ç', 'ss', 's'], 0, 'Coração: Ç antes de A.'],
+      ['Complete: cai___a', ['x', 'ch', 'ss'], 0, 'Depois de ditongo: X.']],
+  m: ['O pássaro voou alto', 'A caixa tem açúcar']},
+ lcie1: {p: [['Sol', 'estrela'], ['Lua', 'satélite natural'], ['Júpiter', 'maior planeta'], ['Mercúrio', 'mais perto do Sol'], ['Rotação', 'dia e noite'], ['Translação', 'um ano']],
+  l: [['O planeta mais quente é ___.', ['Vênus', 'Marte', 'Netuno'], 0, 'A atmosfera de Vênus segura o calor.'],
+      ['A Terra gira em torno de si em cerca de ___ horas.', ['24', '12', '365'], 0, 'Rotação: 24 horas.'],
+      ['Plutão hoje é um planeta-___.', ['anão', 'gigante', 'estrela'], 0, 'Desde 2006.']],
+  m: ['O Sol é uma estrela', 'A Lua reflete a luz do Sol']},
+ lcie2: {p: [['Coração', 'bombeia o sangue'], ['Pulmões', 'trocam os gases'], ['Estômago', 'digere o alimento'], ['Intestino delgado', 'absorve nutrientes'], ['Artérias', 'saem do coração'], ['Veias', 'voltam ao coração']],
+  l: [['O ar entra pelo nariz e passa pela ___.', ['traqueia', 'barriga', 'orelha'], 0, 'Nariz → traqueia → brônquios → pulmões.'],
+      ['O músculo que ajuda a respirar é o ___.', ['diafragma', 'bíceps', 'coração'], 0, 'O diafragma sobe e desce.'],
+      ['O sangue leva oxigênio e ___ para as células.', ['nutrientes', 'fumaça', 'areia'], 0, 'Oxigênio + nutrientes.']],
+  m: ['O coração bombeia o sangue', 'Os pulmões trocam os gases']},
+ lcie3: {p: [['Produtor', 'planta'], ['Consumidor primário', 'herbívoro'], ['Consumidor secundário', 'come o herbívoro'], ['Decompositor', 'fungos e bactérias'], ['Fotossíntese', 'planta faz alimento'], ['Ecossistema', 'seres vivos + ambiente']],
+  l: [['A cadeia alimentar começa com um ___.', ['produtor', 'leão', 'decompositor'], 0, 'Sempre uma planta (produtor).'],
+      ['O coelho, que come capim, é ___.', ['herbívoro', 'carnívoro', 'decompositor'], 0, 'Come plantas.'],
+      ['Fungos e bactérias são ___.', ['decompositores', 'produtores', 'consumidores'], 0, 'Eles reciclam a matéria.']],
+  m: ['A planta faz fotossíntese', 'Os fungos decompõem os restos']},
+ lgeo1: {p: [['Norte', 'maior em área'], ['Nordeste', 'mais estados'], ['Sudeste', 'mais populosa'], ['Sul', 'mais fria'], ['Centro-Oeste', 'Distrito Federal'], ['Brasília', 'capital do Brasil']],
+  l: [['O Brasil tem 26 estados e o Distrito ___.', ['Federal', 'Central', 'Nacional'], 0, 'Distrito Federal.'],
+      ['São Paulo fica na região ___.', ['Sudeste', 'Sul', 'Norte'], 0, 'SP, RJ, MG e ES.'],
+      ['A região com mais estados é o ___.', ['Nordeste', 'Norte', 'Sul'], 0, '9 estados.']],
+  m: ['Brasília é a capital do Brasil', 'O Brasil tem cinco regiões']},
+ lgeo2: {p: [['Amazônia', 'maior floresta'], ['Caatinga', 'semiárido'], ['Cerrado', 'berço das águas'], ['Mata Atlântica', 'mais desmatada'], ['Pantanal', 'planície alagável'], ['Pampa', 'campos do Sul']],
+  l: [['O mandacaru é típico da ___.', ['Caatinga', 'Amazônia', 'Pampa'], 0, 'Planta do semiárido.'],
+      ['O Pantanal fica em Mato Grosso e Mato Grosso do ___.', ['Sul', 'Norte', 'Leste'], 0, 'MT e MS.'],
+      ['A Amazônia é uma floresta ___ úmida.', ['tropical', 'gelada', 'seca'], 0, 'Muita chuva e calor.']],
+  m: ['A Caatinga só existe no Brasil', 'O Pantanal fica alagado']},
+ lgeo3: {p: [['Norte', 'N'], ['Leste', 'onde o Sol nasce'], ['Oeste', 'onde o Sol se põe'], ['Legenda', 'explica os símbolos'], ['Escala', 'mostra a redução'], ['Nordeste', 'entre norte e leste']],
+  l: [['O Sol nasce no ___.', ['leste', 'oeste', 'sul'], 0, 'Nasce no leste.'],
+      ['A ___ explica os símbolos do mapa.', ['legenda', 'escala', 'bússola'], 0, 'Legenda.'],
+      ['Entre o sul e o leste fica o ___.', ['sudeste', 'sudoeste', 'noroeste'], 0, 'Sul + leste = sudeste.']],
+  m: ['O Sol nasce no leste', 'A legenda explica o mapa']},
+ lhis1: {p: [['1500', 'chegada dos portugueses'], ['Cabral', 'comandante da esquadra'], ['Pau-brasil', 'primeira riqueza'], ['Escambo', 'troca sem dinheiro'], ['Ilha de Vera Cruz', 'primeiro nome da terra'], ['Tupi e Guarani', 'povos indígenas']],
+  l: [['Os portugueses chegaram em 22 de abril de ___.', ['1500', '1822', '1889'], 0, '1500.'],
+      ['O nome Brasil vem do ___.', ['pau-brasil', 'português', 'rio'], 0, 'Árvore de madeira avermelhada.'],
+      ['Trocar sem dinheiro se chama ___.', ['escambo', 'imposto', 'salário'], 0, 'Escambo.']],
+  m: ['Os indígenas já viviam aqui', 'Cabral chegou em 1500']},
+ lhis2: {p: [['Capitanias', '1534'], ['Salvador', 'primeira capital'], ['Engenho', 'cana vira açúcar'], ['Quilombo', 'resistência à escravidão'], ['Zumbi', 'líder de Palmares'], ['Ouro Preto', 'ciclo do ouro']],
+  l: [['Os engenhos produziam ___.', ['açúcar', 'ouro', 'café'], 0, 'Da cana-de-açúcar.'],
+      ['O Quilombo dos ___ foi o mais famoso.', ['Palmares', 'Coqueiros', 'Engenhos'], 0, 'Liderado por Zumbi.'],
+      ['Muito ouro foi encontrado em Minas ___.', ['Gerais', 'Novas', 'Grandes'], 0, 'Minas Gerais.']],
+  m: ['Salvador foi a primeira capital', 'Zumbi liderou Palmares']},
+ lhis3: {p: [['1808', 'família real chega'], ['1822', 'Independência'], ['1888', 'Lei Áurea'], ['1889', 'República'], ['Dom Pedro I', 'primeiro imperador'], ['Deodoro da Fonseca', 'proclamou a República']],
+  l: [['A Independência foi em 7 de setembro de ___.', ['1822', '1889', '1500'], 0, '1822.'],
+      ['A Lei Áurea foi assinada pela Princesa ___.', ['Isabel', 'Leopoldina', 'Maria'], 0, 'Princesa Isabel.'],
+      ['Na República, o país é governado por um ___.', ['presidente', 'imperador', 'rei'], 0, 'Presidente.']],
+  m: ['Dom Pedro I declarou a Independência', 'A República começou em 1889']},
+ ling1: {p: [['red', 'vermelho'], ['blue', 'azul'], ['green', 'verde'], ['seven', '7'], ['twelve', '12'], ['twenty', '20']],
+  l: [['The sky is ___ (azul).', ['blue', 'red', 'green'], 0, 'Blue = azul.'],
+      ['Five + five = ___.', ['ten', 'nine', 'eleven'], 0, '5 + 5 = 10 = ten.'],
+      ['The banana is ___ (amarela).', ['yellow', 'purple', 'black'], 0, 'Yellow = amarelo.']],
+  m: ['The apple is red', 'I am ten years old']},
+ ling2: {p: [['mother', 'mãe'], ['father', 'pai'], ['sister', 'irmã'], ['dog', 'cachorro'], ['horse', 'cavalo'], ['bird', 'pássaro']],
+  l: [['This is my ___ (mãe).', ['mother', 'father', 'brother'], 0, 'Mother = mãe.'],
+      ['I have a ___ (gato).', ['cat', 'cow', 'car'], 0, 'Cat = gato.'],
+      ['My ___ is my mother’s sister (tia).', ['aunt', 'uncle', 'cousin'], 0, 'Aunt = tia.']],
+  m: ['This is my mother', 'I have a dog']},
+ ling3: {p: [['Good morning', 'bom dia'], ['Good night', 'boa noite (dormir)'], ['Goodbye', 'tchau'], ['Monday', 'segunda-feira'], ['Friday', 'sexta-feira'], ['Sunday', 'domingo']],
+  l: [['___ morning! (Bom dia!)', ['Good', 'Bad', 'Nice'], 0, 'Good morning.'],
+      ['How ___ you? (Como você está?)', ['are', 'is', 'am'], 0, 'How are you?'],
+      ['My ___ is Ana. (Meu nome é Ana.)', ['name', 'day', 'dog'], 0, 'Name = nome.']],
+  m: ['How are you?', 'My name is Ana']}
+};
+
+/* ===== Junta a biblioteca de assuntos ao conteúdo do app ===== */
+LIB.forEach(m => { if (APP.libExtra) { m.extra = true; m.nome = 'Mais ' + m.nome; } MATERIAS.push(m); });
+Object.assign(EXTRA, EXTRA_LIB);
+
+
 /* =====================================================================
    MOTOR v3 — trilha de lições, exercícios variados e IA
    ===================================================================== */
@@ -1384,7 +1958,7 @@ const $$ = s => [...document.querySelectorAll(s)];
 const app = $('#app');
 const esc = t => String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const ANO = 2026, MIN = 60000, DIA = 864e5;
-const TITULOS = ['Novato','Aprendiz','Explorador','Estudante Ninja','Cientista Jr.','Mestre do Saber','Lenda da Turma','Gênio Supremo','Imortal do 5º Ano'];
+const TITULOS = ['Novato','Aprendiz','Explorador','Estudante Ninja','Cientista Jr.','Mestre do Saber','Lenda da Turma','Gênio Supremo', APP.ultimoTitulo];
 const AVATARES = ['🎮','🦊','🐼','🐯','🦄','🐸','🤖','👾','🐉','🦖','🐙','⚽','🎧','🚀','🧙','🦸'];
 const sorteia = a => a[Math.floor(Math.random() * a.length)];
 const embaralha = a => { const b = [...a]; for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; };
@@ -1394,9 +1968,10 @@ const vibra = p => { try { if (navigator.vibrate) navigator.vibrate(p); } catch 
 const QIDX = {}, TOP = {};
 MATERIAS.forEach(m => m.topicos.forEach(t => { TOP[t.id] = {m, t}; t.quiz.forEach((q, i) => { q.id = t.id + ':' + i; QIDX[q.id] = {q, m, t}; }); }));
 const matDe = id => MATERIAS.find(m => m.id === id);
+const PRINCIPAIS = () => MATERIAS.filter(m => !m.extra);
 
 /* ---------- Salvamento (vários jogadores no mesmo aparelho) ---------- */
-const KEY = 'estudoGamer.av2.v1';
+const KEY = APP.chave;
 let DB = (() => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; } })();
 DB.players = DB.players || {};
 if (DB.sound === undefined) DB.sound = true;
@@ -1554,7 +2129,7 @@ function lembra(id, ok) {
   m.due = Date.now() + INTERV[m.n];
 }
 const idsDaUnidade = t => t.quiz.map(q => q.id)
-  .concat((EXTRA[t.id] ? EXTRA[t.id].l : []).map((_, i) => t.id + ':l' + i), (EXTRA[t.id] ? EXTRA[t.id].m : []).map((_, i) => t.id + ':m' + i));
+  .concat(t.cards.map((c, k) => c.ck ? t.id + ':ck' + k : null).filter(Boolean),(EXTRA[t.id] ? EXTRA[t.id].l : []).map((_, i) => t.id + ':l' + i), (EXTRA[t.id] ? EXTRA[t.id].m : []).map((_, i) => t.id + ':m' + i));
 function forcaUnidade(t) { const ids = idsDaUnidade(t), mem = P().mem; return ids.reduce((s, id) => s + (mem[id] ? mem[id].n / 5 : 0), 0) / ids.length; }
 function pendentes(t) { const now = Date.now(), mem = P().mem; return idsDaUnidade(t).filter(id => mem[id] && mem[id].due <= now && mem[id].n < 5).length; }
 const forcaMateria = m => m.topicos.reduce((s, t) => s + forcaUnidade(t), 0) / m.topicos.length;
@@ -1568,18 +2143,18 @@ const CONQ = [
   {id:'perf', e:'⭐', n:'Lição perfeita', d:'Termine sem errar', ok: p => p.perfeitas >= 1},
   {id:'licoes10', e:'📚', n:'Maratonista', d:'Conclua 10 lições', ok: p => p.licoes >= 10},
   {id:'unidade', e:'🧩', n:'Unidade completa', d:'Termine uma unidade', ok: p => MATERIAS.some(m => m.topicos.some(t => nodesDe(m).filter(n => n.tid === t.id).every(n => p.nodes[n.id])))},
-  {id:'tudo', e:'👑', n:'Zerou a trilha', d:'Todas as lições', ok: p => MATERIAS.every(m => nodesDe(m).every(n => p.nodes[n.id]))},
+  {id:'tudo', e:'👑', n:'Zerou a trilha', d:'Todas as lições', ok: p => PRINCIPAIS().every(m => nodesDe(m).every(n => p.nodes[n.id]))},
   {id:'aprov', e:'📝', n:'Aprovado!', d:'Nota 7+ num simulado', ok: p => Object.values(p.simu).some(n => n >= 7)},
   {id:'dez', e:'💯', n:'Nota 10', d:'Gabarite um simulado', ok: p => Object.values(p.simu).some(n => n >= 10)},
-  {id:'simus', e:'🎓', n:'Pronto pra AV2', d:'Nota 7+ nos 6 simulados', ok: p => MATERIAS.every(m => (p.simu[m.id] || 0) >= 7)},
+  {id:'simus', e:'🎓', n: APP.conqProvas, d:'Nota 7+ em todas as matérias', ok: p => PRINCIPAIS().every(m => (p.simu[m.id] || 0) >= 7)},
   {id:'erros', e:'🧠', n:'Aprendi com os erros', d:'Supere 5 erros', ok: p => p.dominadas >= 5},
   {id:'rel', e:'⚡', n:'Raio veloz', d:'9+ no Relâmpago', ok: p => p.relBest >= 9},
   {id:'streak3', e:'📆', n:'Constância', d:'3 dias seguidos', ok: p => p.streak >= 3},
   {id:'streak7', e:'🌋', n:'Semana de fogo', d:'7 dias seguidos', ok: p => p.streak >= 7},
   {id:'meta', e:'🥅', n:'Meta batida', d:'Bata a meta do dia', ok: p => !!p.metaDia},
-  {id:'ia', e:'🤖', n:'Amigo do Byte', d:'Use a IA de ajuda', ok: p => p.iaUsos >= 1},
+  {id:'ia', e: APP.botEm, n:'Amigo do ' + APP.bot, d:'Use a IA de ajuda', ok: p => p.iaUsos >= 1},
   {id:'xp1000', e:'💎', n:'Mil XP', d:'Junte 1.000 XP', ok: p => p.xp >= 1000}
-].concat(MATERIAS.map(m => ({id:'m_' + m.id, e:m.em, n:'Mestre: ' + m.nome, d:'Toda a trilha da matéria', ok: p => nodesDe(m).every(n => p.nodes[n.id])})));
+].concat(PRINCIPAIS().map(m => ({id:'m_' + m.id, e:m.em, n:'Mestre: ' + m.nome, d:'Toda a trilha da matéria', ok: p => nodesDe(m).every(n => p.nodes[n.id])})));
 function checaConquistas() {
   const p = P(); if (!p) return;
   const novas = CONQ.filter(c => !p.badges[c.id] && c.ok(p));
@@ -1617,14 +2192,18 @@ function botaoOuvir(btn, texto) {
   btn.onclick = e => { e.stopPropagation(); if (btn.classList.contains('on')) calar(); else falar(typeof texto === 'function' ? texto() : texto, btn); };
 }
 
+
 /* ---------- Datas das provas ---------- */
 function diasPara(ddmm) {
+  if (!ddmm) return null;
   const [d, m] = ddmm.split('/').map(Number);
   const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
   return Math.round((new Date(ANO, m - 1, d) - hoje) / DIA);
 }
-const quando = n => n > 1 ? 'em ' + n + ' dias' : n === 1 ? 'AMANHÃ' : n === 0 ? 'HOJE' : 'já foi';
-const porData = () => [...MATERIAS].sort((a, b) => diasPara(a.data) - diasPara(b.data));
+const quando = n => n === null ? '' : n > 1 ? 'em ' + n + ' dias' : n === 1 ? 'AMANHÃ' : n === 0 ? 'HOJE' : 'já foi';
+const ordemData = m => { const d = diasPara(m.data); return d === null ? (m.extra ? 2e6 : 1e6) : d < 0 ? 5e5 + d : d; };
+const porData = () => [...MATERIAS].sort((a, b) => ordemData(a) - ordemData(b));
+const futura = m => { const d = diasPara(m.data); return d !== null && d >= 0; };
 
 /* ---------- Texto puro e busca no conteúdo (base da ajuda offline e da IA) ---------- */
 function txtDe(html) {
@@ -1676,16 +2255,16 @@ function erroIA(e) {
 }
 const iaOn = () => IA_ESTADO === 'on' && !!IA;
 const contaUsoIA = () => { const p = P(); p.iaUsos = (p.iaUsos || 0) + 1; salvar(); setTimeout(checaConquistas, 300); };
-const PROVAS_TXT = () => porData().map(m => m.nome + ' ' + m.data + ' (' + quando(diasPara(m.data)) + ')').join(', ');
+const PROVAS_TXT = () => porData().map(m => m.nome + (m.data ? ' ' + m.data + ' (' + quando(diasPara(m.data)) + ')' : '')).join(', ');
 const REGRAS_BYTE = () =>
-  'Você é o Byte 🤖, tutor de um app de estudos para crianças do 5º ano (10–11 anos) no Brasil que estão estudando para a prova AV2 de dezembro.\n' +
+  'Você é o ' + APP.bot + ' ' + APP.botEm + ', tutor de um app de estudos para crianças ' + APP.publico + ' (' + APP.idade + ') no Brasil que estão ' + APP.objetivo + '.\n' +
   'Regras:\n- Responda em português do Brasil, com frases curtas e simples, tom animado e gentil. No máximo 120 palavras e 1 ou 2 emojis.\n' +
-  '- Use o CONTEÚDO DO LIVRO abaixo sempre que ele ajudar. Se algo não estiver nele, explique de forma simples e correta, sem inventar.\n' +
+  '- Use o CONTEÚDO DE ESTUDO abaixo sempre que ele ajudar. Se algo não estiver nele, explique de forma simples e correta, sem inventar.\n' +
   '- Fale só de estudos e assuntos escolares. Se pedirem outra coisa, convide de volta para os estudos com gentileza.\n' +
   '- Nunca peça dados pessoais (nome completo, endereço, telefone, escola, senhas) e não incentive nada perigoso.\n' +
   '- Se pedirem a resposta de uma atividade, explique o raciocínio passo a passo para a criança entender de verdade.\n' +
   '- Quando fizer sentido, termine com uma perguntinha rápida para checar se ela entendeu.\n' +
-  'Provas da AV2: ' + PROVAS_TXT() + '.\n';
+  (MATERIAS.some(m => m.data) ? 'Provas e matérias: ' : 'Matérias do app: ') + PROVAS_TXT() + '.\n';
 
 /* textos do exercício, para a IA e para a ajuda offline */
 function descreveItem(it) {
@@ -1698,17 +2277,17 @@ function descreveItem(it) {
 }
 async function iaDica(it, onText) {
   const d = descreveItem(it), ctx = trechos(buscar(d.enun + ' ' + d.certa, 2, it.mid));
-  const prompt = 'Você é o Byte, tutor gentil de crianças do 5º ano no Brasil. Dê UMA dica curta (no máximo 2 frases, até 35 palavras) que ajude a criança a resolver o exercício abaixo SEM revelar a resposta e sem dizer qual alternativa é a certa. Português do Brasil, 1 emoji.\n\n' +
+  const prompt = 'Você é o ' + APP.bot + ', tutor gentil de crianças ' + APP.publico + ' no Brasil. Dê UMA dica curta (no máximo 2 frases, até 35 palavras) que ajude a criança a resolver o exercício abaixo SEM revelar a resposta e sem dizer qual alternativa é a certa. Português do Brasil, 1 emoji.\n\n' +
     'Exercício: ' + d.enun + (d.ops.length ? '\nOpções: ' + d.ops.join(' | ') : '') +
-    '\n(Só para você saber, a resposta certa é: ' + d.certa + '. NÃO revele isso.)\n' + (ctx ? '\nConteúdo do livro:\n' + ctx : '') + '\n\nResponda só com a dica.';
+    '\n(Só para você saber, a resposta certa é: ' + d.certa + '. NÃO revele isso.)\n' + (ctx ? '\nConteúdo de estudo:\n' + ctx : '') + '\n\nResponda só com a dica.';
   const r = await IA(prompt, {modelTier: 'quick', onText}); contaUsoIA(); return r.text;
 }
 async function iaPorQue(it, resposta, onText) {
   const d = descreveItem(it), ctx = trechos(buscar(d.enun + ' ' + d.certa, 2, it.mid));
-  const prompt = 'Você é o Byte, tutor gentil de crianças do 5º ano no Brasil. A criança errou o exercício abaixo. Explique em até 4 frases curtas por que a resposta certa é a certa' +
+  const prompt = 'Você é o ' + APP.bot + ', tutor gentil de crianças ' + APP.publico + ' no Brasil. A criança errou o exercício abaixo. Explique em até 4 frases curtas por que a resposta certa é a certa' +
     (resposta ? ' e por que a resposta dela não é' : '') + ', e dê um truque para lembrar. Tom animado, sem bronca, português do Brasil, 1 emoji.\n\n' +
     'Exercício: ' + d.enun + (d.ops.length ? '\nOpções: ' + d.ops.join(' | ') : '') + (resposta ? '\nResposta da criança: ' + resposta : '') +
-    '\nResposta certa: ' + d.certa + (d.x ? '\nExplicação do livro: ' + d.x : '') + (ctx ? '\n\nConteúdo do livro:\n' + ctx : '');
+    '\nResposta certa: ' + d.certa + (d.x ? '\nExplicação do app: ' + d.x : '') + (ctx ? '\n\nConteúdo de estudo:\n' + ctx : '');
   const r = await IA(prompt, {modelTier: 'quick', onText}); contaUsoIA(); return r.text;
 }
 function dicaOffline(it) {
@@ -1721,7 +2300,7 @@ const CHAT = [];       // {role, content} — fica só na memória desta aba
 let chatCtl = null;
 async function iaChat(pergunta, onText) {
   const ctx = trechos(buscar(pergunta + ' ' + CHAT.slice(-2).map(m => m.content).join(' '), 4));
-  const turnos = [{role: 'user', content: REGRAS_BYTE() + (ctx ? '\nCONTEÚDO DO LIVRO (trechos que parecem relevantes):\n' + ctx : '') + '\n\nA criança vai falar agora.'}]
+  const turnos = [{role: 'user', content: REGRAS_BYTE() + (ctx ? '\nCONTEÚDO DE ESTUDO (trechos que parecem relevantes):\n' + ctx : '') + '\n\nA criança vai falar agora.'}]
     .concat(CHAT.slice(-8)).concat([{role: 'user', content: pergunta}]);
   chatCtl = new AbortController();
   const r = await IA(turnos, {modelTier: 'quick', cache: false, signal: chatCtl.signal, onText}); contaUsoIA(); return r.text;
@@ -1737,7 +2316,7 @@ function chatOffline(pergunta) {
 async function iaCriarLicao(t, m, onText) {
   const conteudo = t.cards.map(c => c.t + ': ' + txtDe(c.h + ' ' + (c.b || '') + ' ' + (c.d || ''))).join('\n').slice(0, 9000);
   const existentes = t.quiz.map(q => '- ' + q.q).join('\n');
-  const prompt = 'Crie 5 perguntas NOVAS de múltipla escolha para uma criança do 5º ano revisar "' + t.titulo + '" (' + m.nome + '). ' +
+  const prompt = 'Crie 5 perguntas NOVAS de múltipla escolha para uma criança ' + APP.publico + ' revisar "' + t.titulo + '" (' + m.nome + '). ' +
     'Use SOMENTE as informações do conteúdo abaixo, sem inventar fatos. Cada pergunta: enunciado curto e claro, 4 alternativas curtas e diferentes, só 1 correta, e uma explicação de 1 frase. ' +
     'Misture fáceis e médias e não repita as perguntas que já existem.\n\nCONTEÚDO:\n' + conteudo + '\n\nPERGUNTAS QUE JÁ EXISTEM (não repetir):\n' + existentes +
     '\n\nResponda SOMENTE com um JSON array, exemplo: [{"q":"Pergunta?","o":["A","B","C","D"],"a":0,"x":"Explicação."}] (a = índice da alternativa correta, de 0 a 3).';
@@ -1752,9 +2331,9 @@ async function iaCriarLicao(t, m, onText) {
 /* ---------- Escolha de tarefas: treinador automático + plano da IA ---------- */
 function candidatas() {
   const p = P(), out = [];
-  const nErr = Object.keys(p.wrong).filter(id => QIDX[id]).length;
+  const nErr = Object.keys(p.wrong).filter(idValido).length;
   MATERIAS.forEach(m => {
-    const d = diasPara(m.data), urg = d < 0 ? .15 : 1 + 8 / (d + 1);
+    const d = diasPara(m.data), urg = d === null ? (m.extra ? .45 : 1.2) : d < 0 ? .15 : 1 + 8 / (d + 1);
     const ns = nodesDe(m), feitos = ns.filter(n => p.nodes[n.id]).length / ns.length;
     const prox = ns.find(n => !p.nodes[n.id]);
     if (prox && prox.tipo !== 'simulado') out.push({id: 'licao:' + prox.id, tipo: 'licao', m, n: prox, titulo: m.em + ' ' + rotuloNo(prox),
@@ -1764,14 +2343,14 @@ function candidatas() {
     if (fr) out.push({id: 'revisar:' + fr.t.id, tipo: 'revisar', m, t: fr.t, titulo: m.em + ' Revisar: ' + fr.t.titulo,
       info: (fr.pend ? fr.pend + ' para revisar • ' : '') + 'força ' + Math.round(fr.f * 100) + '%', score: urg * (.8 + Math.min(fr.pend, 8) / 8) * (1.25 - fr.f)});
     const nota = p.simu[m.id];
-    if (d >= 0 && (nota === undefined || nota < 8) && (feitos >= .5 || d <= 6)) out.push({id: 'simulado:' + m.id, tipo: 'simulado', m, titulo: m.em + ' Simulado de ' + m.nome,
-      info: nota === undefined ? 'ainda não fez o simulado' : 'melhor nota: ' + nota, score: urg * (d <= 7 ? 1.5 : .7) * (nota === undefined ? 1 : (10 - nota) / 4)});
+    if ((d === null || d >= 0) && (nota === undefined || nota < 8) && (feitos >= .5 || (d !== null && d <= 6))) out.push({id: 'simulado:' + m.id, tipo: 'simulado', m, titulo: m.em + ' ' + provaDe(m) + ': ' + m.nome,
+      info: nota === undefined ? 'ainda não fez' : 'melhor nota: ' + nota, score: urg * (d !== null && d <= 7 ? 1.5 : .7) * (nota === undefined ? 1 : (10 - nota) / 4)});
   });
   if (nErr) out.push({id: 'erros', tipo: 'erros', titulo: '🧠 Caderno de erros', info: nErr + ' erros guardados', score: 1.3 + Math.min(nErr, 10) / 5});
   return out.sort((a, b) => b.score - a.score);
 }
 function motivoAuto(x) {
-  if (x.tipo === 'licao') { const d = diasPara(x.m.data); return 'Prova de ' + x.m.nome + ' ' + quando(d).toLowerCase() + ': avance na trilha!'; }
+  if (x.tipo === 'licao') { const d = diasPara(x.m.data); return d === null ? 'Avance na trilha de ' + x.m.nome + '!' : 'Prova de ' + x.m.nome + ' ' + quando(d).toLowerCase() + ': avance na trilha!'; }
   if (x.tipo === 'revisar') return 'Reforce o que está ficando fraco (' + x.info + ').';
   if (x.tipo === 'simulado') return 'Treine no formato da prova (' + x.info + ').';
   return 'Transforme seus erros em acertos!';
@@ -1793,10 +2372,10 @@ async function iaPlano(onText) {
   const p = P(), c = candidatas().slice(0, 9);
   const provas = porData().map(m => {
     const ns = nodesDe(m);
-    return '- ' + m.nome + ': prova ' + m.data + ' (' + quando(diasPara(m.data)) + '), trilha ' + Math.round(ns.filter(n => p.nodes[n.id]).length / ns.length * 100) +
+    return '- ' + m.nome + (m.data ? ': prova ' + m.data + ' (' + quando(diasPara(m.data)) + ')' : ': sem data de prova') + ', trilha ' + Math.round(ns.filter(n => p.nodes[n.id]).length / ns.length * 100) +
       '%, força ' + Math.round(forcaMateria(m) * 100) + '%, simulado ' + (p.simu[m.id] === undefined ? 'não feito' : p.simu[m.id] + '/10');
   }).join('\n');
-  const prompt = 'Você é o Byte, treinador de estudos de uma criança do 5º ano. Hoje é ' + new Date().toLocaleDateString('pt-BR') + '. ' +
+  const prompt = 'Você é o ' + APP.bot + ', treinador de estudos de uma criança ' + APP.publico + '. Hoje é ' + new Date().toLocaleDateString('pt-BR') + '. ' +
     'Escolha as 3 MELHORES tarefas para ela fazer agora, pensando em: provas mais próximas primeiro, matérias com pouco progresso ou pouca força, erros acumulados e equilíbrio ' +
     '(não escolha a mesma matéria 3 vezes, a não ser que a prova seja amanhã).\n\nSituação: XP hoje ' + xpHoje(p) + '/' + p.meta + '; ofensiva ' + streakAtual(p) + ' dias; vidas ' + vidas(p) + '/5.\n' +
     'Provas:\n' + provas + '\n\nTarefas possíveis (escolha pelo id exato):\n' + c.map(x => '- id: ' + x.id + ' | ' + x.titulo.replace(/^\S+\s/, '') + ' | ' + x.info).join('\n') +
@@ -1817,8 +2396,9 @@ function marcaPlano(id) {
   comemora(fim => { ganhaGemas(5, 'tarefa do plano'); fim(); });
   if (pl.itens.every(x => x.feito) && !pl.bonus) { pl.bonus = 1; salvar();
     comemora(fim => { confete(200); SFX.win(); ganhaGemas(15, 'plano completo');
-      janela('<div class="big">🤖</div><h2 class="orb">PLANO DO DIA COMPLETO!</h2><p>Você fez as 3 tarefas que o Byte escolheu. Ganhou <b>+15 💎</b>!</p>', [{t:'SOU FERA! 😎'}], fim); }); }
+      janela('<div class="big">' + APP.botEm + '</div><h2 class="orb">PLANO DO DIA COMPLETO!</h2><p>Você fez as 3 tarefas que o ' + APP.bot + ' escolheu. Ganhou <b>+15 💎</b>!</p>', [{t:'SOU FERA! 😎'}], fim); }); }
 }
+
 
 /* ---------- Trilha: lições de cada unidade ---------- */
 function nodesDe(m) {
@@ -1837,7 +2417,7 @@ function nodesDe(m) {
 const ICONE = {aprender: '📖', praticar: '✏️', desafio: '⭐', bau: '🎁', simulado: '🏆'};
 function rotuloNo(n, curto) {
   const t = n.tid ? TOP[n.tid].t : null;
-  const nome = {aprender: 'Aprender' + (n.parte ? ' ' + n.parte : ''), praticar: 'Praticar', desafio: 'Desafio', bau: 'Baú', simulado: 'Simulado AV2'}[n.tipo];
+  const nome = {aprender: 'Aprender' + (n.parte ? ' ' + n.parte : ''), praticar: 'Praticar', desafio: 'Desafio', bau: 'Baú', simulado: provaDe(matDe(n.mid))}[n.tipo];
   return curto || !t ? nome : nome + ': ' + t.titulo;
 }
 function achaNo(id) { for (const m of MATERIAS) { const n = nodesDe(m).find(x => x.id === id); if (n) return n; } return null; }
@@ -1854,7 +2434,7 @@ function infoTarefa(id) {
   const [tipo, ref] = id.split(/:(.+)/);
   if (tipo === 'licao') { const n = achaNo(ref); if (!n) return null; const m = matDe(n.mid); return {ic: ICONE[n.tipo], cor: m.cor, titulo: m.em + ' ' + rotuloNo(n)}; }
   if (tipo === 'revisar') { const x = TOP[ref]; if (!x) return null; return {ic: '🔁', cor: x.m.cor, titulo: x.m.em + ' Revisar: ' + x.t.titulo}; }
-  if (tipo === 'simulado') { const m = matDe(ref); if (!m) return null; return {ic: '📝', cor: m.cor, titulo: m.em + ' Simulado de ' + m.nome}; }
+  if (tipo === 'simulado') { const m = matDe(ref); if (!m) return null; return {ic: '📝', cor: m.cor, titulo: m.em + ' ' + provaDe(m) + ': ' + m.nome}; }
   if (tipo === 'erros') return {ic: '🧠', cor: 'var(--pink)', titulo: 'Caderno de erros'};
   return null;
 }
@@ -1868,7 +2448,7 @@ function rodaTarefa(id) {
 }
 function planoHTML(pl) {
   const p = P(), pct = Math.min(100, xpHoje(p) / p.meta * 100);
-  return '<div class="plano"><div class="ph"><span class="bot">🤖</span><div><b>Plano de hoje do Byte</b><small>' +
+  return '<div class="plano"><div class="ph"><span class="bot">' + APP.botEm + '</span><div><b>Plano de hoje do ' + APP.bot + '</b><small>' +
     (pl.fonte === 'ia' ? '✨ Tarefas escolhidas pela IA (Claude)' : '⚙️ Tarefas escolhidas pelo treinador automático') + '</small></div></div>' +
     '<div class="fala">' + pl.fala + '</div>' +
     pl.itens.map((x, k) => { const inf = infoTarefa(x.id); if (!inf) return '';
@@ -1881,16 +2461,16 @@ function planoHTML(pl) {
 }
 function abaTrilha(rolar) {
   const p = P(), pl = planoHoje(), mats = porData();
-  if (!p.sub || !matDe(p.sub)) p.sub = (mats.find(m => diasPara(m.data) >= 0) || mats[0]).id;
+  if (!p.sub || !matDe(p.sub)) p.sub = (mats.find(futura) || mats[0]).id;
   const m = matDe(p.sub), ns = nodesDe(m), d = diasPara(m.data);
   let h = alertaHTML() + planoHTML(pl) + missoesHTML() +
     '<div class="subs">' + mats.map(x => '<button class="sub' + (x.id === m.id ? ' on' : '') + '" data-sub="' + x.id + '" style="--c:' + x.cor + '"><i>' + x.em + '</i>' +
-      x.nome.replace('Língua ', '') + '<small>' + x.data + ' • ' + quando(diasPara(x.data)).toLowerCase() + '</small></button>').join('') + '</div>' +
+      x.nome.replace('Língua ', '') + '<small>' + (x.data ? x.data + ' • ' + quando(diasPara(x.data)).toLowerCase() : (x.extra ? '⭐ extra • ' : '') + Math.round(progressoMat(x) * 100) + '% feito') + '</small></button>').join('') + '</div>' +
     '<div class="exam" style="--c:' + m.cor + '"><span class="ee">' + m.em + '</span><div class="ei"><b>' + esc(m.nome) + '</b>' +
-      '<small>📆 Prova ' + m.dia + ', ' + m.data + ' – ' + quando(d) + ' • ' + Math.round(progressoMat(m) * 100) + '% da trilha • força ' + Math.round(forcaMateria(m) * 100) + '%' +
+      '<small>' + (m.data ? '📆 Prova ' + m.dia + ', ' + m.data + ' – ' + quando(d) + ' • ' : m.extra ? '⭐ Assunto extra • ' : '') + Math.round(progressoMat(m) * 100) + '% da trilha • força ' + Math.round(forcaMateria(m) * 100) + '%' +
       (p.simu[m.id] !== undefined ? ' • simulado ' + String(p.simu[m.id]).replace('.', ',') : '') + '</small>' +
       '<div class="pb"><i style="width:' + progressoMat(m) * 100 + '%"></i></div></div>' +
-      '<div class="eb"><button id="eRes">📄 Resumão</button><button id="eGab">🔓 Gabarito</button></div></div>';
+      '<div class="eb"><button id="eRes">📄 Resumão</button>' + ((GABARITO[m.id] || []).length ? '<button id="eGab">🔓 Gabarito</button>' : '') + '<button id="eCart">🃏 Cartões</button></div></div>';
   let k = 0;
   m.topicos.forEach((t, ui) => {
     const f = Math.round(forcaUnidade(t) * 100), pend = pendentes(t);
@@ -1902,13 +2482,14 @@ function abaTrilha(rolar) {
     h += '</div>';
   });
   h += '<div class="path" style="margin-top:20px">' + noHTML(m, ns[ns.length - 1], 0) + '</div>' +
-    '<p class="foot">Complete as lições na ordem para liberar as próximas. Os baús dão cristais 💎 e o troféu é o simulado da prova!</p>';
+    '<p class="foot">Complete as lições na ordem para liberar as próximas. Os baús dão cristais 💎 e o troféu 🏆 fica no fim da trilha!</p>';
   app.innerHTML = '<div class="view">' + h + '</div>';
   ligaPlano(); ligaAlerta();
   $$('[data-rev]').forEach(b => b.onclick = () => { SFX.tap(); treinoUnidade(TOP[b.dataset.rev].t); });
   $$('.sub').forEach(b => b.onclick = () => { SFX.tap(); P().sub = b.dataset.sub; salvar(); abaTrilha(true); });
   $('#eRes').onclick = () => { SFX.tap(); resumao(m.id); };
-  $('#eGab').onclick = () => { SFX.tap(); gabarito(m.id); };
+  if ($('#eGab')) $('#eGab').onclick = () => { SFX.tap(); gabarito(m.id); };
+  $('#eCart').onclick = () => { SFX.tap(); cartoes(m.id); };
   $$('[data-guia]').forEach(b => b.onclick = () => { SFX.tap(); resumao(m.id, b.dataset.guia); });
   $$('.node').forEach(b => b.onclick = () => abrePop(m, nodesDe(m).find(n => n.id === b.dataset.n), b));
   if (rolar) { const c = $('.node.cur'); if (c) setTimeout(() => c.scrollIntoView({block: 'center', behavior: 'smooth'}), 120); }
@@ -1926,7 +2507,7 @@ function ligaPlano() {
   $$('.tarefa').forEach(b => b.onclick = () => { SFX.tap(); rodaTarefa(b.dataset.tf); });
   const pa = $('#pAuto'); if (pa) pa.onclick = () => { SFX.tap(); P().plano = planoAuto(); salvar(); abaTrilha(); toast('🔄 Plano refeito!'); };
   const pi = $('#pIA'); if (pi) pi.onclick = async () => {
-    SFX.tap(); pi.disabled = true; pi.textContent = '🤖 Pensando…'; $('#pMsg').textContent = 'O Byte está analisando suas provas e seus erros…';
+    SFX.tap(); pi.disabled = true; pi.textContent = '🤖 Pensando…'; $('#pMsg').textContent = 'O ' + APP.bot + ' está analisando seu progresso e seus erros…';
     try { await iaPlano(); toast('✨ Plano novo da IA!'); abaTrilha(); }
     catch (e) { const msg = erroIA(e); if ($('#pMsg')) $('#pMsg').textContent = msg; if ($('#pIA')) { $('#pIA').disabled = false; $('#pIA').textContent = '✨ Tentar de novo'; } }
   };
@@ -1944,7 +2525,7 @@ function abrePop(m, n, btn) {
   } else {
     const desc = {aprender: 'Cards curtinhos com o conteúdo + perguntas rápidas.', praticar: '8 exercícios variados: escolha, verdadeiro ou falso, completar e ligar pares.',
       desafio: '10 exercícios mais difíceis, incluindo montar frases.', bau: st === 'done' ? 'Você já abriu este baú. 😉' : 'Um prêmio por terminar a unidade!',
-      simulado: '10 questões no formato da AV2, nota de 0 a 10. Tire 7 ou mais para conquistar o troféu!' +
+      simulado: provaDescDe(m) + ', nota de 0 a 10. Tire 7 ou mais para conquistar o troféu!' +
         (p.simu[m.id] !== undefined ? ' Sua melhor nota: <b>' + String(p.simu[m.id]).replace('.', ',') + '</b>.' : '')}[n.tipo];
     const txt = n.tipo === 'bau' ? (st === 'done' ? 'FECHAR' : 'ABRIR O BAÚ 🎁') : n.tipo === 'simulado' ? 'FAZER SIMULADO' : st === 'done' ? 'PRATICAR DE NOVO' : 'COMEÇAR';
     corpo = '<b>' + ICONE[n.tipo] + ' ' + esc(rotuloNo(n)) + '</b><small>' + desc + (st === 'done' && n.tipo !== 'bau' && n.tipo !== 'simulado' ? ' Rever vale XP e fortalece a memória!' : '') + '</small>' +
@@ -1980,6 +2561,7 @@ function semVidasFora() {
      {t: 'Agora não'}]);
 }
 
+
 /* ---------- Montagem dos exercícios ---------- */
 function prioridade(id) {
   const m = P().mem[id], r = Math.random() * .35;
@@ -2009,13 +2591,18 @@ function mkPAR(tid, mid) {
   const pares = embaralha(EXTRA[tid].p).slice(0, 4);
   return {t: 'par', id: null, mid, pares, dir: embaralha(pares.map((_, i) => i)), feitos: 0, perros: 0};
 }
+function mkCK(tid, k) {
+  const c = TOP[tid].t.cards[k].ck;
+  return mkMC({id: tid + ':ck' + k, q: c[0], o: c[1], a: c[2], x: c[3] || ''}, TOP[tid].m.id);
+}
 function itemDeId(id) {
   if (QIDX[id]) return Math.random() < .25 ? mkVF(QIDX[id].q, QIDX[id].m.id) : mkMC(QIDX[id].q, QIDX[id].m.id);
   let r = /^(.+):l(\d+)$/.exec(id); if (r && EXTRA[r[1]] && EXTRA[r[1]].l[+r[2]]) return mkLAC(r[1], +r[2], TOP[r[1]].m.id);
   r = /^(.+):m(\d+)$/.exec(id); if (r && EXTRA[r[1]] && EXTRA[r[1]].m[+r[2]]) return mkORD(r[1], +r[2], TOP[r[1]].m.id);
+  r = /^(.+):ck(\d+)$/.exec(id); if (r && TOP[r[1]] && TOP[r[1]].t.cards[+r[2]] && TOP[r[1]].t.cards[+r[2]].ck) return mkCK(r[1], +r[2]);
   return null;
 }
-const idValido = id => !!(QIDX[id] || /:(l|m)\d+$/.test(id) && itemDeId(id));
+const idValido = id => !!(QIDX[id] || /:(l|m|ck)\d+$/.test(id) && itemDeId(id));
 function refaz(it) {
   if (it.t === 'mc') return mkMC(it.q, it.mid);
   if (it.t === 'vf') return mkVF(it.q, it.mid);
@@ -2038,7 +2625,8 @@ function exerciciosUnidade(t, m, rec) {
 function montaLicao(m, n, tarefa) {
   const t = TOP[n.tid].t;
   let itens;
-  if (n.tipo === 'aprender') itens = t.cards.slice(n.de, n.ate).map((c, k) => ({t: 'card', c, key: t.id + ':' + (n.de + k)})).concat(exerciciosUnidade(t, m, {mc: 1, vf: 1, lac: 1}));
+  if (n.tipo === 'aprender') { const cards = t.cards.slice(n.de, n.ate).map((c, k) => ({t: 'card', c, key: t.id + ':' + (n.de + k)}));
+    itens = intercala(cards, exerciciosUnidade(t, m, cards.some(x => x.c.ck) ? {vf: 1, lac: 1} : {mc: 2, vf: 1, lac: 1}), m.id); }
   else if (n.tipo === 'praticar') itens = exerciciosUnidade(t, m, {mc: 3, vf: 2, lac: 2, par: 1});
   else itens = exerciciosUnidade(t, m, {mc: 3, vf: 2, lac: 2, ord: 2, par: 1});
   return {modo: 'licao', titulo: rotuloNo(n), cor: m.cor, itens, node: n, m, t, vidas: true, tarefa};
@@ -2050,10 +2638,10 @@ function treinoUnidade(t, tarefa) {
 function treinoInteligente() {
   const p = P();
   let tops = MATERIAS.flatMap(m => m.topicos.filter(t => nodesDe(m).some(n => n.tid === t.id && p.nodes[n.id])));
-  if (!tops.length) { const m = porData().find(x => diasPara(x.data) >= 0) || MATERIAS[0]; tops = m.topicos.slice(0, 1); }
-  const peso = t => { const d = diasPara(TOP[t.id].m.data); return d < 0 ? .3 : 1 + 4 / (d + 1); };
+  if (!tops.length) { const m = porData().find(futura) || PRINCIPAIS()[0] || MATERIAS[0]; tops = m.topicos.slice(0, 1); }
+  const peso = t => { const mm = TOP[t.id].m, d = diasPara(mm.data); return d === null ? (mm.extra ? .5 : 1) : d < 0 ? .3 : 1 + 4 / (d + 1); };
   const ids = tops.flatMap(t => idsDaUnidade(t).map(id => ({id, s: prioridade(id) * peso(t)}))).sort((a, b) => b.s - a.s).slice(0, 10).map(x => x.id);
-  abreLicao({modo: 'treino', titulo: 'Treino inteligente', cor: '#00e5ff', itens: embaralha(ids).map(itemDeId)});
+  abreLicao({modo: 'treino', titulo: 'Treino inteligente', cor: 'var(--cyan)', itens: embaralha(ids).map(itemDeId)});
 }
 function revisarErros(tarefa) {
   const ids = porPrioridade(Object.keys(P().wrong).filter(idValido)).slice(0, 10);
@@ -2062,11 +2650,11 @@ function revisarErros(tarefa) {
 }
 function relampago() {
   const itens = embaralha(Object.values(QIDX)).slice(0, 10).map(x => mkMC(x.q, x.m.id));
-  abreLicao({modo: 'relampago', titulo: 'Desafio Relâmpago', cor: '#00e5ff', itens, tempo: 20});
+  abreLicao({modo: 'relampago', titulo: 'Desafio Relâmpago', cor: 'var(--cyan)', itens, tempo: 20});
 }
 function simulado(m, tarefa, node) {
   const itens = embaralha(m.topicos.flatMap(t => t.quiz)).slice(0, 10).map(q => mkMC(q, m.id));
-  abreLicao({modo: 'simulado', titulo: 'Simulado AV2 • ' + m.nome, cor: m.cor, itens, m, tarefa, node: node || nodesDe(m)[nodesDe(m).length - 1]});
+  abreLicao({modo: 'simulado', titulo: provaDe(m) + ' • ' + m.nome, cor: m.cor, itens, m, tarefa, node: node || nodesDe(m)[nodesDe(m).length - 1]});
 }
 
 /* ---------- Tela de lição ---------- */
@@ -2090,13 +2678,13 @@ function statusBar() {
   else if (L.modo === 'simulado') { s.className = 'lstat'; s.textContent = '📝 ' + Math.min(L.feitos + 1, L.total) + '/' + L.total; }
   else { s.className = 'lstat'; s.textContent = (L.modo === 'treino' || L.modo === 'erros') ? '❤️ ' + vidas() + ' 🔼' : '🔥 ' + L.combo; }
 }
-const tutorFala = txt => '<div class="tutor"><div class="tb">🤖</div><div class="fala">' + txt + '</div></div>';
+const tutorFala = txt => '<div class="tutor"><div class="tb">' + APP.botEm + '</div><div class="fala">' + txt + '</div></div>';
 function htmlItem(it) {
   if (it.t === 'card') { const c = it.c;
     return '<div class="lcard"><div class="top2"><span class="lkick">' + c.k + '</span><span class="acoes">' + (iaOn() ? '<button class="ouvir" id="bExp">🤖 Explica diferente</button>' : '') +
       (TTS ? '<button class="ouvir" id="ouvir">🔊 Ouvir</button>' : '') + '</span></div>' +
       '<div class="emo">' + c.e + '</div><h2>' + c.t + '</h2><div class="tx">' + c.h + '</div>' + (c.b ? '<div class="box">' + c.b + '</div>' : '') +
-      (c.d ? '<div class="box dica">💡 ' + c.d + '</div>' : '') + '</div>'; }
+      (c.d ? '<div class="box dica">💡 ' + c.d + '</div>' : '') + passosHTML(c) + '</div>'; }
   const ouvir = TTS ? '<div style="text-align:right;margin-top:-6px"><button class="ouvir" id="ouvir">🔊 Ouvir</button></div>' : '';
   if (it.t === 'mc') return '<div class="lkick">🎯 Escolha a resposta certa</div>' + tutorFala(it.q.q) + ouvir + '<div class="opts" id="opts">' +
     it.ordem.map((oi, k) => '<button class="opt" data-v="' + oi + '"><span class="L">' + (k + 1) + '</span><span>' + it.q.o[oi] + '</span></button>').join('') + '</div>';
@@ -2113,7 +2701,7 @@ function htmlItem(it) {
   return '';
 }
 function textoFala(it) {
-  if (it.t === 'card') return it.c.k + '. ' + it.c.t + '. ' + it.c.h + ' ' + (it.c.b || '') + ' ' + (it.c.d ? 'Dica: ' + it.c.d : '');
+  if (it.t === 'card') return it.c.k + '. ' + it.c.t + '. ' + it.c.h + ' ' + (it.c.b || '') + ' ' + (it.c.d ? 'Dica: ' + it.c.d : '') + (it.c.passos ? ' Exemplo: ' + it.c.passos.join(' ') : '');
   if (it.t === 'mc') return it.q.q + it.ordem.map((oi, k) => '. Opção ' + (k + 1) + ': ' + it.q.o[oi]).join('');
   if (it.t === 'vf') return 'Verdadeiro ou falso? ' + it.frase;
   if (it.t === 'lac') return 'Complete a frase: ' + it.f + '. Opções: ' + it.ordem.map(oi => it.o[oi]).join(', ');
@@ -2131,6 +2719,7 @@ function renderItem() {
   else { chk.disabled = true; chk.textContent = it.t === 'par' ? 'LIGUE TODOS OS PARES' : 'VERIFICAR'; }
   ligaItem(it);
   const be = $('#bExp'); if (be) be.onclick = () => explicaCard(it, be);
+  ligaPassos();
   if (TTS) { botaoOuvir($('#ouvir'), () => textoFala(it)); if (DB.narrador && it.t !== 'ord' && it.t !== 'par') setTimeout(() => { if (L && L.fila[0] === it && !L.sheet) falar(textoFala(it), $('#ouvir')); }, 450); }
   if (L.tempo && it.t !== 'card') {
     L.t0 = Date.now(); L.restante = L.tempo; statusBar();
@@ -2177,7 +2766,7 @@ async function pedeDica() {
   it.dica = true; L.ajudou = true; $('#lHint').disabled = true;
   const box = $('#ajuda');
   if (iaOn()) {
-    box.innerHTML = '<div class="aibox"><b class="who">🤖 Byte:</b> <span id="dicaTxt">pensando…</span></div>';
+    box.innerHTML = '<div class="aibox"><b class="who">' + APP.botEm + ' ' + APP.bot + ':</b> <span id="dicaTxt">pensando…</span></div>';
     try { await iaDica(it, ({text}) => { const e = $('#dicaTxt'); if (e && L && L.fila[0] === it) e.textContent = text; }); }
     catch (e) { const msg = erroIA(e); if (L && L.fila[0] === it) dicaLocal(it, box, msg); }
   } else dicaLocal(it, box);
@@ -2191,6 +2780,7 @@ function dicaLocal(it, box, aviso) {
   }
   box.innerHTML = '<div class="aibox">' + (aviso ? '<i class="mut">' + esc(aviso) + '</i>\n' : '') + '<b class="who">💡 Dica:</b> ' + esc(dicaOffline(it)) + (tirou ? '\n✂️ Tirei uma opção errada pra você!' : '') + '</div>';
 }
+
 
 /* ---------- Verificar, painel de resultado e continuar ---------- */
 const ELOGIOS = ['Mandou bem!','Gênio!','É isso aí!','Acertou em cheio!','Brabo demais!','Incrível!','Perfeito!','Ninguém segura!'];
@@ -2209,7 +2799,7 @@ function verificar() {
   if (L.sheet) return continuar();
   const it = L.fila[0], chk = $('#lCheck');
   if (it.t === 'card') {
-    if (!P().seen[it.key]) { P().seen[it.key] = 1; L.xp += 2; ganharXP(2, null, true); }
+    if (it.key && !P().seen[it.key]) { P().seen[it.key] = 1; L.xp += 2; ganharXP(2, null, true); }
     L.fila.shift(); L.feitos++; SFX.tap(); conta('cards'); return proximo();
   }
   if (chk.disabled || it.t === 'par') return;
@@ -2275,7 +2865,7 @@ function painel(ok, it, resp, ganho, extra, esgotou) {
     bq.disabled = true; SFX.tap();
     const box = $('#porque');
     if (iaOn()) {
-      box.innerHTML = '<div class="aibox" style="max-height:26vh;overflow-y:auto"><b class="who">🤖 Byte:</b> <span id="pqTxt">pensando…</span></div>';
+      box.innerHTML = '<div class="aibox" style="max-height:26vh;overflow-y:auto"><b class="who">' + APP.botEm + ' ' + APP.bot + ':</b> <span id="pqTxt">pensando…</span></div>';
       try { await iaPorQue(it, resp, ({text}) => { const e = $('#pqTxt'); if (e) e.textContent = text; }); }
       catch (e) { const msg = erroIA(e); const el = $('#pqTxt'); if (el) el.textContent = (msg ? msg + '\n' : '') + dicaOffline(it); }
     } else box.innerHTML = '<div class="aibox" style="max-height:26vh;overflow-y:auto">' + esc(dicaOffline(it)) + '</div>';
@@ -2366,15 +2956,15 @@ function fimSimulado(c, seg) {
   if (nota >= 10 && (antes === undefined || antes < 10)) { bxp += 50; bgem += 20; }
   if (nota >= 7 && c.node && !p.nodes[c.node.id]) p.nodes[c.node.id] = {em: Date.now(), perf: nota >= 10};
   p.licoes++; conta('licoes'); conta('simulados'); marcaPlano('simulado:' + m.id); if (c.tarefa) marcaPlano(c.tarefa); salvar();
-  const msg = nota >= 9 ? '🏆 Nota de gênio! A AV2 que se prepare!' : nota >= 7 ? '✅ Aprovado! Acima da média 7!' + (c.node && p.nodes[c.node.id] ? ' Troféu conquistado!' : '') : '📚 Abaixo da média 7. Revise os erros e tente de novo!';
+  const msg = nota >= 9 ? '🏆 Nota de gênio! ' + provaFraseDe(m) : nota >= 7 ? '✅ Aprovado! Acima da média 7!' + (c.node && p.nodes[c.node.id] ? ' Troféu conquistado!' : '') : '📚 Abaixo da média 7. Revise os erros e tente de novo!';
   SFX.win(); confete(nota >= 7 ? 260 : 80);
-  telaFim(c, '<div class="big">' + (nota >= 9 ? '🏆' : nota >= 7 ? '✅' : '📚') + '</div><h1 class="orb">SIMULADO CONCLUÍDO</h1><p class="mut">' + esc(m.nome) + ' • prova em ' + m.data + '</p>' +
+  telaFim(c, '<div class="big">' + (nota >= 9 ? '🏆' : nota >= 7 ? '✅' : '📚') + '</div><h1 class="orb">' + provaFimDe(m) + '</h1><p class="mut">' + esc(m.nome) + (m.data ? ' • prova em ' + m.data : '') + '</p>' +
     '<div class="nota">' + String(nota).replace('.', ',') + '<small>/10</small></div><p style="font-weight:900;font-size:18px">' + msg + '</p>' +
     '<div class="kpis"><div class="kpi" style="--c:var(--ok)"><small>Acertos</small><b>' + c.primeira + '</b></div>' +
     '<div class="kpi" style="--c:var(--bad)"><small>Erros</small><b>' + (c.nEx - c.primeira) + '</b></div>' +
     '<div class="kpi" style="--c:var(--gold)"><small>Melhor</small><b>' + String(p.simu[m.id]).replace('.', ',') + '</b></div></div>' +
     (bxp ? '<p style="color:var(--gold);font-weight:900">🎁 Bônus: +' + bxp + ' XP' + (bgem ? ' e +' + bgem + ' 💎' : '') + '</p>' : '') +
-    listaRevisao(c.errados) + '<div class="row2" style="width:100%;margin-top:16px"><button class="btn" id="fimRes">📄 Resumão</button><button class="btn" id="fimDe">🔁 Novo simulado</button></div>' +
+    listaRevisao(c.errados) + '<div class="row2" style="width:100%;margin-top:16px"><button class="btn" id="fimRes">📄 Resumão</button><button class="btn" id="fimDe">🔁 Refazer</button></div>' +
     '<button class="btn go w" id="fimOk" style="margin-top:10px">CONTINUAR</button>');
   $('#fimRes').onclick = () => { fechaLicao(); resumao(m.id); rodaFila(); };
   $('#fimDe').onclick = () => { fechaLicao(); simulado(m); };
@@ -2393,6 +2983,7 @@ document.addEventListener('keydown', e => {
   if (k >= 0) { const b = $$('#opts [data-v]:not(.gone)')[k]; if (b) b.click(); }
 });
 
+
 /* ---------- Resumão e gabarito ---------- */
 function resumao(mid, tid) {
   SUBTELA = true;
@@ -2402,7 +2993,7 @@ function resumao(mid, tid) {
     '<h1 class="orb">Resumão • ' + esc(m.nome) + '</h1><p>Tudo o que cai na prova numa página só. Leia na véspera e depois faça o simulado! 🧠</p></section>' +
     '<div class="resumo" style="--c:' + m.cor + '">' + m.topicos.map(t => '<div class="rt" id="r_' + t.id + '"><span>' + t.em + ' ' + esc(t.titulo) + '<small>' + t.pg + '</small></span>' +
       (TTS ? '<button class="ouvir" data-t="' + t.id + '">🔊 Ouvir</button>' : '') + '</div>' +
-      t.cards.map(c => '<div class="rc"><h4>' + c.e + ' ' + c.t + '</h4>' + c.h + (c.b ? '<div class="box">' + c.b + '</div>' : '') + (c.d ? '<div class="box dica">💡 ' + c.d + '</div>' : '') + '</div>').join('')).join('') +
+      t.cards.map(c => '<div class="rc"><h4>' + c.e + ' ' + c.t + '</h4>' + c.h + (c.b ? '<div class="box">' + c.b + '</div>' : '') + (c.d ? '<div class="box dica">💡 ' + c.d + '</div>' : '') + (c.passos ? '<div class="box">🧠 ' + c.passos.join(' → ') + '</div>' : '') + '</div>').join('')).join('') +
     '</div><button class="btn go w" id="irSim" style="margin-top:16px;--c:' + m.cor + '">📝 FAZER O SIMULADO AGORA</button></div>';
   $('#bk').onclick = () => { SFX.tap(); mostraAba(); };
   $('#irSim').onclick = () => { SFX.tap(); simulado(m); };
@@ -2430,18 +3021,20 @@ function abaTreinar() {
   const p = P(), nErr = Object.keys(p.wrong).filter(idValido).length;
   app.innerHTML = '<div class="view"><section class="hero"><div class="big">🏋️</div><h1 class="orb">Treinar</h1><p>Revise do seu jeito. No treino você <b>ganha vidas</b>: +1 ❤️ por acerto!</p></section>' +
     '<div class="modos">' +
-    '<button class="modo wide" id="tInt" style="--c:var(--cyan)"><span class="mi">🎯</span><b>Treino inteligente</b><small>O app escolhe as perguntas que você está mais perto de esquecer (repetição espaçada) e dá prioridade às provas mais próximas.</small></button>' +
+    '<button class="modo wide" id="tInt" style="--c:var(--cyan)"><span class="mi">🎯</span><b>Treino inteligente</b><small>O app escolhe as perguntas que você está mais perto de esquecer (repetição espaçada)' + (MATERIAS.some(m => m.data) ? ' e dá prioridade às provas mais próximas.' : ' e mistura todas as matérias.') + '</small></button>' +
     '<button class="modo" id="tErr" style="--c:var(--pink)">' + (nErr ? '<span class="num">' + nErr + '</span>' : '') + '<span class="mi">🧠</span><b>Caderno de erros</b><small>' + (nErr ? 'Transforme seus erros em acertos!' : 'Nenhum erro ainda 😎') + '</small></button>' +
     '<button class="modo" id="tRel" style="--c:var(--gold)"><span class="mi">⚡</span><b>Relâmpago</b><small>10 perguntas, 20 s cada. Recorde: ' + p.relBest + '/10</small></button>' +
+    '<button class="modo" id="tCart" style="--c:var(--ok)"><span class="mi">🃏</span><b>Cartões de memória</b><small>Vire os cartões e diga se sabia. Ótimo para decorar!</small></button>' +
+    '<button class="modo" id="tAula" style="--c:var(--cyan)"><span class="mi">🌍</span><b>Aprender qualquer assunto</b><small>' + (iaOn() ? 'O ' + APP.bot + ' monta uma aula com explicação e exercícios.' : 'Procure um tema e estude na hora.') + '</small></button>' +
     '<button class="modo wide" id="tIA" style="--c:var(--pur)"><span class="mi">✨</span><b>Lição criada pela IA</b><small>' +
-      (iaOn() ? 'O Byte inventa 5 perguntas novas sobre a unidade que você escolher.' : 'Disponível quando o app é aberto pelo link do claude.ai.') + '</small></button></div>' +
-    '<div class="sec-t">📝 Simulados da AV2 (nota de 0 a 10)</div>' +
+      (iaOn() ? 'O ' + APP.bot + ' inventa 5 perguntas novas sobre a unidade que você escolher.' : 'Disponível quando o app é aberto pelo link do claude.ai.') + '</small></button></div>' +
+    '<div class="sec-t">📝 ' + APP.grupoProvas + ' (nota de 0 a 10)</div>' +
     porData().map(m => { const n = p.simu[m.id];
-      return '<button class="li" data-sim="' + m.id + '" style="--c:' + m.cor + '"><span class="le">' + m.em + '</span><span class="lt"><b>' + esc(m.nome) + '</b><small>Prova ' + m.data + ' • ' + quando(diasPara(m.data)).toLowerCase() + '</small></span>' +
+      return '<button class="li" data-sim="' + m.id + '" style="--c:' + m.cor + '"><span class="le">' + m.em + '</span><span class="lt"><b>' + esc(m.nome) + '</b><small>' + (m.data ? 'Prova ' + m.data + ' • ' + quando(diasPara(m.data)).toLowerCase() : m.extra ? '⭐ assunto extra' : m.topicos.length + ' assuntos') + '</small></span>' +
         '<span class="lr">' + (n === undefined ? 'FAZER ▶' : '⭐ ' + String(n).replace('.', ',')) + '</span></button>'; }).join('') +
-    '<div class="sec-t">📄 Resumões e 🔓 gabaritos do livro</div>' +
-    porData().map(m => '<div class="li" style="--c:' + m.cor + '"><span class="le">' + m.em + '</span><span class="lt"><b>' + esc(m.nome) + '</b><small>' + (GABARITO[m.id] || []).length + ' respostas do livro</small></span>' +
-      '<span class="lr" style="display:flex;gap:6px"><button class="btn" data-res="' + m.id + '" style="padding:8px 10px;font-size:12px">📄</button><button class="btn" data-gab="' + m.id + '" style="padding:8px 10px;font-size:12px">🔓</button></span></div>').join('') + '</div>';
+    '<div class="sec-t">📄 Resumões' + (Object.keys(GABARITO).length ? ', 🔓 gabaritos' : '') + ' e 🃏 cartões</div>' +
+    porData().map(m => '<div class="li" style="--c:' + m.cor + '"><span class="le">' + m.em + '</span><span class="lt"><b>' + esc(m.nome) + '</b><small>' + ((GABARITO[m.id] || []).length ? GABARITO[m.id].length + ' respostas do livro' : m.topicos.length + ' assuntos') + '</small></span>' +
+      '<span class="lr" style="display:flex;gap:6px"><button class="btn" data-res="' + m.id + '" style="padding:8px 10px;font-size:12px">📄</button>' + ((GABARITO[m.id] || []).length ? '<button class="btn" data-gab="' + m.id + '" style="padding:8px 10px;font-size:12px">🔓</button>' : '') + '<button class="btn" data-cart="' + m.id + '" style="padding:8px 10px;font-size:12px">🃏</button></span></div>').join('') + '</div>';
   $('#tInt').onclick = () => { SFX.tap(); treinoInteligente(); };
   $('#tErr').onclick = () => { SFX.tap(); revisarErros(); };
   $('#tRel').onclick = () => { SFX.tap(); relampago(); };
@@ -2449,13 +3042,15 @@ function abaTreinar() {
   $$('[data-sim]').forEach(b => b.onclick = () => { SFX.tap(); simulado(matDe(b.dataset.sim)); });
   $$('[data-res]').forEach(b => b.onclick = () => { SFX.tap(); resumao(b.dataset.res); });
   $$('[data-gab]').forEach(b => b.onclick = () => { SFX.tap(); gabarito(b.dataset.gab); });
+  $$('[data-cart]').forEach(b => b.onclick = () => { SFX.tap(); cartoes(b.dataset.cart); });
+  $('#tCart').onclick = () => { SFX.tap(); cartoes(P().sub || PRINCIPAIS()[0].id); };
+  $('#tAula').onclick = () => { SFX.tap(); aulaQualquer(); };
 }
 
 /* ---------- ABA BYTE (tutor com IA) ---------- */
-const CHATV = [{quem: 'bot', txt: 'Oi! Eu sou o Byte 🤖, seu tutor. Pergunte qualquer coisa das matérias da AV2, peça para eu explicar de outro jeito ou toque numa sugestão aí em cima!'}];
+const CHATV = [{quem: 'bot', txt: 'Oi! Eu sou o ' + APP.bot + ' ' + APP.botEm + ', seu tutor. Pergunte qualquer coisa ' + APP.sobre + ', peça para eu explicar de outro jeito ou toque numa sugestão aí em cima!'}];
 let ENVIANDO = false;
-const SUGESTOES = ['🎲 Pergunta surpresa', 'Me explica o ciclo da água', 'Discurso direto e indireto: qual a diferença?', 'Como calcular probabilidade?', 'O que é patrimônio imaterial?',
-  'Quais os tipos de poluição da água?', 'Was ou were?', 'Como funciona um circuito elétrico?', 'Dicas para a prova de amanhã'];
+const SUGESTOES = ['🎲 Pergunta surpresa', '🌍 Aprender um assunto novo'].concat(APP.sugestoes);
 function statusIA() {
   if (IA_ESTADO === 'on') return '<span class="iastat on"><i></i>IA conectada (Claude)</span>';
   if (IA_ESTADO === 'buscando') return '<span class="iastat"><i></i>Conectando…</span>';
@@ -2464,19 +3059,19 @@ function statusIA() {
 function abaByte() {
   const velho = $('#chatTxt') ? $('#chatTxt').value : '';
   const opcoes = MATERIAS.map(m => '<optgroup label="' + m.em + ' ' + esc(m.nome) + '">' + m.topicos.map(t => '<option value="' + t.id + '">' + esc(t.titulo) + '</option>').join('') + '</optgroup>').join('');
-  app.innerHTML = '<div class="view"><section class="hero" style="padding-right:70px"><div class="big">🤖</div><h1 class="orb">Byte</h1><p>Seu tutor com IA. ' + statusIA() + '</p>' +
+  app.innerHTML = '<div class="view"><section class="hero" style="padding-right:70px"><div class="big">' + APP.botEm + '</div><h1 class="orb">' + APP.bot + '</h1><p>Seu tutor com IA. ' + statusIA() + '</p>' +
     (IA_ESTADO === 'off' ? '<p style="font-size:12.5px;opacity:.85">' + (IA_MOTIVO === 'negado' ? 'A IA não foi liberada nesta visita.' : 'A IA funciona quando o app é aberto pelo link do claude.ai (usa a conta do Claude de quem está jogando).') +
-      ' Agora eu procuro as respostas no conteúdo das provas.</p>' : '') +
-    (iaOn() && !P().iaUsos ? '<p style="font-size:12.5px;opacity:.9">🔐 Na primeira vez, o claude.ai pede permissão para o Byte usar a IA. É só aceitar!</p>' : '') + '</section>' +
+      ' Agora eu procuro as respostas no conteúdo do app.</p>' : '') +
+    (iaOn() && !P().iaUsos ? '<p style="font-size:12.5px;opacity:.9">🔐 Na primeira vez, o claude.ai pede permissão para o ' + APP.bot + ' usar a IA. É só aceitar!</p>' : '') + '</section>' +
     '<div class="chips2">' + SUGESTOES.map(s => '<button data-sg="' + esc(s) + '">' + esc(s) + '</button>').join('') + '</div>' +
-    (iaOn() ? '<div class="card" style="margin:6px 0 4px"><b>✨ Lição criada pela IA</b><p class="mut" style="font-size:13px;margin:4px 0 8px">Escolha a unidade e o Byte inventa 5 perguntas novas (confira com o livro se algo parecer estranho).</p>' +
+    (iaOn() ? '<div class="card" style="margin:6px 0 4px"><b>✨ Lição criada pela IA</b><p class="mut" style="font-size:13px;margin:4px 0 8px">Escolha a unidade e o ' + APP.bot + ' inventa 5 perguntas novas (confira no resumo se algo parecer estranho).</p>' +
       '<div style="display:flex;gap:8px"><select id="selIA" style="flex:1;padding:12px;border-radius:12px;background:#0b1026;color:#fff;border:2px solid var(--line);font:inherit;font-weight:700">' + opcoes + '</select>' +
       '<button class="btn go" id="bIA" style="--c:var(--pur);padding:0 14px">CRIAR</button></div></div>' : '') +
     fotoHTML() + '<div class="chat" id="chat"></div>' +
-    '<div class="chatin"><textarea id="chatTxt" maxlength="500" placeholder="Pergunte para o Byte…"></textarea><button class="btn go" id="bEnv" style="--c:var(--cyan)">➤</button></div></div>';
+    '<div class="chatin"><textarea id="chatTxt" maxlength="500" placeholder="Pergunte para o ' + APP.bot + '…"></textarea><button class="btn go" id="bEnv" style="--c:var(--cyan)">➤</button></div></div>';
   $('#chatTxt').value = velho;
   desenhaChat();
-  $$('[data-sg]').forEach(b => b.onclick = () => { SFX.tap(); const s = b.dataset.sg; if (s.startsWith('🎲')) perguntaSurpresa(); else enviar(s); });
+  $$('[data-sg]').forEach(b => b.onclick = () => { SFX.tap(); const s = b.dataset.sg; if (s.startsWith('🎲')) perguntaSurpresa(); else if (s.startsWith('🌍')) aulaQualquer(); else enviar(s); });
   $('#bEnv').onclick = () => { if (ENVIANDO && chatCtl) { chatCtl.abort(); return; } const t = $('#chatTxt'); enviar(t.value); t.value = ''; };
   $('#chatTxt').onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('#bEnv').click(); } };
   if ($('#bIA')) $('#bIA').onclick = () => criarLicaoIA($('#selIA').value);
@@ -2487,7 +3082,7 @@ function desenhaChat() {
   box.innerHTML = '';
   CHATV.forEach((m, i) => {
     const d = document.createElement('div'); d.className = 'msg ' + (m.quem === 'eu' ? 'eu' : 'bot') + (m.think ? ' think' : '');
-    if (m.quem !== 'eu') { const w = document.createElement('span'); w.className = 'who'; w.textContent = m.ia ? '🤖 BYTE • IA' : '🤖 BYTE'; d.appendChild(w); }
+    if (m.quem !== 'eu') { const w = document.createElement('span'); w.className = 'who'; w.textContent = APP.botEm + ' ' + APP.bot.toUpperCase() + (m.ia ? ' • IA' : ''); d.appendChild(w); }
     const t = document.createElement('span'); t.textContent = m.think && !m.txt ? 'pensando…' : m.txt; d.appendChild(t);
     if (m.quiz) d.appendChild(quizNoChat(m));
     box.appendChild(d);
@@ -2516,7 +3111,7 @@ async function enviar(txt) {
   if (ABA === 'byte' && !L) { desenhaChat(); rolaChat(); }
 }
 function perguntaSurpresa() {
-  const prox = porData().find(m => diasPara(m.data) >= 0) || MATERIAS[0];
+  const prox = porData().find(futura) || sorteia(PRINCIPAIS());
   const pool = Math.random() < .6 ? prox.topicos.flatMap(t => t.quiz) : Object.values(QIDX).map(x => x.q);
   const q = sorteia(pool), m = QIDX[q.id].m;
   CHATV.push({quem: 'bot', txt: '🎲 Pergunta surpresa de ' + m.em + ' ' + m.nome + ':\n' + q.q.replace(/<[^>]+>/g, ''), quiz: {q, ordem: embaralha(q.o.map((_, i) => i)), feito: false}});
@@ -2554,6 +3149,7 @@ async function criarLicaoIA(tid) {
   const b2 = $('#bIA'); if (b2) b2.disabled = false;
 }
 
+
 /* ---------- Missões do dia ---------- */
 const MISSOES = [
   {id: 'licoes', ic: '📚', t: 'Complete 2 lições', alvo: 2},
@@ -2561,7 +3157,7 @@ const MISSOES = [
   {id: 'combo', ic: '🔥', t: 'Faça um combo de 5', alvo: 5},
   {id: 'perfeitas', ic: '👑', t: 'Termine 1 lição sem errar', alvo: 1},
   {id: 'superados', ic: '🧠', t: 'Supere 3 erros do caderno', alvo: 3},
-  {id: 'simulados', ic: '📝', t: 'Faça 1 simulado', alvo: 1},
+  {id: 'simulados', ic: '📝', t: 'Faça 1 ' + APP.provaCurta.toLowerCase(), alvo: 1},
   {id: 'relampagos', ic: '⚡', t: 'Faça 1 Desafio Relâmpago', alvo: 1},
   {id: 'cards', ic: '📖', t: 'Leia 8 cards de conteúdo', alvo: 8}
 ];
@@ -2604,7 +3200,7 @@ function missoesHTML() {
 
 /* ---------- Aviso de prova chegando ---------- */
 function alertaHTML() {
-  const m = porData().find(x => { const d = diasPara(x.data); return d >= 0 && d <= 2; });
+  const m = porData().find(x => { const d = diasPara(x.data); return d !== null && d >= 0 && d <= 2; });
   if (!m) return '';
   const d = diasPara(m.data), nota = P().simu[m.id];
   return '<div class="alerta"><span class="ai">⚠️</span><div class="at"><b>Prova de ' + esc(m.nome) + ' ' + quando(d) + '!</b><small>' +
@@ -2618,7 +3214,7 @@ function ligaAlerta() {
 /* ---------- Loja de estilo: avatares e cores ---------- */
 const AV_LOJA = [['🦁', 80], ['🦅', 80], ['🦈', 100], ['👽', 100], ['🐺', 120], ['🐲', 150], ['🧛', 150], ['🧚', 150], ['🤴', 200], ['👸', 200]];
 const TEMAS = [
-  {id: 'ciano', n: 'Ciano Neon', c: '#00e5ff', p: '#a855f7', preco: 0},
+  {id: 'ciano', n: APP.temaNome, c: APP.cor1, p: APP.cor2, preco: 0},
   {id: 'galaxia', n: 'Galáxia', c: '#c084fc', p: '#6366f1', preco: 80},
   {id: 'matrix', n: 'Matrix', c: '#22ff88', p: '#0ea5e9', preco: 80},
   {id: 'lava', n: 'Lava', c: '#ff8a3d', p: '#ff2d95', preco: 100},
@@ -2662,7 +3258,7 @@ function ligaEstilo() {
 /* ---------- Compartilhar o progresso ---------- */
 async function compartilhar() {
   const p = P(), Lv = nivel(p.xp), nC = CONQ.filter(c => p.badges[c.id]).length;
-  const txt = '🎮 Estudo Gamer • AV2 do 5º ano\n' + p.av + ' ' + p.nome + ' • Nível ' + Lv.n + ' (' + Lv.titulo + ')\n⚡ ' + p.xp + ' XP • 🔥 ' + streakAtual(p) +
+  const txt = APP.emoji + ' ' + APP.nome + ' • ' + APP.share + '\n' + p.av + ' ' + p.nome + ' • Nível ' + Lv.n + ' (' + Lv.titulo + ')\n⚡ ' + p.xp + ' XP • 🔥 ' + streakAtual(p) +
     ' dias de ofensiva • 🏅 ' + nC + ' conquistas\nBora estudar também? 🚀';
   try { await navigator.clipboard.writeText(txt); SFX.gem(); toast('📋 Copiado! Cole no grupo da turma 😉'); }
   catch (e) {
@@ -2672,7 +3268,7 @@ async function compartilhar() {
 
 /* ---------- IA: explicar um card de outro jeito ---------- */
 async function iaExplica(c, onText) {
-  const prompt = 'Você é o Byte, tutor de crianças do 5º ano no Brasil. Explique o conteúdo abaixo DE OUTRO JEITO, bem simples, como se fosse para um amigo de 10 anos: ' +
+  const prompt = 'Você é o ' + APP.bot + ', tutor de crianças ' + APP.publico + ' no Brasil. Explique o conteúdo abaixo DE OUTRO JEITO, bem simples, como se fosse para um amigo de 10 anos: ' +
     '3 frases curtas, 1 exemplo do dia a dia e 1 truque para lembrar. No máximo 90 palavras, português do Brasil, até 2 emojis. Não invente fatos.\n\n' +
     'Conteúdo: ' + c.t + ': ' + txtDe(c.h + ' ' + (c.b || '') + ' ' + (c.d || ''));
   const r = await IA(prompt, {modelTier: 'quick', onText}); contaUsoIA(); return r.text;
@@ -2681,7 +3277,7 @@ async function explicaCard(it, btn) {
   if (!iaOn() || !L) return;
   btn.disabled = true; SFX.tap();
   const box = $('#ajuda');
-  box.innerHTML = '<div class="aibox"><b class="who">🤖 Byte:</b> <span id="expTxt">pensando…</span></div>';
+  box.innerHTML = '<div class="aibox"><b class="who">' + APP.botEm + ' ' + APP.bot + ':</b> <span id="expTxt">pensando…</span></div>';
   box.scrollIntoView({block: 'nearest', behavior: 'smooth'});
   try { await iaExplica(it.c, ({text}) => { const e = $('#expTxt'); if (e && L && L.fila[0] === it) e.textContent = text; }); }
   catch (e) { const el = $('#expTxt'); if (el) el.textContent = erroIA(e) || '⏹ Parado.'; }
@@ -2691,7 +3287,7 @@ async function explicaCard(it, btn) {
 function palavrasChave(txt) { return [...new Set(semAcento(txtDe(txt)).split(/[^a-z0-9]+/).filter(w => w.length > 4 && !PARADAS.has(w)))]; }
 async function corrige(g, resp) {
   if (iaOn()) {
-    const prompt = 'Você é o Byte, professor gentil de crianças do 5º ano no Brasil. Corrija a resposta da criança para a atividade do livro, comparando com a resposta esperada. ' +
+    const prompt = 'Você é o ' + APP.bot + ', professor gentil de crianças ' + APP.publico + ' no Brasil. Corrija a resposta da criança para a atividade do livro, comparando com a resposta esperada. ' +
       'Aceite outras palavras quando a ideia estiver certa. ' + (g.p ? 'É uma pergunta pessoal: avalie se a resposta faz sentido e responde ao que foi pedido. ' : '') +
       '\n\nAtividade: ' + txtDe(g.q) + '\nResposta esperada: ' + txtDe(g.r) + '\nResposta da criança: ' + resp +
       '\n\nResponda SOMENTE com JSON: {"resultado":"certo" ou "quase" ou "errado","comentario":"até 40 palavras, animado, dizendo o que ela acertou e o que faltou, sem bronca"}';
@@ -2711,7 +3307,7 @@ function escrita(mid, i) {
   if (!g) return gabarito(mid);
   app.innerHTML = '<div class="view"><button class="back" id="bk">◀ Gabarito</button>' +
     '<section class="hero" style="background:linear-gradient(135deg,' + m.cor + '44,rgba(18,26,51,.9));border-color:' + m.cor + '"><div class="big">✍️</div>' +
-    '<h1 class="orb">Responda e confira</h1><p>' + esc(m.nome) + ' • atividade ' + (i + 1) + ' de ' + itens.length + (iaOn() ? ' • o Byte corrige com IA 🤖' : '') + '</p></section>' +
+    '<h1 class="orb">Responda e confira</h1><p>' + esc(m.nome) + ' • atividade ' + (i + 1) + ' de ' + itens.length + (iaOn() ? ' • o ' + APP.bot + ' corrige com IA ' + APP.botEm : '') + '</p></section>' +
     '<div class="card escrita"><div class="lkick">' + g.pg + (g.p ? ' • resposta pessoal' : '') + '</div><div class="ltitle" style="font-size:18px">' + g.q + '</div>' +
     '<textarea id="resp" maxlength="600" placeholder="Escreva sua resposta aqui…"></textarea>' +
     '<div class="row2" style="margin-top:10px"><button class="btn go" id="bCor" style="--c:var(--ok)">' + (iaOn() ? '🤖 CORRIGIR' : '✔ CONFERIR') + '</button>' +
@@ -2748,7 +3344,7 @@ function validaQs(v) {
     .map(q => ({id: null, q: esc(q.q.trim()), o: q.o.map(o => esc(o.trim())), a: q.a, x: esc(String(q.x || 'Confira na página do livro.').trim())}));
 }
 async function iaLicaoFoto(arquivo, onText) {
-  const prompt = 'A imagem é a foto de uma página de livro escolar do 5º ano (Brasil). Leia o conteúdo e crie 5 perguntas de múltipla escolha para a criança revisar ESSE conteúdo. ' +
+  const prompt = 'A imagem é a foto de uma página de livro escolar ' + APP.publico + ' (Brasil). Leia o conteúdo e crie 5 perguntas de múltipla escolha para a criança revisar ESSE conteúdo. ' +
     'Use só o que aparece na página, sem inventar. Cada pergunta: enunciado curto, 4 alternativas curtas e diferentes, só 1 correta, explicação de 1 frase. ' +
     'Se a imagem não for uma página de estudo legível, responda [] (array vazio).\n\nResponda SOMENTE com um JSON array: [{"q":"...","o":["A","B","C","D"],"a":0,"x":"..."}] (a = índice da correta, de 0 a 3).';
   const v = await IA.json(prompt, {modelTier: 'default', images: [arquivo], cache: false, onText}); contaUsoIA();
@@ -2757,14 +3353,14 @@ async function iaLicaoFoto(arquivo, onText) {
   return qs.slice(0, 5);
 }
 async function iaExplicaFoto(arquivo, onText) {
-  const prompt = 'A imagem é a foto de uma página de livro escolar do 5º ano (Brasil). Explique para uma criança de 10 anos, de forma simples, o que a página ensina: ' +
+  const prompt = 'A imagem é a foto de uma página de livro escolar ' + APP.publico + ' (Brasil). Explique para uma criança de 10 anos, de forma simples, o que a página ensina: ' +
     'um resumo em até 4 tópicos curtos e, se houver atividades, como pensar para resolvê-las (sem dar as respostas prontas). No máximo 140 palavras, português do Brasil, até 2 emojis. ' +
     'Se não for uma página de estudo legível, peça gentilmente outra foto.';
   const r = await IA(prompt, {modelTier: 'default', images: [arquivo], onText}); contaUsoIA(); return r.text;
 }
 function fotoHTML() {
   if (!iaOn() || !IA_IMG) return '';
-  return '<div class="foto"><b>📸 Foto do livro → lição</b><p>Tire foto de qualquer página (até de outra matéria ou da AV1!) e o Byte cria perguntas ou explica a página.</p>' +
+  return '<div class="foto"><b>📸 Foto do livro → lição</b><p>Tire foto de qualquer página (' + APP.fotoDica + ') e o ' + APP.bot + ' cria perguntas ou explica a página.</p>' +
     '<img class="prev" id="fPrev" alt="Foto escolhida">' +
     '<label class="btn w" for="fIn">📷 Tirar ou escolher foto</label><input type="file" id="fIn" accept="' + esc(IA_IMG_TIPOS.join(',') || 'image/*') + '" hidden>' +
     '<div class="row2" style="margin-top:8px"><button class="btn go" id="fLic" style="--c:var(--pur)" disabled>✨ Criar lição</button><button class="btn" id="fExp" disabled>🧠 Explicar</button></div></div>';
@@ -2785,7 +3381,7 @@ function ligaFoto() {
       const qs = await iaLicaoFoto(FOTO);
       bot.think = false; bot.txt = '✅ Pronto! Criei ' + qs.length + ' perguntas sobre a sua foto. Abrindo a lição… (feitas pela IA: confira no livro se algo parecer estranho!)';
       ENVIANDO = false; desenhaChat();
-      setTimeout(() => abreLicao({modo: 'ia', titulo: 'Lição da foto 📸', cor: '#a855f7', itens: qs.map(q => mkMC(q, null))}), 700);
+      setTimeout(() => abreLicao({modo: 'ia', titulo: 'Lição da foto 📸', cor: 'var(--pur)', itens: qs.map(q => mkMC(q, null))}), 700);
     } catch (e) {
       bot.think = false; ENVIANDO = false;
       bot.txt = e && e.code === 'foto_ilegivel' ? 'Não consegui ler essa página 😕 Tira outra foto bem de pertinho, reta e com bastante luz!' : (erroIA(e) || '⏹ Cancelado.');
@@ -2804,6 +3400,144 @@ function ligaFoto() {
     bot.think = false; ENVIANDO = false; if (ABA === 'byte' && !L) { desenhaChat(); rolaChat(); }
   };
 }
+
+
+/* ---------- Nomes da prova de cada matéria ---------- */
+const provaDe = m => m && m.extra ? 'Prova final' : APP.prova;
+const provaDescDe = m => m && m.extra ? '10 questões sobre a matéria inteira' : APP.provaDesc;
+const provaFimDe = m => m && m.extra ? 'PROVA FINAL CONCLUÍDA' : APP.provaFim;
+const provaFraseDe = m => m && m.extra ? 'Você domina essa matéria!' : APP.provaFrase;
+
+/* ---------- Ensinar: explicação e pergunta na hora (prática intercalada) ---------- */
+function intercala(cards, ex, mid) {
+  const out = [], fila = ex.slice();
+  cards.forEach((c, i) => {
+    out.push(c);
+    /* pergunta rápida logo depois da explicação; com id fixo ela entra na memória e no caderno de erros */
+    if (c.c && c.c.ck) out.push((c.key && itemDeId(c.key.replace(/:(\d+)$/, ':ck$1'))) || mkMC({id: null, q: c.c.ck[0], o: c.c.ck[1], a: c.c.ck[2], x: c.c.ck[3] || ''}, mid));
+    else if (i % 2 === 1 && fila.length > 1) out.push(fila.shift());
+  });
+  return out.concat(fila);
+}
+function passosHTML(c) {
+  if (!c.passos || !c.passos.length) return '';
+  return '<div class="passos"><div class="ph2">🧠 Exemplo resolvido, passo a passo</div>' +
+    c.passos.map((s, i) => '<div class="passo' + (i ? ' hide' : '') + '"><b>' + (i + 1) + '</b><span>' + s + '</span></div>').join('') +
+    (c.passos.length > 1 ? '<button class="btn" id="bPasso">👉 Próximo passo</button>' : '') + '</div>';
+}
+function ligaPassos() {
+  const b = $('#bPasso'); if (!b) return;
+  b.onclick = () => { const h = $('.passo.hide'); if (h) { h.classList.remove('hide'); SFX.tap(); h.scrollIntoView({block: 'nearest', behavior: 'smooth'}); } if (!$('.passo.hide')) b.remove(); };
+}
+
+/* ---------- Estudo livre de uma unidade (sem precisar da ordem da trilha) ---------- */
+function estudoLivre(t) {
+  const m = TOP[t.id].m, cards = t.cards.map((c, k) => ({t: 'card', c, key: t.id + ':' + k}));
+  abreLicao({modo: 'treino', titulo: 'Estudo livre: ' + t.titulo, cor: m.cor, itens: intercala(cards, exerciciosUnidade(t, m, {mc: 2, lac: 1, vf: 1}), m.id), m, t});
+}
+function topicosPorBusca(tema) {
+  const n = semAcento(tema), vistos = new Set(), out = [];
+  MATERIAS.forEach(m => m.topicos.forEach(t => { if (semAcento(t.titulo + ' ' + m.nome).includes(n) && !vistos.has(t.id)) { vistos.add(t.id); out.push(t); } }));
+  buscar(tema, 14).forEach(d => { if (!vistos.has(d.t.id)) { vistos.add(d.t.id); out.push(d.t); } });
+  return out.slice(0, 6);
+}
+
+/* ---------- Cartões de memória (vira o cartão e diz se sabia) ---------- */
+function cartoes(mid) {
+  SUBTELA = true;
+  const m = matDe(mid) || PRINCIPAIS()[0], pool = [];
+  m.topicos.forEach(t => (EXTRA[t.id] ? EXTRA[t.id].p : []).forEach((par, i) => pool.push({id: t.id + ':pp' + i, f: par[0], v: par[1], t})));
+  if (!pool.length) { toast('Esta matéria ainda não tem cartões'); return mostraAba(); }
+  const deck = porPrioridade(pool.map(x => x.id)).slice(0, 10).map(id => pool.find(x => x.id === id));
+  let i = 0, sabia = 0;
+  const fim = () => {
+    const xp = sabia * 2;
+    app.innerHTML = '<div class="view"><div class="fim" style="--c:' + m.cor + ';min-height:auto"><div class="big">🃏</div><h1 class="orb">CARTÕES FEITOS!</h1>' +
+      '<p class="mut">' + esc(m.nome) + '</p><div class="kpis"><div class="kpi" style="--c:var(--ok)"><small>Sabia</small><b>' + sabia + '</b></div>' +
+      '<div class="kpi" style="--c:var(--bad)"><small>Rever</small><b>' + (deck.length - sabia) + '</b></div><div class="kpi" style="--c:var(--gold)"><small>XP</small><b>+' + xp + '</b></div></div>' +
+      '<p style="font-weight:800">' + (sabia === deck.length ? 'Memória de elefante! 🐘' : 'Os que você não sabia vão aparecer primeiro da próxima vez. 💪') + '</p>' +
+      '<div class="row2" style="width:100%;margin-top:14px"><button class="btn" id="cDe">🔁 Mais cartões</button><button class="btn go" id="cOk">CONTINUAR</button></div></div></div>';
+    SFX.win(); confete(sabia === deck.length ? 160 : 70); if (xp) ganharXP(xp, 'cartões');
+    $('#cDe').onclick = () => cartoes(m.id); $('#cOk').onclick = () => { mostraAba(); rodaFila(); };
+  };
+  const mostra = () => {
+    if (i >= deck.length) return fim();
+    const c = deck[i];
+    app.innerHTML = '<div class="view"><button class="back" id="bk">◀ Voltar</button>' +
+      '<section class="hero" style="background:linear-gradient(135deg,' + m.cor + '44,rgba(18,26,51,.9));border-color:' + m.cor + '"><div class="big">🃏</div>' +
+      '<h1 class="orb">Cartões • ' + esc(m.nome) + '</h1><p>Pense na resposta, toque no cartão para virar e seja sincero! (' + (i + 1) + ' de ' + deck.length + ')</p></section>' +
+      '<div class="fcw" style="--c:' + m.cor + '"><div class="fc" id="fc"><div class="fa"><small>' + c.t.em + ' ' + esc(c.t.titulo) + '</small><b>' + c.f + '</b><i>toque para virar 🔄</i></div>' +
+      '<div class="fb2"><small>resposta</small><b>' + c.v + '</b></div></div></div>' +
+      '<div class="row2 hide" id="fcBt" style="margin-top:16px"><button class="btn" id="nao" style="border-color:var(--bad);color:#ff8fa3">😅 Não sabia</button><button class="btn go" id="sim" style="--c:var(--ok)">😎 Sabia!</button></div></div>';
+    scrollTo(0, 0);
+    $('#bk').onclick = () => { SFX.tap(); mostraAba(); };
+    $('#fc').onclick = () => { $('#fc').classList.toggle('virado'); $('#fcBt').classList.remove('hide'); SFX.tap(); };
+    const resp = ok => { lembra(c.id, ok); conta('cards'); if (ok) { sabia++; SFX.ok(); } else SFX.no(); i++; mostra(); };
+    $('#sim').onclick = () => resp(true); $('#nao').onclick = () => resp(false);
+  };
+  mostra();
+}
+
+/* ---------- Aprender qualquer assunto (aula montada pela IA ou busca offline) ---------- */
+async function iaAula(tema) {
+  const ctx = trechos(buscar(tema, 3));
+  const prompt = 'Você é o ' + APP.bot + ', professor de crianças ' + APP.publico + ' (' + APP.idade + ') no Brasil. Crie uma MINI-AULA sobre o tema: "' + tema + '". ' +
+    'Se o tema não for adequado para o estudo de crianças, responda apenas {"erro":"tema"}. ' +
+    'A aula precisa ENSINAR de verdade: 4 cards curtos em sequência (do básico ao mais interessante), cada um com título, explicação de 2 a 4 frases simples e um exemplo do dia a dia; ' +
+    'depois, 5 perguntas de múltipla escolha sobre o que foi ensinado (4 alternativas curtas, só 1 correta, explicação de 1 frase). Use só informações corretas; se não tiver certeza de algo, deixe de fora.' +
+    (ctx ? '\n\nSe ajudar, use também este conteúdo do app:\n' + ctx : '') +
+    '\n\nResponda SOMENTE com JSON: {"titulo":"...","cards":[{"emoji":"🌋","titulo":"...","texto":"...","exemplo":"..."}],"perguntas":[{"q":"...","o":["A","B","C","D"],"a":0,"x":"..."}]}';
+  const v = await IA.json(prompt, {modelTier: 'default', cache: false}); contaUsoIA();
+  if (v && v.erro) throw {code: 'tema_invalido'};
+  const cards = (v && Array.isArray(v.cards) ? v.cards : []).filter(c => c && typeof c.titulo === 'string' && typeof c.texto === 'string' && c.texto.trim()).slice(0, 5)
+    .map(c => ({t: 'card', c: {k: 'Aula do ' + APP.bot, e: Array.from(String(c.emoji || '💡')).slice(0, 2).join(''), t: esc(c.titulo), h: esc(c.texto),
+      b: c.exemplo ? '💡 <b>Exemplo:</b> ' + esc(String(c.exemplo)) : ''}}));
+  const qs = validaQs(v && v.perguntas);
+  if (cards.length < 2 || qs.length < 3) throw {code: 'invalid_json'};
+  const itens = [];
+  cards.forEach((c, k) => { itens.push(c); if (qs[k]) itens.push(mkMC(qs[k], null)); });
+  qs.slice(cards.length).forEach(q => itens.push(mkMC(q, null)));
+  return {titulo: esc(String(v.titulo || tema)).slice(0, 70), itens};
+}
+function aulaQualquer() {
+  const ov = document.createElement('div'); ov.className = 'ov';
+  const ideias = iaOn() ? ['Vulcões', 'Dinossauros', 'Egito antigo', 'Reciclagem', 'Frações', 'Sistema solar'] : ['frações', 'planetas', 'biomas', 'pontuação', 'corpo humano', 'independência'];
+  ov.innerHTML = '<div class="modal"><div class="mascote">🌍</div><h2 class="orb">Aprender um assunto</h2><p>' +
+    (iaOn() ? 'Digite <b>qualquer tema de estudo</b> e o ' + APP.bot + ' monta uma aula com explicação e exercícios.' : 'Modo offline: digite um tema e eu procuro nos assuntos do app para você estudar agora.') + '</p>' +
+    '<input id="tema" maxlength="60" placeholder="Ex.: vulcões, frações, Egito antigo…" autocomplete="off">' +
+    '<div class="chips2" style="flex-wrap:wrap;justify-content:center">' + ideias.map(e => '<button data-id="' + esc(e) + '">' + esc(e) + '</button>').join('') + '</div>' +
+    '<div style="display:grid;gap:8px;margin-top:10px"><button class="btn go w" id="tGo">' + (iaOn() ? '✨ CRIAR AULA' : '🔎 PROCURAR') + '</button>' +
+    '<button class="btn ghost w" id="tX">Fechar</button></div><div id="tRes" style="margin-top:10px;text-align:left"></div></div>';
+  document.body.appendChild(ov);
+  const inp = $('#tema'), res = $('#tRes'), go = $('#tGo');
+  ov.querySelectorAll('[data-id]').forEach(b => b.onclick = () => { inp.value = b.dataset.id; SFX.tap(); go.click(); });
+  $('#tX').onclick = () => ov.remove();
+  inp.onkeydown = e => { if (e.key === 'Enter') go.click(); };
+  setTimeout(() => inp.focus(), 50);
+  go.onclick = async () => {
+    const tema = inp.value.trim();
+    if (tema.length < 2) { SFX.no(); inp.focus(); return; }
+    if (iaOn()) {
+      go.disabled = true; let seg = 0;
+      res.innerHTML = '<p class="mut">✨ Criando sua aula sobre “' + esc(tema) + '”… <span id="tSeg">0</span> s (pode levar até 1 minuto)</p>';
+      const tick = setInterval(() => { const e = $('#tSeg'); if (e) e.textContent = ++seg; }, 1000);
+      try {
+        const aula = await iaAula(tema); clearInterval(tick); ov.remove(); SFX.win();
+        abreLicao({modo: 'ia', titulo: 'Aula: ' + aula.titulo, cor: 'var(--pur)', itens: aula.itens});
+      } catch (e) {
+        clearInterval(tick); go.disabled = false;
+        res.innerHTML = '<p style="color:#ffb3c0">' + esc(e && e.code === 'tema_invalido' ? 'Esse tema não dá 😅 Escolha um assunto de estudo!' : (erroIA(e) || 'Cancelado.')) + '</p>';
+      }
+      return;
+    }
+    const tops = topicosPorBusca(tema);
+    res.innerHTML = tops.length ? '<p class="mut" style="margin-bottom:8px">Encontrei estes assuntos. Toque para estudar:</p>' +
+      tops.map(t => { const m = TOP[t.id].m; return '<button class="li" data-est="' + t.id + '" style="--c:' + m.cor + '"><span class="le">' + t.em + '</span><span class="lt"><b>' + esc(t.titulo) + '</b><small>' + m.em + ' ' + esc(m.nome) + '</small></span><span class="lr">ESTUDAR ▶</span></button>'; }).join('')
+      : '<p class="mut">Não achei esse assunto aqui 🤔 Tente outra palavra.' + (iaOn() ? '' : ' Pelo link do claude.ai, a IA cria aulas sobre qualquer tema!') + '</p>';
+    res.querySelectorAll('[data-est]').forEach(b => b.onclick = () => { ov.remove(); estudoLivre(TOP[b.dataset.est].t); });
+  };
+}
+
 
 /* ---------- ABA LIGA (ranking da semana) ---------- */
 function hash01(s) { let h = 2166136261; for (const c of s) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967295; }
@@ -2832,7 +3566,7 @@ function abaRanking() {
   const linha = (x, i) => '<div class="li' + (x.eu ? ' me' : '') + '" style="--c:' + (i === 0 ? 'var(--gold)' : i === 1 ? '#cfd8ff' : i === 2 ? 'var(--orange)' : 'var(--cyan)') + '">' +
     '<span class="pos">' + (['🥇', '🥈', '🥉'][i] || (i + 1)) + '</span><span class="le">' + x.av + '</span><span class="lt"><b>' + esc(x.nome) + (x.eu ? ' (você)' : '') + '</b><small>' +
     (x.bot ? 'robô adversário' : x.n ? 'Nível ' + x.n : 'jogador deste aparelho') + '</small></span><span class="lr">' + x.xp + ' XP</span></div>';
-  app.innerHTML = '<div class="view"><section class="hero"><div class="big">🏆</div><h1 class="orb">Liga Neon</h1><p>A semana termina em <b>' + restam + ' dia' + (restam > 1 ? 's' : '') + '</b>. ' +
+  app.innerHTML = '<div class="view"><section class="hero"><div class="big">🏆</div><h1 class="orb">' + APP.liga + '</h1><p>A semana termina em <b>' + restam + ' dia' + (restam > 1 ? 's' : '') + '</b>. ' +
     'Pódio ganha cristais: 🥇 30 💎 • 🥈 20 💎 • 🥉 10 💎</p></section>' +
     '<div class="zona">⬆️ ZONA DO PÓDIO</div>' + lista.map((x, i) => (i === 3 ? '<div class="zona" style="color:var(--mut)">— resto da liga —</div>' : '') + linha(x, i)).join('') +
     '<div class="sec-t">🌟 Ranking geral deste aparelho (XP total)</div>' + geral.map((x, i) => linha(x, i)).join('') +
@@ -2862,10 +3596,10 @@ function abaPerfil() {
     '<button class="btn w" id="pShare" style="margin-top:10px">📤 Copiar meu progresso para mandar à turma</button>' +
     '<div class="sec-t">🏅 Conquistas • ' + nConq + '/' + CONQ.length + '</div><div class="badges">' +
     CONQ.map(c => '<div class="bdg' + (p.badges[c.id] ? ' on' : '') + '"><i>' + c.e + '</i><b>' + esc(c.n) + '</b>' + esc(c.d) + '</div>').join('') + '</div>' +
-    '<div class="sec-t">🤖 Sobre o Byte e a IA</div><div class="card" style="font-size:14px;line-height:1.55;color:#cdd3ff">' +
-    '<b>Status:</b> ' + statusIA() + '<br><br>Quando o app é aberto pelo <b>link do claude.ai</b>, o Byte usa a IA <b>Claude</b> para conversar, dar dicas, explicar erros, montar o plano do dia e criar lições novas. ' +
-    'A IA usa a conta do Claude de quem está jogando, e o navegador pede permissão na primeira vez.<br><br>No arquivo baixado (fora do claude.ai), o Byte funciona no <b>modo offline</b>: procura as respostas no conteúdo das provas e o treinador automático escolhe as tarefas.</div>' +
-    '<p class="foot">Conteúdo da AV2 (4º bimestre) do 5º ano, feito a partir do boletim “Saiba +” e das páginas do livro.<br>Seu progresso fica salvo neste aparelho.</p></div>';
+    '<div class="sec-t">' + APP.botEm + ' Sobre o ' + APP.bot + ' e a IA</div><div class="card" style="font-size:14px;line-height:1.55;color:#cdd3ff">' +
+    '<b>Status:</b> ' + statusIA() + '<br><br>Quando o app é aberto pelo <b>link do claude.ai</b>, o ' + APP.bot + ' usa a IA <b>Claude</b> para conversar, dar dicas, explicar erros, montar o plano do dia e criar lições novas. ' +
+    'A IA usa a conta do Claude de quem está jogando, e o navegador pede permissão na primeira vez.<br><br>No arquivo baixado (fora do claude.ai), o ' + APP.bot + ' funciona no <b>modo offline</b>: procura as respostas no conteúdo do app e o treinador automático escolhe as tarefas.</div>' +
+    '<p class="foot">' + APP.fonte + '<br>Seu progresso fica salvo neste aparelho.</p></div>';
   $('#pTroca').onclick = () => telaPerfil(true);
   ligaEstilo();
   $('#pShare').onclick = () => compartilhar();
@@ -2882,7 +3616,7 @@ function telaPerfil(podeFechar) {
   const ov = document.createElement('div'); ov.className = 'ov';
   const lista = Object.entries(DB.players).sort((a, b) => b[1].xp - a[1].xp);
   let av = sorteia(AVATARES);
-  ov.innerHTML = '<div class="modal"><div class="mascote">🤖</div><h2 class="orb">ESTUDO GAMER</h2><p>AV2 de Dezembro • 5º Ano<br><small class="mut">Trilha de lições, vidas, liga e o Byte, seu tutor com IA</small></p>' +
+  ov.innerHTML = '<div class="modal"><div class="mascote">' + APP.botEm + '</div><h2 class="orb">' + APP.nome.toUpperCase() + '</h2><p>' + APP.sub + '<br><small class="mut">Trilha de lições, vidas, liga e o ' + APP.bot + ', seu tutor com IA</small></p>' +
     (lista.length ? '<div class="sec-t" style="margin:16px 0 0">👥 Quem vai jogar?</div><div class="plist">' +
       lista.map(([id, x]) => '<button data-id="' + id + '"><span>' + x.av + '</span><span>' + esc(x.nome) + '</span><small>Nv ' + nivel(x.xp).n + ' • ' + x.xp + ' XP</small></button>').join('') + '</div>' : '') +
     '<div class="sec-t" style="margin:16px 0 0">' + (lista.length ? '➕ Novo jogador' : 'Crie seu jogador') + '</div>' +
@@ -2896,9 +3630,9 @@ function telaPerfil(podeFechar) {
     const nome = $('#inNome').value.trim();
     if (!nome) { $('#inNome').focus(); $('#inNome').style.borderColor = 'var(--bad)'; SFX.no(); return; }
     novoJogador(nome, av); P().ligaSem = semanaStr(); salvar(); ov.remove(); aplicaTema(); hud(); mostraAba('trilha', true); SFX.win(); confete(90);
-    comemora(fim => janela('<div class="mascote">🤖</div><h2 class="orb">Oi, ' + esc(nome) + '!</h2><p style="text-align:left">Eu sou o <b>Byte</b>, seu tutor. Funciona assim:<br><br>' +
+    comemora(fim => janela('<div class="mascote">' + APP.botEm + '</div><h2 class="orb">Oi, ' + esc(nome) + '!</h2><p style="text-align:left">Eu sou o <b>' + APP.bot + '</b>, seu tutor. Funciona assim:<br><br>' +
       '🗺️ Siga a <b>trilha</b>: cada lição libera a próxima.<br>❤️ Errar tira uma <b>vida</b> (elas voltam com o tempo).<br>🔁 O que você errar <b>volta</b> no fim da lição.<br>' +
-      '🔥 Estude todo dia para manter a <b>ofensiva</b>.<br>🤖 Eu monto seu <b>plano do dia</b> e te ajudo com dicas!</p>', [{t: 'BORA! 🚀'}], fim));
+      '🔥 Estude todo dia para manter a <b>ofensiva</b>.<br>' + APP.botEm + ' Eu monto seu <b>plano do dia</b> e te ajudo com dicas!</p>', [{t: 'BORA! 🚀'}], fim));
   };
   $('#btnCriar').onclick = criar;
   $('#inNome').onkeydown = e => { if (e.key === 'Enter') criar(); };
@@ -2941,6 +3675,7 @@ setInterval(() => { const p = P(); if (!p) return; const h = p.hearts; vidas(p);
   if (DB.current && DB.players[DB.current]) { norm(P()); salvar(); aplicaTema(); premioLiga(); hud(); mostraAba('trilha', true); setTimeout(checaConquistas, 900); setTimeout(rodaFila, 400); }
   else telaPerfil(false);
 })();
+
 </script>
 </body>
 </html>
